@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+    --studio-bg: #07090e;
+    --studio-surface: #0e131f;
+    --studio-surface-raised: #141b2c;
+    --studio-border: rgba(255, 255, 255, 0.08);
+    --studio-border-hover: rgba(99, 102, 241, 0.4);
+    --accent-glow: rgba(99, 102, 241, 0.15);
+  }
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--studio-bg);
+    color: #f1f5f9;
+    letter-spacing: -0.012em;
+  }
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #1f293d;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #334155;
+}
+
+/* Modern Architectural Grid & Dot Patterns */
+.bg-dot-grid {
+  background-image: radial-gradient(rgba(255, 255, 255, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.bg-blueprint-grid {
+  background-image: linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Frosted Glass & Surface Panels */
+.studio-glass {
+  background: rgba(13, 17, 26, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.studio-card {
+  background: rgba(14, 19, 30, 0.6);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.studio-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  box-shadow: 0 12px 36px -10px rgba(99, 102, 241, 0.15);
+}
+
+/* Ambient Radial Glow Effect */
+.ambient-glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(100px);
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+/* Drag and Drop Canvas States */
+.drag-over-canvas {
+  outline: 2px dashed #6366f1 !important;
+  outline-offset: -2px;
+  background-color: rgba(99, 102, 241, 0.08) !important;
+}
+
+.canvas-element-selected {
+  outline: 2px solid #6366f1 !important;
+  outline-offset: -1px;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.15);
+}
+
+/* Block category subtle indicators */
+.block-strip-ui {
+  border-left: 3px solid #3b82f6;
+}
+.block-strip-logic {
+  border-left: 3px solid #eab308;
+}
+.block-strip-backend {
+  border-left: 3px solid #10b981;
+}
+
+/* Shooting star visual */
+@keyframes starTravel {
+  0% {
+    transform: translateX(0) translateY(0) rotate(-35deg);
+    opacity: 0.9;
+    width: 0px;
+  }
+  50% {
+    width: 120px;
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(-400px) translateY(280px) rotate(-35deg);
+    opacity: 0;
+    width: 0px;
+  }
+}
+
+.shooting-star-anim {
+  position: absolute;
+  height: 1.5px;
+  background: linear-gradient(-45deg, #818cf8, rgba(255, 255, 255, 0));
+  filter: drop-shadow(0 0 6px #818cf8);
+  animation: starTravel 5s ease-in-out infinite;
+  pointer-events: none;
+}

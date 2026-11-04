@@ -1,0 +1,106 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "User UID from Firebase Auth"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "User email address"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "User display name"
+        },
+        "avatar": {
+          "type": "string",
+          "description": "Profile picture URL"
+        },
+        "role": {
+          "type": "string",
+          "maxLength": 50,
+          "description": "User role"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Last update timestamp"
+        }
+      },
+      "required": ["id", "email", "name"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "SL Builder user project document",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Unique project identifier"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner user UID"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Project title"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["Landing", "Portfolio", "E-Commerce", "Web Apps"],
+          "description": "Project category"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Active", "Draft", "Published"],
+          "description": "Publication status"
+        },
+        "blocks": {
+          "type": "array",
+          "description": "Array of visual and functional canvas blocks"
+        },
+        "thumbnailColor": {
+          "type": "string",
+          "description": "Accent gradient or color"
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Project brief summary"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Created at timestamp"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Updated at timestamp"
+        }
+      },
+      "required": ["id", "userId", "name", "category", "status", "blocks"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User account documents keyed by Auth UID"
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Visual builder projects belonging to authenticated users"
+    }
+  }
+}

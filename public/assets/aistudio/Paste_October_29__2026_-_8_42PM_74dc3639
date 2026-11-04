@@ -1,0 +1,1318 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SL Builder — Visual Drag & Drop Website Builder</title>
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#eef2ff',
+                            100: '#e0e7ff',
+                            400: '#818cf8',
+                            500: '#6366f1',
+                            600: '#4f46e5',
+                            700: '#4338ca',
+                            950: '#0b0f19'
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #060913;
+            color: #f3f4f6;
+            overflow-x: hidden;
+        }
+
+        /* Canvas Particle Background Styling */
+        #space-canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #060913;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #374151;
+        }
+
+        /* Drag and Drop Visual Highlight Helpers */
+        .drag-over {
+            outline: 2px dashed #6366f1 !important;
+            outline-offset: -2px;
+            background-color: rgba(99, 102, 241, 0.08) !important;
+        }
+
+        .canvas-element-selected {
+            outline: 2px solid #6366f1 !important;
+            outline-offset: -1px;
+            position: relative;
+        }
+
+        .canvas-element-hover:hover {
+            outline: 1px dashed rgba(99, 102, 241, 0.6);
+        }
+
+        /* Glassmorphism Styles */
+        .glass-panel {
+            background: rgba(11, 15, 25, 0.75);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .glass-card {
+            background: rgba(11, 15, 25, 0.6);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        /* Shooting Star Effect Styling */
+        @keyframes shootingStar {
+            0% {
+                transform: translateX(0) translateY(0) rotate(-35deg);
+                opacity: 1;
+                width: 0px;
+            }
+            70% {
+                width: 120px;
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(-500px) translateY(350px) rotate(-35deg);
+                opacity: 0;
+                width: 0px;
+            }
+        }
+
+        .shooting-star {
+            position: absolute;
+            height: 2px;
+            background: linear-gradient(-45deg, rgba(129, 140, 248, 1), rgba(255, 255, 255, 0));
+            filter: drop-shadow(0 0 6px rgba(129, 140, 248, 0.8));
+            animation: shootingStar 4s ease-in-out infinite;
+        }
+
+        /* Block Type Color Coding */
+        .block-ui {
+            border-left: 4px solid #3b82f6;
+        }
+        .block-logic {
+            border-left: 4px solid #eab308;
+        }
+        .block-backend {
+            border-left: 4px solid #10b981;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
+
+    <!-- STAR PARTICLES BACKGROUND CANVAS -->
+    <canvas id="space-canvas"></canvas>
+
+    <!-- TOAST NOTIFICATION POPUP -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none flex items-center space-x-3 px-5 py-3.5 rounded-xl bg-indigo-950 border border-indigo-700/60 text-white shadow-2xl">
+        <i id="toast-icon" class="fa-solid fa-circle-check text-indigo-400 text-lg"></i>
+        <span id="toast-message" class="text-sm font-medium">Notification message</span>
+    </div>
+
+    <!-- MAIN APP CONTAINER WRAPPER -->
+    <div id="app-wrapper" class="relative z-10 flex-grow flex flex-col">
+
+        <!-- GLOBAL TOP NAVIGATION BAR -->
+        <header class="sticky top-0 z-40 glass-panel border-b border-gray-900/80 px-6 py-4">
+            <div class="max-w-7xl mx-auto flex items-center justify-between">
+                
+                <!-- Logo Brand -->
+                <div class="flex items-center space-x-3 cursor-pointer" onclick="switchPage('welcome')">
+                    <div class="w-8 h-8 rounded-lg bg-indigo-600/20 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
+                        <i class="fa-solid fa-sparkles text-sm"></i>
+                    </div>
+                    <span class="text-lg font-extrabold tracking-tight text-white font-sans">
+                        SL Builder
+                    </span>
+                </div>
+
+                <!-- Navigation Links (Visible on Welcome / Projects Page) -->
+                <nav id="public-nav" class="hidden md:flex items-center space-x-8 text-sm font-medium text-gray-400">
+                    <a href="#" onclick="switchPage('welcome')" class="hover:text-white transition-colors">Home</a>
+                    <a href="#features-section" onclick="scrollToFeatures(event)" class="hover:text-white transition-colors">Features</a>
+                    <a href="#about-section" onclick="scrollToAbout(event)" class="hover:text-white transition-colors">About</a>
+                    <a href="#" onclick="switchPage('projects')" class="hover:text-white transition-colors">Projects</a>
+                </nav>
+
+                <!-- Action Button -->
+                <div id="public-nav-cta" class="flex items-center space-x-4">
+                    <button onclick="switchPage('auth')" class="text-sm font-medium text-gray-300 hover:text-white transition-colors hidden sm:block">
+                        Log in
+                    </button>
+                    <button onclick="switchPage('auth')" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-lg shadow-indigo-600/30 hover:shadow-indigo-500/50 transition-all duration-200">
+                        Get Started
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- PAGE 1: WELCOME / LANDING PAGE VIEW -->
+        <main id="page-welcome" class="page-view flex-grow">
+            
+            <!-- HERO SECTION -->
+            <section class="relative pt-24 pb-20 px-6 max-w-5xl mx-auto text-center flex flex-col items-center">
+                
+                <!-- Shooting star trail visual effect element -->
+                <div class="shooting-star top-16 right-1/4"></div>
+
+                <!-- Top Sub-Header Tag -->
+                <div class="mb-6 inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-indigo-950/70 border border-indigo-800/50 text-[11px] font-mono tracking-widest font-semibold uppercase text-indigo-300">
+                    <span>SL BUILDER</span>
+                </div>
+
+                <!-- Main Hero Headline -->
+                <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight leading-[1.1] mb-6">
+                    Your code. <br class="hidden sm:inline"/>
+                    <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-indigo-400 to-purple-400">
+                        Your universe.
+                    </span>
+                </h1>
+
+                <!-- Hero Subtext -->
+                <p class="text-base sm:text-lg text-gray-400 max-w-2xl font-normal leading-relaxed mb-10">
+                    A space to create, organize, and explore your ideas. Build projects, save your code, and collaborate — all in one place.
+                </p>
+
+                <!-- Hero CTA Buttons -->
+                <div class="flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto">
+                    <button onclick="switchPage('auth')" class="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-sm shadow-xl shadow-indigo-600/30 hover:shadow-indigo-500/50 transition-all duration-200">
+                        Get Started
+                    </button>
+                    <button onclick="scrollToFeatures(event)" class="w-full sm:w-auto px-8 py-3.5 rounded-xl bg-gray-900/80 hover:bg-gray-800 border border-gray-800 text-gray-300 font-semibold text-sm transition-all duration-200">
+                        Explore Features
+                    </button>
+                </div>
+            </section>
+
+            <!-- FEATURES SECTION (Pixel-matched grid layout from user screenshot) -->
+            <section id="features-section" class="py-24 px-6 md:px-12 max-w-7xl mx-auto border-t border-gray-900/60 relative z-10">
+                
+                <!-- Section Header -->
+                <div class="mb-14 text-left">
+                    <span class="text-[11px] font-mono tracking-[0.3em] font-semibold text-indigo-400 uppercase block mb-3">
+                        FEATURES
+                    </span>
+                    <h2 class="text-3xl sm:text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-4">
+                        Everything you build, in one place
+                    </h2>
+                    <p class="text-sm sm:text-base text-gray-400 max-w-2xl font-normal leading-relaxed">
+                        Six tools that work together, so your ideas never get scattered.
+                    </p>
+                </div>
+
+                <!-- 6-Grid Feature Cards (Identical layout, icon boxes, dark surface style) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    
+                    <!-- Feature 1: Hub -->
+                    <div class="bg-[#0b0f19]/80 border border-gray-800/80 hover:border-indigo-500/40 rounded-2xl p-7 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/5 group">
+                        <div class="w-11 h-11 rounded-xl bg-indigo-950/60 border border-indigo-800/40 flex items-center justify-center text-indigo-400 group-hover:text-white group-hover:bg-indigo-600 transition-all mb-6">
+                            <i class="fa-solid fa-border-all text-lg"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-white mb-2">Hub</h3>
+                        <p class="text-xs sm:text-sm text-gray-400 leading-relaxed">
+                            A central place for projects and recent activity.
+                        </p>
+                    </div>
+
+                    <!-- Feature 2: Component Vault -->
+                    <div class="bg-[#0b0f19]/80 border border-gray-800/80 hover:border-indigo-500/40 rounded-2xl p-7 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/5 group relative overflow-hidden">
+                        <!-- Shooting Star Trail inside card -->
+                        <div class="absolute -right-6 top-8 w-24 h-[1px] bg-gradient-to-l from-indigo-400/40 to-transparent rotate-[-30deg] pointer-events-none"></div>
+                        <div class="w-11 h-11 rounded-xl bg-indigo-950/60 border border-indigo-800/40 flex items-center justify-center text-indigo-400 group-hover:text-white group-hover:bg-indigo-600 transition-all mb-6">
+                            <i class="fa-solid fa-lock text-lg"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-white mb-2">Component Vault</h3>
+                        <p class="text-xs sm:text-sm text-gray-400 leading-relaxed">
+                            Store, organize, and reuse website UI snippets.
+                        </p>
+                    </div>
+
+                    <!-- Feature 3: Visual IDE -->
+                    <div class="bg-[#0b0f19]/80 border border-gray-800/80 hover:border-indigo-500/40 rounded-2xl p-7 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/5 group">
+                        <div class="w-11 h-11 rounded-xl bg-indigo-950/60 border border-indigo-800/40 flex items-center justify-center text-indigo-400 group-hover:text-white group-hover:bg-indigo-600 transition-all mb-6">
+                            <i class="fa-solid fa-code text-lg"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-white mb-2">Visual IDE</h3>
+                        <p class="text-xs sm:text-sm text-gray-400 leading-relaxed">
+                            A drag & drop workspace for building layouts visually.
+                        </p>
+                    </div>
+
+                    <!-- Feature 4: Community -->
+                    <div class="bg-[#0b0f19]/80 border border-gray-800/80 hover:border-indigo-500/40 rounded-2xl p-7 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/5 group">
+                        <div class="w-11 h-11 rounded-xl bg-indigo-950/60 border border-indigo-800/40 flex items-center justify-center text-indigo-400 group-hover:text-white group-hover:bg-indigo-600 transition-all mb-6">
+                            <i class="fa-solid fa-users text-lg"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-white mb-2">Community</h3>
+                        <p class="text-xs sm:text-sm text-gray-400 leading-relaxed">
+                            Share projects, publish templates, and connect with creators.
+                        </p>
+                    </div>
+
+                    <!-- Feature 5: AI Assistant -->
+                    <div class="bg-[#0b0f19]/80 border border-gray-800/80 hover:border-indigo-500/40 rounded-2xl p-7 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/5 group">
+                        <div class="w-11 h-11 rounded-xl bg-indigo-950/60 border border-indigo-800/40 flex items-center justify-center text-indigo-400 group-hover:text-white group-hover:bg-indigo-600 transition-all mb-6">
+                            <i class="fa-solid fa-wand-magic-sparkles text-lg"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-white mb-2">AI Assistant</h3>
+                        <p class="text-xs sm:text-sm text-gray-400 leading-relaxed">
+                            Experiment with AI-assisted website generation tools.
+                        </p>
+                    </div>
+
+                    <!-- Feature 6: Collaboration -->
+                    <div class="bg-[#0b0f19]/80 border border-gray-800/80 hover:border-indigo-500/40 rounded-2xl p-7 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/5 group">
+                        <div class="w-11 h-11 rounded-xl bg-indigo-950/60 border border-indigo-800/40 flex items-center justify-center text-indigo-400 group-hover:text-white group-hover:bg-indigo-600 transition-all mb-6">
+                            <i class="fa-solid fa-share-nodes text-lg"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-white mb-2">Collaboration</h3>
+                        <p class="text-xs sm:text-sm text-gray-400 leading-relaxed">
+                            Share projects and work together with other developers.
+                        </p>
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- ABOUT SECTION (Matching reference layout) -->
+            <section id="about-section" class="py-16 px-6 md:px-12 max-w-7xl mx-auto border-t border-gray-900/60 relative z-10">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    <div>
+                        <span class="text-[11px] font-mono tracking-[0.3em] font-semibold text-indigo-400 uppercase block mb-3">
+                            ABOUT
+                        </span>
+                        <h3 class="text-2xl font-bold text-white">Built for creators</h3>
+                    </div>
+                    <div class="md:col-span-2">
+                        <p class="text-sm text-gray-400 leading-relaxed">
+                            SL Builder is a visual developer platform built around one idea: a calm place to write code, design layout blocks visually, keep what you build, and export clean HTML/CSS — without the noise.
+                        </p>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <!-- PAGE 2: AUTHENTICATION / LOGIN & SIGNUP PAGE (Pixel-matched to reference screenshot) -->
+        <main id="page-auth" class="page-view hidden flex-grow relative overflow-y-auto px-6 py-12">
+            
+            <!-- Top Right Back to home button -->
+            <div class="max-w-7xl mx-auto flex justify-end mb-8">
+                <button onclick="switchPage('welcome')" class="px-4 py-2 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 font-medium text-xs flex items-center space-x-2 transition-all">
+                    <i class="fa-solid fa-arrow-left text-xs"></i>
+                    <span>Back to home</span>
+                </button>
+            </div>
+
+            <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center py-6">
+                
+                <!-- Left Column: Branding info & bullet points -->
+                <div class="lg:col-span-6 space-y-6">
+                    <div class="inline-block text-[11px] font-mono tracking-[0.25em] font-semibold text-indigo-400 uppercase">
+                        SL BUILDER
+                    </div>
+                    <h1 class="text-4xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight">
+                        Welcome to your <br/>
+                        <span class="text-transparent bg-clip-text bg-gradient-to-r from-indigo-300 via-indigo-400 to-purple-400">universe.</span>
+                    </h1>
+                    <p class="text-sm text-gray-400 leading-relaxed">
+                        Create an account or log in to start building, saving and sharing your code.
+                    </p>
+
+                    <div class="space-y-4 pt-4">
+                        <div class="flex items-center space-x-3 text-sm text-gray-300">
+                            <i class="fa-solid fa-check text-indigo-400 text-base"></i>
+                            <span>One account for every SL Builder tool</span>
+                        </div>
+                        <div class="flex items-center space-x-3 text-sm text-gray-300">
+                            <i class="fa-solid fa-check text-indigo-400 text-base"></i>
+                            <span>Sign up in under a minute</span>
+                        </div>
+                        <div class="flex items-center space-x-3 text-sm text-gray-300">
+                            <i class="fa-solid fa-check text-indigo-400 text-base"></i>
+                            <span>Your projects and snippets, always with you</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Auth Card (Tabs for Signup / Login) -->
+                <div class="lg:col-span-6">
+                    <div class="bg-[#0b0f19]/90 border border-gray-800/80 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl relative">
+                        
+                        <!-- Shooting star decoration -->
+                        <div class="shooting-star top-4 right-10"></div>
+
+                        <!-- Auth Mode Switch Tabs -->
+                        <div class="grid grid-cols-2 bg-gray-950 p-1.5 rounded-2xl border border-gray-900 mb-8">
+                            <button id="auth-tab-signup" onclick="switchAuthMode('signup')" class="py-2.5 rounded-xl text-xs font-semibold transition-all bg-indigo-600 text-white shadow-md">
+                                Create account
+                            </button>
+                            <button id="auth-tab-login" onclick="switchAuthMode('login')" class="py-2.5 rounded-xl text-xs font-semibold transition-all text-gray-400 hover:text-white">
+                                Log in
+                            </button>
+                        </div>
+
+                        <!-- DYNAMIC FORM CONTAINER -->
+                        <div id="auth-form-container">
+                            <!-- Rendered via JavaScript -->
+                        </div>
+
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- PAGE 3: MY PROJECTS DASHBOARD -->
+        <main id="page-projects" class="page-view hidden flex-grow px-6 py-10">
+            <div class="max-w-7xl mx-auto space-y-8">
+                
+                <!-- HEADER & METRICS BAR -->
+                <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-gray-900">
+                    <div>
+                        <div class="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-950/60 border border-indigo-800/40 text-[10px] font-mono tracking-widest font-semibold uppercase text-indigo-400 mb-2">
+                            <i class="fa-solid fa-folder-tree text-xs"></i>
+                            <span>PROJECT HUB</span>
+                        </div>
+                        <h1 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">Your Projects</h1>
+                        <p class="text-xs sm:text-sm text-gray-400 mt-1">Manage, edit, export and deploy your visual website builds.</p>
+                    </div>
+
+                    <!-- ACTION & CREATE BUTTON -->
+                    <div class="flex items-center space-x-3">
+                        <button onclick="openNewProjectModal()" class="px-5 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/30 hover:shadow-indigo-500/50 transition-all flex items-center space-x-2">
+                            <i class="fa-solid fa-plus text-xs"></i>
+                            <span>Create New Project</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- OVERVIEW STAT CARDS -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="bg-[#0b0f19]/70 border border-gray-800/80 rounded-2xl p-4 flex items-center space-x-4">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-950/80 border border-indigo-800/40 flex items-center justify-center text-indigo-400">
+                            <i class="fa-solid fa-layer-group text-sm"></i>
+                        </div>
+                        <div>
+                            <span class="block text-xl font-extrabold text-white" id="stat-total-projects">4</span>
+                            <span class="text-[11px] text-gray-400 font-medium">Total Projects</span>
+                        </div>
+                    </div>
+                    <div class="bg-[#0b0f19]/70 border border-gray-800/80 rounded-2xl p-4 flex items-center space-x-4">
+                        <div class="w-10 h-10 rounded-xl bg-emerald-950/80 border border-emerald-800/40 flex items-center justify-center text-emerald-400">
+                            <i class="fa-solid fa-circle-check text-sm"></i>
+                        </div>
+                        <div>
+                            <span class="block text-xl font-extrabold text-white">3 Active</span>
+                            <span class="text-[11px] text-gray-400 font-medium">Published Sites</span>
+                        </div>
+                    </div>
+                    <div class="bg-[#0b0f19]/70 border border-gray-800/80 rounded-2xl p-4 flex items-center space-x-4">
+                        <div class="w-10 h-10 rounded-xl bg-purple-950/80 border border-purple-800/40 flex items-center justify-center text-purple-400">
+                            <i class="fa-solid fa-code text-sm"></i>
+                        </div>
+                        <div>
+                            <span class="block text-xl font-extrabold text-white">HTML / JS / Python</span>
+                            <span class="text-[11px] text-gray-400 font-medium">Export Ready</span>
+                        </div>
+                    </div>
+                    <div class="bg-[#0b0f19]/70 border border-gray-800/80 rounded-2xl p-4 flex items-center space-x-4">
+                        <div class="w-10 h-10 rounded-xl bg-amber-950/80 border border-amber-800/40 flex items-center justify-center text-amber-400">
+                            <i class="fa-solid fa-cloud-arrow-up text-sm"></i>
+                        </div>
+                        <div>
+                            <span class="block text-xl font-extrabold text-white">Auto Saved</span>
+                            <span class="text-[11px] text-gray-400 font-medium">Cloud Synced</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEARCH BAR & CATEGORY FILTER TABS -->
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4 bg-[#0b0f19]/50 p-2 rounded-2xl border border-gray-900">
+                    
+                    <!-- Search Input -->
+                    <div class="relative w-full sm:w-80">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-xs"></i>
+                        <input type="text" id="project-search" oninput="filterProjects()" placeholder="Search projects..." class="w-full bg-gray-950 border border-gray-800/80 rounded-xl pl-9 pr-4 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500 transition-colors">
+                    </div>
+
+                    <!-- Category Pills -->
+                    <div class="flex items-center space-x-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+                        <button onclick="setProjectCategoryFilter('all')" class="category-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 text-white transition-all whitespace-nowrap">
+                            All Projects
+                        </button>
+                        <button onclick="setProjectCategoryFilter('Landing')" class="category-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-900 text-gray-400 hover:text-white transition-all whitespace-nowrap">
+                            Landing Pages
+                        </button>
+                        <button onclick="setProjectCategoryFilter('Portfolio')" class="category-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-900 text-gray-400 hover:text-white transition-all whitespace-nowrap">
+                            Portfolios
+                        </button>
+                        <button onclick="setProjectCategoryFilter('E-Commerce')" class="category-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-gray-900 text-gray-400 hover:text-white transition-all whitespace-nowrap">
+                            E-Commerce
+                        </button>
+                    </div>
+
+                </div>
+
+                <!-- PROJECTS GRID CONTAINER -->
+                <div id="projects-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <!-- Projects cards dynamically rendered here by JS -->
+                </div>
+
+            </div>
+        </main>
+
+        <!-- PAGE 4: VISUAL EDITOR (PRO STUDIO INTEGRATED) -->
+        <main id="page-editor" class="page-view hidden flex-grow flex flex-col h-[calc(100vh-73px)] overflow-hidden">
+            <!-- EDITOR NAVBAR -->
+            <div class="bg-gray-950 border-b border-gray-900 px-4 py-2.5 flex items-center justify-between text-xs z-20">
+                <div class="flex items-center space-x-3">
+                    <button onclick="switchPage('projects')" class="p-2 rounded-lg bg-gray-900 hover:bg-gray-800 text-gray-400 hover:text-white transition-colors">
+                        <i class="fa-solid fa-arrow-left"></i>
+                    </button>
+                    <input type="text" id="editor-project-name" value="Untitled Interactive App" class="bg-transparent text-white font-semibold text-sm outline-none border-b border-transparent focus:border-indigo-500 px-1 py-0.5" />
+                    <span class="px-2 py-0.5 rounded bg-indigo-950 border border-indigo-800 text-indigo-300 text-[10px] font-mono">Visual Logic Studio</span>
+                </div>
+
+                <!-- Viewport Mode Switchers -->
+                <div class="flex items-center space-x-1 bg-gray-900 p-1 rounded-xl border border-gray-800">
+                    <button id="vp-desktop" onclick="setViewport('desktop')" class="vp-btn px-2.5 py-1 rounded-lg bg-indigo-600 text-white transition-all">
+                        <i class="fa-solid fa-desktop text-xs"></i>
+                    </button>
+                    <button id="vp-tablet" onclick="setViewport('tablet')" class="vp-btn px-2.5 py-1 rounded-lg text-gray-400 hover:text-white transition-all">
+                        <i class="fa-solid fa-tablet-screen-button text-xs"></i>
+                    </button>
+                    <button id="vp-mobile" onclick="setViewport('mobile')" class="vp-btn px-2.5 py-1 rounded-lg text-gray-400 hover:text-white transition-all">
+                        <i class="fa-solid fa-mobile-screen text-xs"></i>
+                    </button>
+                </div>
+
+                <!-- Actions -->
+                <div class="flex items-center space-x-2">
+                    <button onclick="clearCanvas()" class="px-3 py-1.5 rounded-lg bg-gray-900 hover:bg-red-950/50 hover:text-red-400 text-gray-400 transition-all">
+                        Clear
+                    </button>
+                    <button onclick="exportCodeModal()" class="px-3.5 py-1.5 rounded-lg bg-indigo-950 hover:bg-indigo-900 border border-indigo-700/50 text-indigo-300 font-medium transition-all flex items-center space-x-1.5">
+                        <i class="fa-solid fa-code"></i>
+                        <span>Export Code</span>
+                    </button>
+                    <button onclick="runVisualApp()" class="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-semibold transition-all shadow-md flex items-center space-x-1.5">
+                        <i class="fa-solid fa-play"></i>
+                        <span>Run Simulation</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- EDITOR MAIN LAYOUT (3-COLUMN WORKSPACE) -->
+            <div class="flex-grow flex overflow-hidden">
+                
+                <!-- LEFT TOOLBAR PALETTE (Categorized Blocks) -->
+                <div class="w-72 bg-[#080c16] border-r border-gray-900 flex flex-col h-full overflow-y-auto p-4 space-y-6">
+                    <div>
+                        <span class="text-[10px] font-mono tracking-wider font-semibold text-gray-500 uppercase block mb-3">
+                            <i class="fa-solid fa-cubes text-indigo-400 mr-1"></i> Drag & Drop Blocks
+                        </span>
+
+                        <!-- Categorized Block Palette -->
+                        <div class="space-y-5">
+                            
+                            <!-- Category 1: UI Blocks -->
+                            <div>
+                                <h4 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-blue-500 inline-block"></span>
+                                    <span>🟦 A. UI Blocks</span>
+                                </h4>
+                                <div class="space-y-2">
+                                    <div draggable="true" ondragstart="handleDragStart(event, 'ui-text')" class="block-ui bg-gray-900/80 hover:bg-gray-800 p-2.5 rounded-xl text-xs text-gray-200 cursor-grab active:cursor-grabbing border border-gray-800 flex items-center space-x-2">
+                                        <span class="text-lg">📝</span>
+                                        <div>
+                                            <div class="font-semibold text-white">Text / Title</div>
+                                            <div class="text-[10px] text-gray-400">Heading or label</div>
+                                        </div>
+                                    </div>
+                                    <div draggable="true" ondragstart="handleDragStart(event, 'ui-button')" class="block-ui bg-gray-900/80 hover:bg-gray-800 p-2.5 rounded-xl text-xs text-gray-200 cursor-grab active:cursor-grabbing border border-gray-800 flex items-center space-x-2">
+                                        <span class="text-lg">🔘</span>
+                                        <div>
+                                            <div class="font-semibold text-white">Button</div>
+                                            <div class="text-[10px] text-gray-400">Clickable trigger</div>
+                                        </div>
+                                    </div>
+                                    <div draggable="true" ondragstart="handleDragStart(event, 'ui-image')" class="block-ui bg-gray-900/80 hover:bg-gray-800 p-2.5 rounded-xl text-xs text-gray-200 cursor-grab active:cursor-grabbing border border-gray-800 flex items-center space-x-2">
+                                        <span class="text-lg">🖼️</span>
+                                        <div>
+                                            <div class="font-semibold text-white">Image Container</div>
+                                            <div class="text-[10px] text-gray-400">Visual image frame</div>
+                                        </div>
+                                    </div>
+                                    <div draggable="true" ondragstart="handleDragStart(event, 'ui-container')" class="block-ui bg-gray-900/80 hover:bg-gray-800 p-2.5 rounded-xl text-xs text-gray-200 cursor-grab active:cursor-grabbing border border-gray-800 flex items-center space-x-2">
+                                        <span class="text-lg">📦</span>
+                                        <div>
+                                            <div class="font-semibold text-white">Container Box</div>
+                                            <div class="text-[10px] text-gray-400">Layout wrapper</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Category 2: Logic & Event Blocks -->
+                            <div>
+                                <h4 class="text-xs font-bold text-yellow-400 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-yellow-500 inline-block"></span>
+                                    <span>🟨 B. Logic Blocks</span>
+                                </h4>
+                                <div class="space-y-2">
+                                    <div draggable="true" ondragstart="handleDragStart(event, 'logic-click')" class="block-logic bg-gray-900/80 hover:bg-gray-800 p-2.5 rounded-xl text-xs text-gray-200 cursor-grab active:cursor-grabbing border border-gray-800 flex items-center space-x-2">
+                                        <span class="text-lg">⚡</span>
+                                        <div>
+                                            <div class="font-semibold text-white">When Clicked</div>
+                                            <div class="text-[10px] text-gray-400">Event listener wire</div>
+                                        </div>
+                                    </div>
+                                    <div draggable="true" ondragstart="handleDragStart(event, 'logic-ifelse')" class="block-logic bg-gray-900/80 hover:bg-gray-800 p-2.5 rounded-xl text-xs text-gray-200 cursor-grab active:cursor-grabbing border border-gray-800 flex items-center space-x-2">
+                                        <span class="text-lg">⚖️</span>
+                                        <div>
+                                            <div class="font-semibold text-white">If / Else Condition</div>
+                                            <div class="text-[10px] text-gray-400">Branching statement</div>
+                                        </div>
+                                    </div>
+                                    <div draggable="true" ondragstart="handleDragStart(event, 'logic-loop')" class="block-logic bg-gray-900/80 hover:bg-gray-800 p-2.5 rounded-xl text-xs text-gray-200 cursor-grab active:cursor-grabbing border border-gray-800 flex items-center space-x-2">
+                                        <span class="text-lg">🔄</span>
+                                        <div>
+                                            <div class="font-semibold text-white">Repeat / Loop</div>
+                                            <div class="text-[10px] text-gray-400">Iteration cycle</div>
+                                        </div>
+                                    </div>
+                                    <div draggable="true" ondragstart="handleDragStart(event, 'logic-number')" class="block-logic bg-gray-900/80 hover:bg-gray-800 p-2.5 rounded-xl text-xs text-gray-200 cursor-grab active:cursor-grabbing border border-gray-800 flex items-center space-x-2">
+                                        <span class="text-lg">🔢</span>
+                                        <div>
+                                            <div class="font-semibold text-white">Number / Counter</div>
+                                            <div class="text-[10px] text-gray-400">Variable counter value</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Category 3: Backend & Python Blocks -->
+                            <div>
+                                <h4 class="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 flex items-center space-x-1.5">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                                    <span>🟩 C. Backend / Python</span>
+                                </h4>
+                                <div class="space-y-2">
+                                    <div draggable="true" ondragstart="handleDragStart(event, 'backend-python')" class="block-backend bg-gray-900/80 hover:bg-gray-800 p-2.5 rounded-xl text-xs text-gray-200 cursor-grab active:cursor-grabbing border border-gray-800 flex items-center space-x-2">
+                                        <span class="text-lg">🐍</span>
+                                        <div>
+                                            <div class="font-semibold text-white">Python API Request</div>
+                                            <div class="text-[10px] text-gray-400">Flask API /fetch()</div>
+                                        </div>
+                                    </div>
+                                    <div draggable="true" ondragstart="handleDragStart(event, 'backend-blockly')" class="block-backend bg-gray-900/80 hover:bg-gray-800 p-2.5 rounded-xl text-xs text-gray-200 cursor-grab active:cursor-grabbing border border-gray-800 flex items-center space-x-2">
+                                        <span class="text-lg">🧩</span>
+                                        <div>
+                                            <div class="font-semibold text-white">Google Blockly Logic</div>
+                                            <div class="text-[10px] text-gray-400">Visual Code Generator</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CENTER INTERACTIVE CANVAS -->
+                <div class="flex-grow bg-[#04060c] p-6 overflow-y-auto flex justify-center items-start relative">
+                    <div id="builder-canvas" ondragover="handleDragOver(event)" ondragleave="handleDragLeave(event)" ondrop="handleDrop(event)" class="w-full max-w-2xl min-h-[600px] bg-[#0b0f19] border border-gray-800 rounded-2xl p-6 shadow-2xl transition-all space-y-4 relative">
+                        
+                        <!-- Initial Default Pre-loaded Blocks Demo -->
+                        <div id="empty-canvas-notice" class="hidden"></div>
+
+                        <!-- Sample Initial Stack to explain the concept visually -->
+                        <div class="p-4 rounded-xl bg-gray-900/40 border border-gray-800 space-y-3">
+                            <span class="text-[10px] font-mono text-indigo-400 uppercase font-semibold">Visual Layout & Events</span>
+                            <div class="canvas-element-hover relative p-4 rounded-xl transition-all border border-gray-800 bg-gray-950">
+                                <h1 id="demo-target-text" class="text-2xl font-bold text-white mb-2 editable-text">Hello World!</h1>
+                                <button id="demo-target-btn" class="px-5 py-2 rounded-xl bg-indigo-600 text-white font-medium text-xs shadow-md shadow-indigo-600/30 hover:bg-indigo-500 transition-all">Click Me</button>
+                            </div>
+                        </div>
+
+                        <!-- Visual Event Wiring Connector Box -->
+                        <div class="p-4 rounded-xl bg-yellow-950/20 border border-yellow-800/40 space-y-2">
+                            <div class="flex items-center space-x-2 text-yellow-400 text-xs font-bold">
+                                <span>⚡ Attached Logic Event Wiring</span>
+                            </div>
+                            <div class="text-xs text-gray-300 font-mono bg-black/50 p-2.5 rounded-lg border border-gray-800">
+                                [ When Button Clicked ] ➔ [ Change Target Text ] ➔ "Hello, User!"
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- RIGHT INSPECTOR & LIVE CODE GENERATOR PANEL -->
+                <div class="w-80 bg-[#080c16] border-l border-gray-900 flex flex-col h-full overflow-y-auto p-4 space-y-5">
+                    <div>
+                        <h3 class="text-xs font-mono font-semibold text-gray-400 uppercase tracking-wider mb-3">
+                            <i class="fa-solid fa-sliders text-indigo-400 mr-1"></i> Block Inspector
+                        </h3>
+                        <div id="inspector-content" class="bg-gray-900/60 border border-gray-800 rounded-xl p-3.5 text-xs text-gray-400">
+                            Select any element on the canvas to inspect or adjust properties.
+                        </div>
+                    </div>
+
+                    <div class="flex-grow flex flex-col min-h-[300px]">
+                        <h3 class="text-xs font-mono font-semibold text-gray-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+                            <span><i class="fa-solid fa-code text-indigo-400 mr-1"></i> Live Generated JS/Python</span>
+                        </h3>
+                        <div class="flex-grow bg-black/80 border border-gray-800 rounded-xl p-3 font-mono text-[11px] text-indigo-300 overflow-y-auto space-y-3">
+                            <div>
+                                <span class="text-[10px] text-gray-500 font-sans block mb-1">// Generated JavaScript Logic:</span>
+                                <pre class="text-emerald-400 leading-relaxed whitespace-pre-wrap">document.getElementById("demo-target-btn")
+  .addEventListener("click", () => {
+    document.getElementById("demo-target-text")
+      .textContent = "Hello, User!";
+  });</pre>
+                            </div>
+
+                            <div class="border-t border-gray-800 pt-2">
+                                <span class="text-[10px] text-gray-500 font-sans block mb-1"># Generated Python Backend API (Flask):</span>
+                                <pre class="text-indigo-300 leading-relaxed whitespace-pre-wrap">from flask import Flask, jsonify
+app = Flask(__name__)
+
+@app.route("/api/hello")
+def hello():
+    return jsonify({"message": "Hello from Python!"})</pre>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+
+        <!-- CODE EXPORT MODAL -->
+        <div id="export-code-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
+            <div class="bg-[#0b0f19] border border-gray-800 rounded-3xl p-6 max-w-2xl w-full shadow-2xl relative">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold text-white flex items-center space-x-2">
+                        <i class="fa-solid fa-code text-indigo-400"></i>
+                        <span>Exported Generated Code</span>
+                    </h3>
+                    <button onclick="closeExportModal()" class="text-gray-400 hover:text-white p-1">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+
+                <p class="text-xs text-gray-400 mb-3">Copy this ready-to-use HTML, CSS, JavaScript, and Python code stack.</p>
+
+                <textarea id="export-code-area" readonly class="w-full h-64 bg-gray-950 border border-gray-800 rounded-xl p-3.5 font-mono text-xs text-indigo-300 focus:outline-none mb-4 resize-none"></textarea>
+
+                <div class="flex items-center justify-end space-x-3">
+                    <button onclick="closeExportModal()" class="px-4 py-2 rounded-xl bg-gray-900 border border-gray-800 text-gray-300 text-xs font-semibold">Close</button>
+                    <button onclick="copyExportCode()" class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md">Copy Code</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- CREATE NEW PROJECT MODAL -->
+        <div id="new-project-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+            <div class="bg-[#0b0f19] border border-gray-800 rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl relative">
+                <div class="flex items-center justify-between mb-6">
+                    <h3 class="text-lg font-bold text-white">Create New Project</h3>
+                    <button onclick="closeNewProjectModal()" class="text-gray-400 hover:text-white p-1">
+                        <i class="fa-solid fa-xmark text-lg"></i>
+                    </button>
+                </div>
+
+                <div class="space-y-4 text-xs">
+                    <div>
+                        <label class="block font-medium text-gray-300 mb-1.5">Project Name</label>
+                        <input type="text" id="new-proj-name" placeholder="e.g. Modern AI Startup" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block font-medium text-gray-300 mb-1.5">Category</label>
+                        <select id="new-proj-category" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-3 text-white focus:outline-none focus:border-indigo-500">
+                            <option value="Landing">Landing Page</option>
+                            <option value="Portfolio">Portfolio</option>
+                            <option value="E-Commerce">E-Commerce</option>
+                        </select>
+                    </div>
+
+                    <div class="pt-4 flex items-center justify-end space-x-3">
+                        <button onclick="closeNewProjectModal()" class="px-4 py-2.5 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 font-semibold transition-all">
+                            Cancel
+                        </button>
+                        <button onclick="createNewProject()" class="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-lg shadow-indigo-600/30 transition-all">
+                            Create & Launch
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- JAVASCRIPT APPLICATION LOGIC -->
+    <script>
+        // PROJECT STATE DATA STORE
+        let projects = [
+            { id: 1, name: "Agency Landing Page", category: "Landing", date: "2 hours ago", status: "Active" },
+            { id: 2, name: "Personal Developer Portfolio", category: "Portfolio", date: "Yesterday", status: "Active" },
+            { id: 3, name: "Saas Product Launch", category: "Landing", date: "3 days ago", status: "Draft" },
+            { id: 4, name: "E-Commerce Gadget Store", category: "E-Commerce", date: "1 week ago", status: "Active" }
+        ];
+
+        let selectedCategoryFilter = 'all';
+        let activeSelectedElement = null;
+        let draggedComponentType = null;
+        let currentAuthMode = 'signup'; // 'signup' or 'login'
+
+        // INITIALIZATION
+        window.onload = function() {
+            initSpaceCanvas();
+            renderProjects();
+            renderAuthForm();
+        };
+
+        // SCROLL HELPERS
+        function scrollToFeatures(e) {
+            if (e) e.preventDefault();
+            switchPage('welcome');
+            setTimeout(() => {
+                document.getElementById('features-section')?.scrollIntoView({ behavior: 'smooth' });
+            }, 50);
+        }
+
+        function scrollToAbout(e) {
+            if (e) e.preventDefault();
+            switchPage('welcome');
+            setTimeout(() => {
+                document.getElementById('about-section')?.scrollIntoView({ behavior: 'smooth' });
+            }, 50);
+        }
+
+        // PAGE ROUTER SYSTEM
+        function switchPage(pageId) {
+            document.querySelectorAll('.page-view').forEach(el => el.classList.add('hidden'));
+            const targetPage = document.getElementById(`page-${pageId}`);
+            if (targetPage) targetPage.classList.remove('hidden');
+
+            const publicNav = document.getElementById('public-nav');
+            const publicCta = document.getElementById('public-nav-cta');
+            const publicFooter = document.getElementById('public-footer');
+
+            if (pageId === 'editor' || pageId === 'auth') {
+                if (publicNav) publicNav.classList.add('hidden');
+                if (publicCta) publicCta.classList.add('hidden');
+                if (publicFooter) publicFooter.classList.add('hidden');
+            } else {
+                if (publicNav) publicNav.classList.remove('hidden');
+                if (publicCta) publicCta.classList.remove('hidden');
+                if (publicFooter) publicFooter.classList.remove('hidden');
+            }
+
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // AUTHENTICATION FORM CONTROLLER
+        function switchAuthMode(mode) {
+            currentAuthMode = mode;
+            const btnSignup = document.getElementById('auth-tab-signup');
+            const btnLogin = document.getElementById('auth-tab-login');
+
+            if (mode === 'signup') {
+                btnSignup.className = "py-2.5 rounded-xl text-xs font-semibold transition-all bg-indigo-600 text-white shadow-md";
+                btnLogin.className = "py-2.5 rounded-xl text-xs font-semibold transition-all text-gray-400 hover:text-white";
+            } else {
+                btnLogin.className = "py-2.5 rounded-xl text-xs font-semibold transition-all bg-indigo-600 text-white shadow-md";
+                btnSignup.className = "py-2.5 rounded-xl text-xs font-semibold transition-all text-gray-400 hover:text-white";
+            }
+            renderAuthForm();
+        }
+
+        function renderAuthForm() {
+            const container = document.getElementById('auth-form-container');
+            if (!container) return;
+
+            if (currentAuthMode === 'signup') {
+                container.innerHTML = `
+                    <div class="mb-6 p-4 rounded-2xl bg-indigo-950/40 border border-indigo-900/50 flex items-start space-x-3">
+                        <div class="w-7 h-7 rounded-full bg-indigo-600/30 flex items-center justify-center text-indigo-400 flex-shrink-0 mt-0.5">
+                            <i class="fa-solid fa-sparkles text-xs"></i>
+                        </div>
+                        <div class="text-xs space-y-1">
+                            <p class="font-bold text-white">Hello, new explorer!</p>
+                            <p class="text-gray-400">1. Enter your email and a password.<br>2. Open the confirmation link we email you.<br>3. Log in and start building.</p>
+                        </div>
+                    </div>
+
+                    <form onsubmit="handleAuthSubmit(event)" class="space-y-4 text-xs">
+                        <div>
+                            <label class="block font-medium text-gray-300 mb-1.5">Email</label>
+                            <input type="email" required placeholder="name@example.com" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block font-medium text-gray-300 mb-1.5">Confirm email</label>
+                            <input type="email" required placeholder="name@example.com" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block font-medium text-gray-300 mb-1.5">Password (8+ characters)</label>
+                            <div class="relative">
+                                <input type="password" required placeholder="••••••••" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-3 pr-10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500">
+                                <i class="fa-regular fa-eye absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 cursor-pointer hover:text-gray-300"></i>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block font-medium text-gray-300 mb-1.5">Confirm password</label>
+                            <div class="relative">
+                                <input type="password" required placeholder="••••••••" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-3 pr-10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500">
+                                <i class="fa-regular fa-eye absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 cursor-pointer hover:text-gray-300"></i>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/30 transition-all mt-2">
+                            Create account
+                        </button>
+
+                        <div class="relative flex py-3 items-center">
+                            <div class="flex-grow border-t border-gray-800"></div>
+                            <span class="flex-shrink mx-4 text-gray-600 text-[11px]">or</span>
+                            <div class="flex-grow border-t border-gray-800"></div>
+                        </div>
+
+                        <button type="button" onclick="showToast('Google Login coming soon!')" class="w-full py-3 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 font-medium flex items-center justify-center space-x-2 transition-all">
+                            <i class="fa-brands fa-google text-xs"></i>
+                            <span>Google Login — Coming Soon</span>
+                        </button>
+
+                        <p class="text-center text-gray-500 pt-2 text-[11px]">
+                            New users must create an account first. Already registered? <a href="#" onclick="switchAuthMode('login'); return false;" class="text-indigo-400 hover:underline">Log in.</a>
+                        </p>
+                    </form>
+                `;
+            } else {
+                container.innerHTML = `
+                    <form onsubmit="handleAuthSubmit(event)" class="space-y-4 text-xs pt-2">
+                        <div>
+                            <label class="block font-medium text-gray-300 mb-1.5">Email</label>
+                            <input type="email" required placeholder="name@example.com" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-3 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500">
+                        </div>
+                        <div>
+                            <div class="flex items-center justify-between mb-1.5">
+                                <label class="block font-medium text-gray-300">Password</label>
+                                <a href="#" onclick="showToast('Password reset link sent to your email.'); return false;" class="text-indigo-400 hover:underline">Forgot password?</a>
+                            </div>
+                            <div class="relative">
+                                <input type="password" required placeholder="••••••••" class="w-full bg-gray-900 border border-gray-800 rounded-xl px-3.5 py-3 pr-10 text-white placeholder-gray-600 focus:outline-none focus:border-indigo-500">
+                                <i class="fa-regular fa-eye absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-500 cursor-pointer hover:text-gray-300"></i>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-lg shadow-indigo-600/30 transition-all mt-4">
+                            Log in
+                        </button>
+
+                        <div class="relative flex py-3 items-center">
+                            <div class="flex-grow border-t border-gray-800"></div>
+                            <span class="flex-shrink mx-4 text-gray-600 text-[11px]">or</span>
+                            <div class="flex-grow border-t border-gray-800"></div>
+                        </div>
+
+                        <button type="button" onclick="showToast('Google Login coming soon!')" class="w-full py-3 rounded-xl bg-gray-900 hover:bg-gray-800 border border-gray-800 text-gray-300 font-medium flex items-center justify-center space-x-2 transition-all">
+                            <i class="fa-brands fa-google text-xs"></i>
+                            <span>Google Login — Coming Soon</span>
+                        </button>
+
+                        <p class="text-center text-gray-500 pt-3 text-[11px]">
+                            New users must create an account first. Already registered? <a href="#" onclick="switchAuthMode('signup'); return false;" class="text-indigo-400 hover:underline">Create account.</a>
+                        </p>
+                    </form>
+                `;
+            }
+        }
+
+        function handleAuthSubmit(e) {
+            e.preventDefault();
+            showToast(currentAuthMode === 'signup' ? "Account created successfully! Check your email." : "Successfully logged in!");
+            setTimeout(() => {
+                switchPage('projects');
+            }, 800);
+        }
+
+        // TOAST NOTIFICATION CONTROLLER
+        function showToast(message) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-message');
+            msgEl.textContent = message;
+            toast.classList.remove('translate-y-20', 'opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0', 'pointer-events-none');
+            }, 3000);
+        }
+
+        // RENDER PROJECTS CARDS
+        function renderProjects() {
+            const grid = document.getElementById('projects-grid');
+            const searchVal = document.getElementById('project-search')?.value.toLowerCase() || '';
+
+            const filtered = projects.filter(p => {
+                const matchesSearch = p.name.toLowerCase().includes(searchVal);
+                const matchesCategory = selectedCategoryFilter === 'all' || p.category === selectedCategoryFilter;
+                return matchesSearch && matchesCategory;
+            });
+
+            // Update project counters
+            const statTotal = document.getElementById('stat-total-projects');
+            if (statTotal) statTotal.textContent = projects.length;
+
+            if (filtered.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-span-full py-16 text-center text-gray-500 bg-[#0b0f19]/40 border border-gray-900 rounded-2xl flex flex-col items-center justify-center">
+                        <i class="fa-solid fa-folder-open text-3xl mb-3 text-indigo-400/50"></i>
+                        <p class="text-sm font-semibold text-gray-300">No projects found</p>
+                        <p class="text-xs text-gray-500 mt-1">Try searching for something else or create a new project.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = filtered.map(p => `
+                <div class="bg-[#0b0f19]/80 border border-gray-800/80 hover:border-indigo-500/50 rounded-2xl p-6 transition-all duration-300 hover:shadow-xl hover:shadow-indigo-500/10 group flex flex-col justify-between relative overflow-hidden">
+                    <div class="absolute -right-8 -top-8 w-24 h-24 bg-indigo-600/5 rounded-full blur-xl group-hover:bg-indigo-600/20 transition-all"></div>
+                    <div>
+                        <div class="flex items-center justify-between mb-4">
+                            <span class="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-indigo-950/80 text-indigo-400 border border-indigo-800/40">
+                                ${p.category}
+                            </span>
+                            <span class="text-[11px] text-gray-500 font-mono">${p.date}</span>
+                        </div>
+                        <h3 class="text-lg font-bold text-white group-hover:text-indigo-300 transition-colors mb-2">${p.name}</h3>
+                        <p class="text-xs text-gray-400 leading-relaxed">Custom responsive layout template crafted with SL Builder.</p>
+                    </div>
+
+                    <div class="pt-6 mt-6 border-t border-gray-900/80 flex items-center justify-between">
+                        <button onclick="openProjectEditor('${p.name}')" class="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/20 transition-all flex items-center space-x-2">
+                            <i class="fa-solid fa-code text-xs"></i>
+                            <span>Open Editor</span>
+                        </button>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="showToast('Project duplicated!')" title="Duplicate" class="text-gray-500 hover:text-indigo-400 p-2 rounded-lg hover:bg-gray-900 transition-colors">
+                                <i class="fa-solid fa-copy text-xs"></i>
+                            </button>
+                            <button onclick="deleteProject(${p.id})" title="Delete" class="text-gray-500 hover:text-red-400 p-2 rounded-lg hover:bg-gray-900 transition-colors">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function filterProjects() { renderProjects(); }
+
+        function setProjectCategoryFilter(cat) {
+            selectedCategoryFilter = cat;
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('bg-gray-900', 'text-gray-400');
+            });
+            event.target.classList.remove('bg-gray-900', 'text-gray-400');
+            event.target.classList.add('bg-indigo-600', 'text-white');
+            renderProjects();
+        }
+
+        function openNewProjectModal() {
+            document.getElementById('new-project-modal').classList.remove('hidden');
+        }
+
+        function closeNewProjectModal() {
+            document.getElementById('new-project-modal').classList.add('hidden');
+        }
+
+        function createNewProject() {
+            const nameInput = document.getElementById('new-proj-name');
+            const catInput = document.getElementById('new-proj-category');
+            if (!nameInput.value.trim()) return;
+
+            projects.unshift({
+                id: Date.now(),
+                name: nameInput.value.trim(),
+                category: catInput.value,
+                date: "Just now",
+                status: "Active"
+            });
+
+            nameInput.value = '';
+            closeNewProjectModal();
+            renderProjects();
+            showToast("New project created successfully!");
+        }
+
+        function deleteProject(id) {
+            projects = projects.filter(p => p.id !== id);
+            renderProjects();
+            showToast("Project deleted.");
+        }
+
+        function openProjectEditor(name) {
+            document.getElementById('editor-project-name').value = name;
+            switchPage('editor');
+        }
+
+        // VISUAL RUN SIMULATION DEMO
+        function runVisualApp() {
+            const targetText = document.getElementById('demo-target-text');
+            if (targetText) {
+                targetText.textContent = "Hello, User!";
+                targetText.classList.add('text-indigo-400');
+                showToast("⚡ Visual event triggered! Text changed to 'Hello, User!'");
+            } else {
+                showToast("Simulation running...");
+            }
+        }
+
+        // DRAG & DROP EDITOR CORE ENGINE
+        function handleDragStart(e, type) {
+            draggedComponentType = type;
+            e.dataTransfer.setData('text/plain', type);
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            document.getElementById('builder-canvas').classList.add('drag-over');
+        }
+
+        function handleDragLeave(e) {
+            document.getElementById('builder-canvas').classList.remove('drag-over');
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const canvas = document.getElementById('builder-canvas');
+            canvas.classList.remove('drag-over');
+
+            const newEl = createCanvasElement(draggedComponentType);
+            canvas.appendChild(newEl);
+            selectCanvasElement(newEl);
+            showToast("Block added to visual workspace!");
+        }
+
+        function createCanvasElement(type) {
+            const wrapper = document.createElement('div');
+            wrapper.className = 'canvas-element-hover relative p-4 rounded-xl transition-all cursor-pointer group border border-gray-800/80 bg-gray-900/60 my-2';
+            wrapper.onclick = (e) => {
+                e.stopPropagation();
+                selectCanvasElement(wrapper);
+            };
+
+            let innerHtml = '';
+            
+            // UI BLOCKS
+            if (type === 'ui-text') {
+                innerHtml = `<div class="block-ui pl-3"><h2 class="text-xl font-bold text-white editable-text">Custom Text Title</h2></div>`;
+            } else if (type === 'ui-button') {
+                innerHtml = `<div class="block-ui pl-3"><button class="px-5 py-2.5 bg-indigo-600 text-white font-medium text-xs rounded-xl shadow-lg shadow-indigo-600/30 editable-text">Custom Button</button></div>`;
+            } else if (type === 'ui-image') {
+                innerHtml = `<div class="block-ui pl-3"><img src="https://placehold.co/600x250/1e293b/818cf8?text=Visual+Image+Block" class="w-full rounded-xl object-cover h-32 border border-gray-800" /></div>`;
+            } else if (type === 'ui-container') {
+                innerHtml = `<div class="block-ui pl-3 p-4 bg-gray-950 rounded-xl border border-dashed border-gray-800 text-xs text-gray-400">📦 Container Layout Box</div>`;
+            } 
+            // LOGIC BLOCKS
+            else if (type === 'logic-click') {
+                innerHtml = `<div class="block-logic pl-3 text-xs font-mono text-yellow-300">⚡ [When Button Clicked] ➔ [Change Text]</div>`;
+            } else if (type === 'logic-ifelse') {
+                innerHtml = `<div class="block-logic pl-3 text-xs font-mono text-yellow-300">⚖️ IF (Condition == true) { Do Action } ELSE { Fallback }</div>`;
+            } else if (type === 'logic-loop') {
+                innerHtml = `<div class="block-logic pl-3 text-xs font-mono text-yellow-300">🔄 REPEAT (count = 5) { Execute Logic }</div>`;
+            } else if (type === 'logic-number') {
+                innerHtml = `<div class="block-logic pl-3 text-xs font-mono text-yellow-300">🔢 Counter Variable = 0</div>`;
+            }
+            // BACKEND / PYTHON BLOCKS
+            else if (type === 'backend-python') {
+                innerHtml = `<div class="block-backend pl-3 text-xs font-mono text-emerald-300">🐍 [Send Request] ➔ fetch('/api/hello') ➔ Flask API</div>`;
+            } else if (type === 'backend-blockly') {
+                innerHtml = `<div class="block-backend pl-3 text-xs font-mono text-emerald-300">🧩 Google Blockly Generated Visual Code Engine</div>`;
+            }
+
+            wrapper.innerHTML = innerHtml + `
+                <div class="absolute -top-3 right-3 hidden group-hover:flex items-center space-x-1 bg-gray-900 border border-gray-800 rounded-lg p-1 text-[10px] shadow-lg">
+                    <button onclick="removeCanvasElement(this.parentElement.parentElement)" class="text-red-400 hover:bg-gray-800 px-1.5 py-0.5 rounded">Delete</button>
+                </div>
+            `;
+            return wrapper;
+        }
+
+        function selectCanvasElement(el) {
+            document.querySelectorAll('.canvas-element-selected').forEach(item => item.classList.remove('canvas-element-selected'));
+            activeSelectedElement = el;
+            el.classList.add('canvas-element-selected');
+
+            const inspector = document.getElementById('inspector-content');
+            const editableText = el.querySelector('.editable-text');
+            
+            inspector.innerHTML = `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block font-semibold text-gray-400 mb-1">Block Text Label</label>
+                        <input type="text" id="insp-text" value="${editableText ? editableText.innerText : 'Visual Block'}" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white outline-none focus:border-indigo-500" />
+                    </div>
+                    <div>
+                        <label class="block font-semibold text-gray-400 mb-1">Block Type Color</label>
+                        <select id="insp-color" class="w-full bg-gray-900 border border-gray-800 rounded-lg p-2 text-white outline-none">
+                            <option value="ui">🟦 UI Block</option>
+                            <option value="logic">🟨 Logic Event Block</option>
+                            <option value="backend">🟩 Backend API Block</option>
+                        </select>
+                    </div>
+                    <button onclick="applyInspectorChanges()" class="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg font-semibold text-xs shadow-md">Apply Changes</button>
+                </div>
+            `;
+
+            document.getElementById('insp-text')?.addEventListener('input', (e) => {
+                if (editableText) editableText.innerText = e.target.value;
+            });
+        }
+
+        function applyInspectorChanges() {
+            showToast("Block properties updated!");
+        }
+
+        function removeCanvasElement(el) {
+            el.remove();
+            showToast("Element removed.");
+        }
+
+        function clearCanvas() {
+            const canvas = document.getElementById('builder-canvas');
+            canvas.innerHTML = `
+                <div id="empty-canvas-notice" class="h-96 border-2 border-dashed border-gray-800 rounded-xl flex flex-col items-center justify-center text-center p-6 text-gray-500 space-y-3">
+                    <div class="w-12 h-12 rounded-full bg-gray-900 flex items-center justify-center text-indigo-400">
+                        <i class="fa-solid fa-hand-pointer text-xl"></i>
+                    </div>
+                    <h4 class="text-sm font-semibold text-gray-300">Your Canvas is Empty</h4>
+                    <p class="text-xs text-gray-500 max-w-xs">Drag and drop UI, Logic, or Backend blocks from the left panel onto this visual space.</p>
+                </div>
+            `;
+            showToast("Canvas cleared.");
+        }
+
+        function setViewport(mode) {
+            const canvas = document.getElementById('builder-canvas');
+            document.querySelectorAll('.vp-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white');
+                btn.classList.add('text-gray-400');
+            });
+
+            if (mode === 'desktop') {
+                canvas.style.maxWidth = '100%';
+                document.getElementById('vp-desktop').classList.add('bg-indigo-600', 'text-white');
+            } else if (mode === 'tablet') {
+                canvas.style.maxWidth = '768px';
+                document.getElementById('vp-tablet').classList.add('bg-indigo-600', 'text-white');
+            } else if (mode === 'mobile') {
+                canvas.style.maxWidth = '375px';
+                document.getElementById('vp-mobile').classList.add('bg-indigo-600', 'text-white');
+            }
+        }
+
+        function exportCodeModal() {
+            const cleanHtml = `<!-- Generated by SL Builder Visual Studio -->\n\n<!-- HTML & UI Layout -->\n<div class="container">\n  <h1 id="myTitle">Hello World!</h1>\n  <button id="myButton">Click Me</button>\n</div>\n\n<!-- JavaScript Logic Wiring -->\n<script>\n  document.getElementById("myButton").addEventListener("click", () => {\n    document.getElementById("myTitle").textContent = "Hello, User!";\n    \n    // Fetch Backend Python Flask API\n    fetch("/api/hello")\n      .then(res => res.json())\n      .then(data => console.log(data.message));\n  });\n<\/script>\n\n# Python Flask Backend Server (API)\nfrom flask import Flask, jsonify\napp = Flask(__name__)\n\n@app.route("/api/hello")\ndef hello():\n    return jsonify({"message": "Hello from Python!"})`;
+            
+            document.getElementById('export-code-area').value = cleanHtml;
+            document.getElementById('export-code-modal').classList.remove('hidden');
+        }
+
+        function closeExportModal() {
+            document.getElementById('export-code-modal').classList.add('hidden');
+        }
+
+        function copyExportCode() {
+            const codeArea = document.getElementById('export-code-area');
+            codeArea.select();
+            document.execCommand('copy');
+            showToast("Code copied to clipboard!");
+            closeExportModal();
+        }
+
+        // BACKGROUND SPACE PARTICLES ENGINE
+        function initSpaceCanvas() {
+            const canvas = document.getElementById('space-canvas');
+            const ctx = canvas.getContext('2d');
+            let width = canvas.width = window.innerWidth;
+            let height = canvas.height = window.innerHeight;
+
+            window.addEventListener('resize', () => {
+                width = canvas.width = window.innerWidth;
+                height = canvas.height = window.innerHeight;
+            });
+
+            const stars = Array.from({ length: 120 }, () => ({
+                x: Math.random() * width,
+                y: Math.random() * height,
+                radius: Math.random() * 1.5,
+                alpha: Math.random(),
+                speed: Math.random() * 0.005 + 0.002
+            }));
+
+            function draw() {
+                ctx.clearRect(0, 0, width, height);
+                stars.forEach(star => {
+                    star.alpha += star.speed;
+                    if (star.alpha > 1 || star.alpha < 0) star.speed = -star.speed;
+
+                    ctx.beginPath();
+                    ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = `rgba(180, 195, 255, ${Math.abs(star.alpha)})`;
+                    ctx.fill();
+                });
+                requestAnimationFrame(draw);
+            }
+            draw();
+        }
+    </script>
+</body>
+</html>

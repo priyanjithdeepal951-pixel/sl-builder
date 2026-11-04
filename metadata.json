@@ -1,0 +1,8 @@
+{
+  "name": "SL Builder — Visual Drag & Drop Studio",
+  "description": "Visual drag & drop website builder with interactive logic wiring, live multi-language code export (HTML/Tailwind, React, JS, Python), and cosmic developer aesthetics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
