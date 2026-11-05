@@ -16,6 +16,8 @@ import {
   Eye,
   Archive,
   Zap,
+  ZoomIn,
+  ZoomOut,
 } from 'lucide-react';
 import { CanvasBlock, Project, ViewportMode, BlockType } from '../../types/builder';
 import { BlockPalette } from './BlockPalette';
@@ -57,6 +59,8 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
 
   // View preferences
   const [editorFontSize, setEditorFontSize] = useState<number>(14);
+  const [zoomLevel, setZoomLevel] = useState<number>(100);
+  const [settingsInitialModal, setSettingsInitialModal] = useState<'people' | null>(null);
   const [isSplitView, setIsSplitView] = useState<boolean>(false);
   const [isFolded, setIsFolded] = useState<boolean>(false);
   const [localMeteorShower, setLocalMeteorShower] = useState<boolean>(isMeteorShower);
@@ -384,14 +388,14 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
           </div>
         </div>
 
-        {/* Center: Viewport Switcher & History Undo/Redo */}
+        {/* Center: Viewport Switcher, Zoom Controls & History Undo/Redo */}
         <div className="hidden md:flex items-center gap-2">
           {/* History Controls */}
           <div className="flex items-center bg-white/5 p-0.5 rounded-lg border border-white/5">
             <button
               onClick={handleUndo}
               disabled={historyIndex <= 0}
-              className="p-1 rounded text-slate-400 hover:text-white disabled:opacity-25 transition-colors"
+              className="p-1 rounded text-slate-400 hover:text-white disabled:opacity-25 transition-colors cursor-pointer"
               title="Undo (Ctrl+Z)"
             >
               <Undo2 className="w-3.5 h-3.5" />
@@ -399,7 +403,7 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
             <button
               onClick={handleRedo}
               disabled={historyIndex >= history.length - 1}
-              className="p-1 rounded text-slate-400 hover:text-white disabled:opacity-25 transition-colors"
+              className="p-1 rounded text-slate-400 hover:text-white disabled:opacity-25 transition-colors cursor-pointer"
               title="Redo (Ctrl+Shift+Z)"
             >
               <Redo2 className="w-3.5 h-3.5" />
@@ -410,7 +414,7 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
           <div className="flex items-center bg-white/5 p-0.5 rounded-lg border border-white/5">
             <button
               onClick={() => setViewportMode('desktop')}
-              className={`p-1.5 rounded transition-colors ${
+              className={`p-1.5 rounded transition-colors cursor-pointer ${
                 viewportMode === 'desktop' ? 'bg-white/15 text-white font-semibold' : 'text-slate-400 hover:text-white'
               }`}
               title="Desktop View (100%)"
@@ -419,7 +423,7 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
             </button>
             <button
               onClick={() => setViewportMode('tablet')}
-              className={`p-1.5 rounded transition-colors ${
+              className={`p-1.5 rounded transition-colors cursor-pointer ${
                 viewportMode === 'tablet' ? 'bg-white/15 text-white font-semibold' : 'text-slate-400 hover:text-white'
               }`}
               title="Tablet View (768px)"
@@ -428,12 +432,39 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
             </button>
             <button
               onClick={() => setViewportMode('mobile')}
-              className={`p-1.5 rounded transition-colors ${
+              className={`p-1.5 rounded transition-colors cursor-pointer ${
                 viewportMode === 'mobile' ? 'bg-white/15 text-white font-semibold' : 'text-slate-400 hover:text-white'
               }`}
               title="Mobile View (375px)"
             >
               <Smartphone className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Zoom Controls */}
+          <div className="flex items-center bg-white/5 p-0.5 rounded-lg border border-white/5 text-[11px] font-mono text-slate-400">
+            <button
+              onClick={() => setZoomLevel((prev) => Math.max(50, prev - 10))}
+              disabled={zoomLevel <= 50}
+              className="p-1 rounded hover:text-white disabled:opacity-25 transition-colors cursor-pointer"
+              title="Zoom Out (-10%)"
+            >
+              <ZoomOut className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => setZoomLevel(100)}
+              className="px-1.5 py-0.5 text-[10px] font-bold hover:text-white transition-colors cursor-pointer"
+              title="Reset Zoom to 100%"
+            >
+              {zoomLevel}%
+            </button>
+            <button
+              onClick={() => setZoomLevel((prev) => Math.min(150, prev + 10))}
+              disabled={zoomLevel >= 150}
+              className="p-1 rounded hover:text-white disabled:opacity-25 transition-colors cursor-pointer"
+              title="Zoom In (+10%)"
+            >
+              <ZoomIn className="w-3.5 h-3.5" />
             </button>
           </div>
         </div>
@@ -442,8 +473,11 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
         <div className="flex items-center gap-1.5 sm:gap-2 relative">
           {/* People button from screenshot */}
           <button
-            onClick={() => setIsSettingsMenuOpen(true)}
-            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-medium"
+            onClick={() => {
+              setSettingsInitialModal('people');
+              setIsSettingsMenuOpen(true);
+            }}
+            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer"
             title="Collaborators and workspace"
           >
             <Users className="w-3.5 h-3.5 text-slate-400" />
@@ -453,7 +487,7 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
           {/* Preview button from screenshot */}
           <button
             onClick={() => setIsSimulationOpen(true)}
-            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-medium"
+            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer"
             title="Preview and interactive simulation sandbox"
           >
             <Eye className="w-3.5 h-3.5 text-slate-400" />
@@ -463,7 +497,7 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
           {/* Export button from screenshot */}
           <button
             onClick={() => setIsExportOpen(true)}
-            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-medium"
+            className="px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition-colors flex items-center gap-1.5 text-xs font-medium cursor-pointer"
             title="Export source code bundle"
           >
             <Archive className="w-3.5 h-3.5 text-slate-400" />
@@ -472,8 +506,11 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
 
           {/* SETTINGS / MENU BUTTON '≡' (Exact match to User's Screenshot) */}
           <button
-            onClick={() => setIsSettingsMenuOpen((prev) => !prev)}
-            className={`p-1.5 sm:px-2 rounded-lg border transition-colors flex items-center justify-center ${
+            onClick={() => {
+              setSettingsInitialModal(null);
+              setIsSettingsMenuOpen((prev) => !prev);
+            }}
+            className={`p-1.5 sm:px-2 rounded-lg border transition-colors flex items-center justify-center cursor-pointer ${
               isSettingsMenuOpen
                 ? 'bg-white/20 border-white/30 text-white shadow-lg'
                 : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300 hover:text-white'
@@ -486,7 +523,10 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
           {/* THE 2-COLUMN SETTINGS FLYOUT MENU */}
           <EditorSettingsMenu
             isOpen={isSettingsMenuOpen}
-            onClose={() => setIsSettingsMenuOpen(false)}
+            onClose={() => {
+              setIsSettingsMenuOpen(false);
+              setSettingsInitialModal(null);
+            }}
             project={{ ...project, name: projectName, blocks }}
             onUpdateProject={pushState ? (p) => pushState(p.blocks) : onUpdateProject}
             onUndo={handleUndo}
@@ -506,8 +546,14 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
             isMeteorShowerActive={localMeteorShower}
             onToggleMeteorShower={toggleMeteorShower}
             selectedBlockId={selectedBlockId}
+            onSelectBlock={setSelectedBlockId}
             onDuplicateSelectedBlock={handleDuplicateSelected}
             onDeleteSelectedBlock={handleDeleteSelected}
+            onResumeStudio={() => {
+              setIsSettingsMenuOpen(false);
+              setSettingsInitialModal(null);
+            }}
+            initialModal={settingsInitialModal}
           />
         </div>
       </div>
@@ -537,6 +583,7 @@ export const VisualStudio: React.FC<VisualStudioProps> = ({
           onMoveBlock={handleMoveBlock}
           onDrop={handleDrop}
           viewportMode={viewportMode}
+          zoomLevel={zoomLevel}
           onSimulateBlockAction={handleSimulateBlockAction}
         />
 
