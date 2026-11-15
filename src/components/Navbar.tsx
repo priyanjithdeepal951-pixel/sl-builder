@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Sparkles, FolderKanban, LogOut, Code2, Menu, X, ArrowUpRight } from 'lucide-react';
 import { UserProfile } from '../types/builder';
 import { ThemeSwitcher } from './ThemeSwitcher';
+import { PWAInstallButton } from './PWAInstallButton';
 import { useTheme } from '../context/ThemeContext';
 
 interface NavbarProps {
@@ -9,8 +10,8 @@ interface NavbarProps {
   onNavigate: (page: 'welcome' | 'auth' | 'projects' | 'editor') => void;
   currentUser: UserProfile | null;
   onLogout: () => void;
-  hasActiveProject: boolean;
-  onOpenActiveEditor: () => void;
+  hasActiveProject?: boolean;
+  onOpenActiveEditor?: () => void;
   isMeteorShower?: boolean;
   onToggleMeteorShower?: () => void;
 }
@@ -20,7 +21,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigate,
   currentUser,
   onLogout,
-  hasActiveProject,
+  hasActiveProject = false,
   onOpenActiveEditor,
   isMeteorShower = false,
   onToggleMeteorShower,
@@ -34,7 +35,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     return null;
   }
 
-  const handleNavClick = (page: 'welcome' | 'auth' | 'projects') => {
+  const handleNavClick = (page: 'welcome' | 'auth' | 'projects' | 'editor') => {
     onNavigate(page);
     setMobileMenuOpen(false);
   };
@@ -117,6 +118,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Zone 3: Actions & Auth */}
         <div className="flex items-center gap-2.5 shrink-0">
+          {/* PWA Install Button for PC & Mobile */}
+          <PWAInstallButton variant="topbar" />
+
           {/* SETTINGS / MENU BUTTON '≡' (Housing: උල්කාපාත, Theme Switcher, Resume Studio) */}
           <div className="relative">
             <button
@@ -177,21 +181,22 @@ export const Navbar: React.FC<NavbarProps> = ({
 
                     {/* 2. Theme Switcher (Cosmic Indigo ⌄) */}
                     <ThemeSwitcher pill />
-                  </div>
 
-                  {/* 3. Resume Studio Button */}
-                  {hasActiveProject && (
-                    <button
-                      onClick={() => {
-                        setSettingsDropdownOpen(false);
-                        onOpenActiveEditor();
-                      }}
-                      className="w-full rounded-full px-4 py-2 bg-[#111625] hover:bg-[#182035] border border-white/15 hover:border-white/30 text-white font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-sm"
-                    >
-                      <Code2 className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Resume Studio</span>
-                    </button>
-                  )}
+                    {/* 3. Resume Studio Button */}
+                    {hasActiveProject && onOpenActiveEditor && (
+                      <button
+                        onClick={() => {
+                          setSettingsDropdownOpen(false);
+                          onOpenActiveEditor();
+                        }}
+                        className="rounded-full px-3.5 py-1.5 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer"
+                        style={{ backgroundColor: themeConfig.accentHex }}
+                      >
+                        <Code2 className="w-3.5 h-3.5" />
+                        <span>Resume Studio</span>
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Quick Navigation Links */}
@@ -207,16 +212,22 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <span>Projects Mission Control</span>
                   </button>
 
-                  <button
-                    onClick={() => {
-                      setSettingsDropdownOpen(false);
-                      onOpenActiveEditor();
-                    }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-slate-300 hover:text-white flex items-center gap-2"
-                  >
-                    <Code2 className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Launch Visual Studio</span>
-                  </button>
+                  {hasActiveProject && onOpenActiveEditor && (
+                    <button
+                      onClick={() => {
+                        setSettingsDropdownOpen(false);
+                        onOpenActiveEditor();
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-indigo-300 hover:text-white flex items-center gap-2"
+                    >
+                      <Code2 className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Open WebStudio</span>
+                    </button>
+                  )}
+
+                  <div className="pt-1.5 border-t border-white/10">
+                    <PWAInstallButton variant="menu-item" />
+                  </div>
                 </div>
               </div>
             )}
@@ -281,7 +292,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   boxShadow: `0 8px 24px -4px ${themeConfig.accentHex}40`,
                 }}
               >
-                <span>Launch Studio</span>
+                <span>Get Started</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>

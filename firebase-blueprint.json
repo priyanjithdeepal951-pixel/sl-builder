@@ -41,7 +41,7 @@
     },
     "Project": {
       "title": "Project",
-      "description": "SL Builder user project document",
+      "description": "SL Builder user and collaborative project document",
       "type": "object",
       "properties": {
         "id": {
@@ -72,6 +72,14 @@
           "type": "array",
           "description": "Array of visual and functional canvas blocks"
         },
+        "collaboratorUids": {
+          "type": "array",
+          "description": "List of user UIDs who have collaborator access"
+        },
+        "collaborators": {
+          "type": "array",
+          "description": "Detailed collaborator records with role, name, and email"
+        },
         "thumbnailColor": {
           "type": "string",
           "description": "Accent gradient or color"
@@ -91,6 +99,89 @@
         }
       },
       "required": ["id", "userId", "name", "category", "status", "blocks"]
+    },
+    "ProjectMessage": {
+      "title": "ProjectMessage",
+      "description": "Real-time team chat message inside a project workspace",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Message identifier"
+        },
+        "projectId": {
+          "type": "string",
+          "description": "Project reference ID"
+        },
+        "senderId": {
+          "type": "string",
+          "description": "User ID of sender"
+        },
+        "senderName": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Display name of sender"
+        },
+        "senderEmail": {
+          "type": "string",
+          "description": "Sender email"
+        },
+        "senderAvatar": {
+          "type": "string",
+          "description": "Avatar URL of sender"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Message content"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when message was sent"
+        }
+      },
+      "required": ["id", "senderId", "senderName", "text", "createdAt"]
+    },
+    "ProjectPresence": {
+      "title": "ProjectPresence",
+      "description": "Real-time presence and active cursor of collaborator in project",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Presence document ID (user UID)"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Collaborator UID"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Collaborator display name"
+        },
+        "avatar": {
+          "type": "string",
+          "description": "Collaborator avatar image"
+        },
+        "activeBlockId": {
+          "type": "string",
+          "description": "Block ID currently being selected or edited"
+        },
+        "cursorX": {
+          "type": "number",
+          "description": "Cursor relative X percent"
+        },
+        "cursorY": {
+          "type": "number",
+          "description": "Cursor relative Y percent"
+        },
+        "lastSeen": {
+          "type": "string",
+          "description": "Heartbeat timestamp"
+        }
+      },
+      "required": ["id", "userId", "name", "lastSeen"]
     }
   },
   "firestore": {
@@ -100,7 +191,15 @@
     },
     "/projects/{projectId}": {
       "schema": "Project",
-      "description": "Visual builder projects belonging to authenticated users"
+      "description": "Visual builder projects belonging to authenticated users or shared with collaborators"
+    },
+    "/projects/{projectId}/messages/{messageId}": {
+      "schema": "ProjectMessage",
+      "description": "Real-time chat feed between project collaborators"
+    },
+    "/projects/{projectId}/presence/{userId}": {
+      "schema": "ProjectPresence",
+      "description": "Live active collaborator presence, cursors and editing indicators"
     }
   }
 }

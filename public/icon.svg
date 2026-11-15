@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0f19" />
+      <stop offset="50%" stop-color="#060913" />
+      <stop offset="100%" stop-color="#020408" />
+    </linearGradient>
+    <linearGradient id="accent" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="50%" stop-color="#8b5cf6" />
+      <stop offset="100%" stop-color="#ec4899" />
+    </linearGradient>
+    <linearGradient id="cyan-glow" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="100%" stop-color="#3b82f6" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="16" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background container -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+  <rect width="508" height="508" x="2" y="2" rx="110" fill="none" stroke="rgba(255, 255, 255, 0.12)" stroke-width="3" />
+
+  <!-- Grid overlay subtle pattern -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="rgba(99, 102, 241, 0.15)" stroke-width="2" stroke-dasharray="6,8" />
+  <circle cx="256" cy="256" r="130" fill="none" stroke="rgba(6, 182, 212, 0.2)" stroke-width="1.5" />
+
+  <!-- Central Visual Builder Icon: Modern Block Frame with Code Nodes -->
+  <g transform="translate(106, 106)">
+    <!-- Ambient Glow behind symbol -->
+    <rect x="20" y="20" width="260" height="260" rx="44" fill="url(#accent)" opacity="0.3" filter="url(#glow)" />
+
+    <!-- Main Block Card -->
+    <rect x="25" y="25" width="250" height="250" rx="42" fill="#0f172a" stroke="url(#accent)" stroke-width="6" />
+
+    <!-- Top Window Title Bar / Pills -->
+    <circle cx="65" cy="65" r="7" fill="#ef4444" />
+    <circle cx="90" cy="65" r="7" fill="#f59e0b" />
+    <circle cx="115" cy="65" r="7" fill="#10b981" />
+
+    <!-- Stylized "SL" Monogram + Drag & Drop Canvas Nodes -->
+    <!-- 'S' curve path -->
+    <path d="M 175 110 C 130 95, 80 120, 80 155 C 80 190, 220 180, 220 220 C 220 255, 160 265, 115 250" 
+          fill="none" stroke="url(#accent)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Drag / Connect Handles -->
+    <circle cx="75" cy="155" r="9" fill="#06b6d4" stroke="#ffffff" stroke-width="3" />
+    <circle cx="225" cy="220" r="9" fill="#ec4899" stroke="#ffffff" stroke-width="3" />
+    <circle cx="150" cy="187" r="7" fill="#a855f7" />
+
+    <!-- Sparkling Star Accent -->
+    <path d="M 230 75 Q 230 90 245 90 Q 230 90 230 105 Q 230 90 215 90 Q 230 90 230 75 Z" fill="#38bdf8" />
+  </g>
+</svg>

@@ -80,7 +80,7 @@ export const ProjectsHub: React.FC<ProjectsHubProps> = ({
     onCreateProject(newProject);
     setIsModalOpen(false);
     setNewProjName('');
-    onToast(`Project "${newProject.name}" created and loaded into Studio!`, 'success');
+    onToast(`Project "${newProject.name}" created!`, 'success');
   };
 
   return (
@@ -292,7 +292,7 @@ export const ProjectsHub: React.FC<ProjectsHubProps> = ({
               <div className="pt-5 mt-5 border-t border-white/5 flex items-center justify-between">
                 <button
                   onClick={() => onOpenProject(proj)}
-                  className="px-3.5 py-1.5 rounded-xl text-white text-xs font-semibold transition-all flex items-center gap-1.5 hover:opacity-90 active:scale-95"
+                  className="px-3.5 py-1.5 rounded-xl text-white text-xs font-semibold transition-all flex items-center gap-1.5 hover:opacity-90 active:scale-95 cursor-pointer"
                   style={{
                     backgroundColor: themeConfig.accentHex,
                   }}
@@ -367,11 +367,11 @@ export const ProjectsHub: React.FC<ProjectsHubProps> = ({
               <div className="flex items-center gap-2 self-end sm:self-center">
                 <button
                   onClick={() => onOpenProject(proj)}
-                  className="px-3 py-1.5 rounded-xl text-white text-xs font-semibold transition-all flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-xl text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer"
                   style={{ backgroundColor: themeConfig.accentHex }}
                 >
                   <Code2 className="w-3.5 h-3.5" />
-                  <span>Launch Studio</span>
+                  <span>Open Studio</span>
                 </button>
                 <button
                   onClick={() => {
@@ -490,7 +490,7 @@ export const ProjectsHub: React.FC<ProjectsHubProps> = ({
                   className="px-4 py-2 rounded-xl text-white font-semibold shadow-lg transition-all"
                   style={{ backgroundColor: themeConfig.accentHex }}
                 >
-                  Create & Open Studio
+                  Create Project
                 </button>
               </div>
             </form>

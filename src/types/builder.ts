@@ -1,3 +1,5 @@
+import type { StudioWorkspaceState } from './studio';
+
 export type BlockCategory = 'ui' | 'logic' | 'backend' | 'layout' | 'media';
 
 export type BlockType =
@@ -63,15 +65,52 @@ export interface CanvasBlock {
   isExpanded?: boolean;
 }
 
+export interface CollaboratorMember {
+  uid: string;
+  email: string;
+  name: string;
+  avatar?: string;
+  role: 'owner' | 'editor' | 'viewer';
+  joinedAt?: string;
+  isOnline?: boolean;
+}
+
+export interface ProjectMessage {
+  id: string;
+  projectId: string;
+  senderId: string;
+  senderName: string;
+  senderEmail: string;
+  senderAvatar: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface ProjectPresence {
+  id: string;
+  userId: string;
+  name: string;
+  email?: string;
+  avatar?: string;
+  activeBlockId?: string | null;
+  cursorX?: number;
+  cursorY?: number;
+  lastSeen: string;
+}
+
 export interface Project {
   id: string;
+  userId?: string;
   name: string;
   category: 'Landing' | 'Portfolio' | 'E-Commerce' | 'Web Apps';
   updatedAt: string;
   status: 'Active' | 'Draft' | 'Published';
   blocks: CanvasBlock[];
+  studioState?: StudioWorkspaceState;
   thumbnailColor?: string;
   description?: string;
+  collaboratorUids?: string[];
+  collaborators?: CollaboratorMember[];
 }
 
 export interface UserProfile {

@@ -12,7 +12,16 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() > 0 && id.size() <= 64 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isProjectMember(projectData) {
+      return isSignedIn() && (
+        projectData.userId == request.auth.uid ||
+        (projectData.keys().hasAny(['collaboratorUids']) &&
+         projectData.collaboratorUids is list &&
+         request.auth.uid in projectData.collaboratorUids)
+      );
     }
 
     function isValidUser(data) {
@@ -22,7 +31,7 @@ service cloud.firestore {
     }
 
     function isValidProject(data) {
-      return data.userId == request.auth.uid &&
+      return data.userId is string &&
              data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
              data.category in ['Landing', 'Portfolio', 'E-Commerce', 'Web Apps'] &&
              data.status in ['Active', 'Draft', 'Published'] &&
@@ -42,13 +51,39 @@ service cloud.firestore {
       allow delete: if isOwner(userId);
     }
 
-    // User web projects
+    // User web projects & collaborative workspaces
     match /projects/{projectId} {
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && isValidId(projectId) && isValidProject(request.resource.data);
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid && isValidProject(request.resource.data) && request.resource.data.userId == resource.data.userId;
+      allow get: if isProjectMember(resource.data);
+      allow list: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        request.auth.uid in resource.data.collaboratorUids
+      );
+      allow create: if isSignedIn() && isValidId(projectId) && isValidProject(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow update: if isProjectMember(resource.data) && isValidProject(request.resource.data) && request.resource.data.userId == resource.data.userId;
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      // Real-time project collaborative chat messages
+      match /messages/{messageId} {
+        allow read: if isProjectMember(get(/databases/$(database)/documents/projects/$(projectId)).data);
+        allow create: if isSignedIn() &&
+                         isValidId(messageId) &&
+                         isProjectMember(get(/databases/$(database)/documents/projects/$(projectId)).data) &&
+                         request.resource.data.senderId == request.auth.uid &&
+                         request.resource.data.text is string &&
+                         request.resource.data.text.size() > 0 &&
+                         request.resource.data.text.size() <= 1000;
+        allow delete: if isSignedIn() &&
+                         (resource.data.senderId == request.auth.uid ||
+                          get(/databases/$(database)/documents/projects/$(projectId)).data.userId == request.auth.uid);
+      }
+
+      // Real-time presence & cursor tracking for active collaborators
+      match /presence/{userId} {
+        allow read: if isProjectMember(get(/databases/$(database)/documents/projects/$(projectId)).data);
+        allow write: if isOwner(userId) &&
+                        isValidId(userId) &&
+                        isProjectMember(get(/databases/$(database)/documents/projects/$(projectId)).data);
+      }
     }
   }
 }

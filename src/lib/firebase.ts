@@ -17,14 +17,25 @@ import {
   getDoc,
   getDocFromServer,
   setDoc,
+  updateDoc,
   deleteDoc,
   collection,
   query,
   where,
+  orderBy,
+  limit,
   onSnapshot,
+  arrayUnion,
+  arrayRemove,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
-import { Project, UserProfile } from '../types/builder';
+import {
+  Project,
+  UserProfile,
+  CollaboratorMember,
+  ProjectMessage,
+  ProjectPresence,
+} from '../types/builder';
 
 // Initialize Firebase App
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -164,12 +175,16 @@ export async function deleteProjectFromFirestore(projectId: string): Promise<voi
   }
 }
 
-// Subscribe to User's Projects in Firestore
+// Subscribe to User's Owned Projects in Firestore
 export function subscribeToUserProjects(
   userId: string,
   onProjectsUpdated: (projects: Project[]) => void,
   onError?: (err: Error) => void
 ): () => void {
+  if (!auth.currentUser || auth.currentUser.uid !== userId) {
+    return () => {};
+  }
+
   const collectionPath = 'projects';
   const q = query(collection(db, collectionPath), where('userId', '==', userId));
 
@@ -199,3 +214,222 @@ export function subscribeToUserProjects(
 
   return unsubscribe;
 }
+
+// Subscribe to Projects Shared with User (Collaborative Projects)
+export function subscribeToSharedProjects(
+  userId: string,
+  onSharedProjectsUpdated: (projects: Project[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const collectionPath = 'projects';
+  const q = query(collection(db, collectionPath), where('collaboratorUids', 'array-contains', userId));
+
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const items: Project[] = [];
+      snapshot.forEach((d) => {
+        const data = d.data() as Project;
+        items.push({
+          ...data,
+          id: d.id,
+        });
+      });
+      items.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+      onSharedProjectsUpdated(items);
+    },
+    (error) => {
+      console.error('Error fetching shared projects:', error);
+      if (onError) {
+        onError(error);
+      }
+      handleFirestoreError(error, OperationType.GET, collectionPath);
+    }
+  );
+
+  return unsubscribe;
+}
+
+// Subscribe to Live Single Project Document (Live Multi-User Canvas Sync)
+export function subscribeToProjectLiveDoc(
+  projectId: string,
+  onProjectUpdated: (project: Project) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const path = `projects/${projectId}`;
+  const docRef = doc(db, 'projects', projectId);
+
+  const unsubscribe = onSnapshot(
+    docRef,
+    (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data() as Project;
+        onProjectUpdated({
+          ...data,
+          id: snapshot.id,
+        });
+      }
+    },
+    (error) => {
+      console.error(`Error in live sync for project ${projectId}:`, error);
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.GET, path);
+    }
+  );
+
+  return unsubscribe;
+}
+
+// Real-Time Project Team Chat
+export function subscribeToProjectMessages(
+  projectId: string,
+  onMessages: (messages: ProjectMessage[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const collectionPath = `projects/${projectId}/messages`;
+  const q = query(collection(db, collectionPath), orderBy('createdAt', 'asc'), limit(100));
+
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const messages: ProjectMessage[] = [];
+      snapshot.forEach((d) => {
+        messages.push({
+          ...(d.data() as ProjectMessage),
+          id: d.id,
+        });
+      });
+      onMessages(messages);
+    },
+    (error) => {
+      console.error('Error fetching project messages:', error);
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.GET, collectionPath);
+    }
+  );
+
+  return unsubscribe;
+}
+
+export async function sendProjectMessage(
+  projectId: string,
+  message: Omit<ProjectMessage, 'id'>
+): Promise<void> {
+  const messageId = `msg_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const path = `projects/${projectId}/messages/${messageId}`;
+  try {
+    const msgRef = doc(db, 'projects', projectId, 'messages', messageId);
+    await setDoc(msgRef, {
+      ...message,
+      id: messageId,
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+// Real-Time Collaborator Presence & Cursor Tracking
+export function subscribeToProjectPresence(
+  projectId: string,
+  onPresenceUpdate: (presences: ProjectPresence[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const collectionPath = `projects/${projectId}/presence`;
+  const q = query(collection(db, collectionPath));
+
+  const unsubscribe = onSnapshot(
+    q,
+    (snapshot) => {
+      const presences: ProjectPresence[] = [];
+      const now = Date.now();
+      snapshot.forEach((d) => {
+        const data = d.data() as ProjectPresence;
+        // Consider active if updated within the last 60 seconds
+        const lastSeenMs = new Date(data.lastSeen).getTime();
+        if (now - lastSeenMs < 60000) {
+          presences.push({
+            ...data,
+            id: d.id,
+          });
+        }
+      });
+      onPresenceUpdate(presences);
+    },
+    (error) => {
+      console.error('Error fetching project presence:', error);
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.GET, collectionPath);
+    }
+  );
+
+  return unsubscribe;
+}
+
+export async function updateProjectPresence(
+  projectId: string,
+  presence: ProjectPresence
+): Promise<void> {
+  const path = `projects/${projectId}/presence/${presence.userId}`;
+  try {
+    const presenceRef = doc(db, 'projects', projectId, 'presence', presence.userId);
+    await setDoc(
+      presenceRef,
+      {
+        ...presence,
+        lastSeen: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function removeProjectPresence(
+  projectId: string,
+  userId: string
+): Promise<void> {
+  const path = `projects/${projectId}/presence/${userId}`;
+  try {
+    const presenceRef = doc(db, 'projects', projectId, 'presence', userId);
+    await deleteDoc(presenceRef);
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+// Add and Remove Collaborators
+export async function addCollaboratorToProject(
+  projectId: string,
+  collaborator: CollaboratorMember
+): Promise<void> {
+  const path = `projects/${projectId}`;
+  try {
+    const projectDocRef = doc(db, 'projects', projectId);
+    await updateDoc(projectDocRef, {
+      collaboratorUids: arrayUnion(collaborator.uid),
+      collaborators: arrayUnion(collaborator),
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function removeCollaboratorFromProject(
+  projectId: string,
+  collaborator: CollaboratorMember
+): Promise<void> {
+  const path = `projects/${projectId}`;
+  try {
+    const projectDocRef = doc(db, 'projects', projectId);
+    await updateDoc(projectDocRef, {
+      collaboratorUids: arrayRemove(collaborator.uid),
+      collaborators: arrayRemove(collaborator),
+      updatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+

@@ -6,8 +6,9 @@ import { Navbar } from './components/Navbar';
 import { LandingPage } from './components/LandingPage';
 import { AuthPage } from './components/AuthPage';
 import { ProjectsHub } from './components/ProjectsHub';
-import { VisualStudio } from './components/editor/VisualStudio';
+import { ScratchStudio } from './components/studio/ScratchStudio';
 import { ToastContainer, ToastMessage } from './components/Toast';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import {
   auth,
@@ -61,9 +62,17 @@ function AppContent() {
     return () => unsubscribe();
   }, []);
 
-  // Listen to User Projects in Firestore in Real Time
+  const isCloudAuthenticated = Boolean(
+    !isAuthChecking &&
+      currentUser &&
+      auth.currentUser &&
+      currentUser.id === auth.currentUser.uid &&
+      currentUser.id !== 'demo_user'
+  );
+
+  // Listen to User Projects in Firestore in Real Time (only when Firebase Auth is ready & signed in)
   useEffect(() => {
-    if (!currentUser) return;
+    if (!isCloudAuthenticated || !currentUser) return;
 
     const unsubscribe = subscribeToUserProjects(
       currentUser.id,
@@ -95,7 +104,7 @@ function AppContent() {
     );
 
     return () => unsubscribe();
-  }, [currentUser?.id]);
+  }, [isCloudAuthenticated, currentUser?.id]);
 
   const handleToggleMeteorShower = () => {
     setIsMeteorShower((prev) => {
@@ -141,11 +150,11 @@ function AppContent() {
     addToast('You have been logged out from Firebase.', 'info');
   };
 
-  // Project handlers (with Firestore Cloud Persistence)
+  // Project handlers (with Firestore Cloud Persistence + Local Fallback for Demo Mode)
   const handleOpenProject = (project: Project) => {
     setCurrentProject(project);
     setCurrentPage('editor');
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    addToast(`Opened "${project.name}" in Studio.`, 'success');
   };
 
   const handleCreateProject = (newProject: Project) => {
@@ -154,21 +163,29 @@ function AppContent() {
     setCurrentProject(newProject);
     setCurrentPage('editor');
 
-    if (currentUser) {
+    if (isCloudAuthenticated && currentUser) {
       saveProjectToFirestore(newProject, currentUser.id).catch((err) => {
         console.warn('Firestore save project notice:', err);
       });
       addToast(`Project "${newProject.name}" synced to Firebase Cloud!`, 'success');
+    } else {
+      localStorage.setItem('sl_builder_projects', JSON.stringify(updated));
     }
   };
 
   const handleUpdateProject = (updatedProject: Project) => {
-    setProjects((prev) => prev.map((p) => (p.id === updatedProject.id ? updatedProject : p)));
+    setProjects((prev) => {
+      const next = prev.map((p) => (p.id === updatedProject.id ? updatedProject : p));
+      if (!isCloudAuthenticated) {
+        localStorage.setItem('sl_builder_projects', JSON.stringify(next));
+      }
+      return next;
+    });
     if (currentProject && currentProject.id === updatedProject.id) {
       setCurrentProject(updatedProject);
     }
 
-    if (currentUser) {
+    if (isCloudAuthenticated && currentUser) {
       saveProjectToFirestore(updatedProject, currentUser.id).catch((err) => {
         console.warn('Firestore update project notice:', err);
       });
@@ -184,9 +201,15 @@ function AppContent() {
       name: `${target.name} (Copy)`,
       updatedAt: 'Just now',
     };
-    setProjects((prev) => [duplicated, ...prev]);
+    setProjects((prev) => {
+      const next = [duplicated, ...prev];
+      if (!isCloudAuthenticated) {
+        localStorage.setItem('sl_builder_projects', JSON.stringify(next));
+      }
+      return next;
+    });
 
-    if (currentUser) {
+    if (isCloudAuthenticated && currentUser) {
       saveProjectToFirestore(duplicated, currentUser.id).catch((err) => {
         console.warn('Firestore duplicate project notice:', err);
       });
@@ -195,12 +218,18 @@ function AppContent() {
   };
 
   const handleDeleteProject = (id: string) => {
-    setProjects((prev) => prev.filter((p) => p.id !== id));
+    setProjects((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      if (!isCloudAuthenticated) {
+        localStorage.setItem('sl_builder_projects', JSON.stringify(next));
+      }
+      return next;
+    });
     if (currentProject && currentProject.id === id) {
       setCurrentProject(projects.find((p) => p.id !== id) || null);
     }
 
-    if (currentUser) {
+    if (isCloudAuthenticated) {
       deleteProjectFromFirestore(id).catch((err) => {
         console.warn('Firestore delete project notice:', err);
       });
@@ -238,7 +267,7 @@ function AppContent() {
       {/* Dynamic Star & Live Meteor (උල්කාපාත) particles canvas */}
       <CosmicBackground meteorShowerMode={isMeteorShower} />
 
-      {/* Global Top Navbar (visible on Landing, Auth, Projects) */}
+      {/* Global Top Navbar */}
       <Navbar
         currentPage={currentPage}
         onNavigate={setCurrentPage}
@@ -285,18 +314,17 @@ function AppContent() {
       )}
 
       {currentPage === 'editor' && currentProject && (
-        <VisualStudio
+        <ScratchStudio
           project={currentProject}
           onUpdateProject={handleUpdateProject}
           onBackToProjects={() => setCurrentPage('projects')}
           onToast={addToast}
-          isMeteorShower={isMeteorShower}
-          onToggleMeteorShower={handleToggleMeteorShower}
         />
       )}
 
-      {/* Global Toast Notifications */}
+      {/* Global Toast Notifications & PWA Offline Indicator */}
       <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
+      <OfflineIndicator />
     </div>
   );
 }
