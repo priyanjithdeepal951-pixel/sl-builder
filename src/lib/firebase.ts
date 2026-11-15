@@ -149,16 +149,32 @@ export async function syncUserProfile(userProfile: UserProfile): Promise<void> {
   }
 }
 
+function stripUndefined<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefined(item)) as unknown as T;
+  }
+  if (value && typeof value === 'object') {
+    const out: Record<string, unknown> = {};
+    Object.entries(value as Record<string, unknown>).forEach(([k, v]) => {
+      if (v !== undefined) {
+        out[k] = stripUndefined(v);
+      }
+    });
+    return out as T;
+  }
+  return value;
+}
+
 // Firestore Projects CRUD
 export async function saveProjectToFirestore(project: Project, userId: string): Promise<void> {
   const path = `projects/${project.id}`;
   try {
     const projectDocRef = doc(db, 'projects', project.id);
-    const payload = {
+    const payload = stripUndefined({
       ...project,
       userId,
       updatedAt: new Date().toISOString(),
-    };
+    });
     await setDoc(projectDocRef, payload, { merge: true });
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);

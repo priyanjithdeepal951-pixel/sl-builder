@@ -32,8 +32,13 @@ export type BlockType =
 
 export interface BlockStyle {
   textColor?: string;
+  customTextHex?: string;
+  subtitleColorHex?: string;
   bgColor?: string;
+  customBgHex?: string;
   borderColor?: string;
+  fontFamily?: 'sans' | 'serif' | 'mono' | 'display' | 'rounded';
+  fontWeight?: 'normal' | 'medium' | 'semibold' | 'bold' | 'extrabold';
   fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
   textAlign?: 'left' | 'center' | 'right';
   padding?: string;
@@ -56,6 +61,7 @@ export interface CanvasBlock {
   apiEndpoint?: string;
   // Custom metadata
   imageUrl?: string;
+  badgeText?: string;
   buttonVariant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost';
   counterValue?: number;
   statValue?: string;
@@ -98,6 +104,37 @@ export interface ProjectPresence {
   lastSeen: string;
 }
 
+export type PageLiveAnimationType =
+  | 'none'
+  | 'meteors'
+  | 'starfield'
+  | 'aurora'
+  | 'particles'
+  | 'cyber-grid'
+  | 'snow';
+
+export interface PageStyleSettings {
+  backgroundType?: 'solid' | 'gradient';
+  backgroundColor?: string;
+  gradientFrom?: string;
+  gradientTo?: string;
+  gradientDirection?: 'to bottom' | 'to bottom right' | 'to right' | 'radial';
+  textColor?: string;
+  accentColor?: string;
+  liveAnimation?: PageLiveAnimationType;
+  animationColor?: string;
+  animationSpeed?: 'slow' | 'normal' | 'fast';
+  animationDensity?: 'low' | 'medium' | 'high';
+}
+
+export interface SitePage {
+  id: string;
+  name: string;
+  slug: string;
+  blocks: CanvasBlock[];
+  pageStyle?: PageStyleSettings;
+}
+
 export interface Project {
   id: string;
   userId?: string;
@@ -106,6 +143,7 @@ export interface Project {
   updatedAt: string;
   status: 'Active' | 'Draft' | 'Published';
   blocks: CanvasBlock[];
+  pages?: SitePage[];
   studioState?: StudioWorkspaceState;
   thumbnailColor?: string;
   description?: string;

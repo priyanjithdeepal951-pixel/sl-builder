@@ -126,3 +126,97 @@
   animation: starTravel 5s ease-in-out infinite;
   pointer-events: none;
 }
+
+/* SL Builder WebStudio Live Page Background Animations */
+@keyframes slMeteorFall {
+  0% {
+    transform: rotate(-35deg) translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  75% {
+    opacity: 0.95;
+  }
+  100% {
+    transform: rotate(-35deg) translate3d(-620px, 0, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes slStarTwinkle {
+  0%, 100% {
+    opacity: 0.2;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+}
+
+@keyframes slAuroraDrift {
+  0% {
+    transform: translate3d(-8%, -6%, 0) scale(1);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translate3d(8%, 6%, 0) scale(1.12);
+    opacity: 0.65;
+  }
+  100% {
+    transform: translate3d(-8%, -6%, 0) scale(1);
+    opacity: 0.35;
+  }
+}
+
+@keyframes slFloatUp {
+  0% {
+    transform: translate3d(0, 20px, 0) scale(0.7);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.85;
+  }
+  80% {
+    opacity: 0.65;
+  }
+  100% {
+    transform: translate3d(18px, -260px, 0) scale(1.1);
+    opacity: 0;
+  }
+}
+
+@keyframes slSnowFall {
+  0% {
+    transform: translate3d(0, -15px, 0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.85;
+  }
+  85% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: translate3d(24px, 420px, 0);
+    opacity: 0;
+  }
+}
+
+@keyframes slGridPulse {
+  0%, 100% {
+    opacity: 0.18;
+  }
+  50% {
+    opacity: 0.38;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sl-anim-item {
+    animation: none !important;
+  }
+}
+

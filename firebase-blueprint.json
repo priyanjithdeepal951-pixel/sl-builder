@@ -70,7 +70,11 @@
         },
         "blocks": {
           "type": "array",
-          "description": "Array of visual and functional canvas blocks"
+          "description": "Array of visual and functional canvas blocks (Home page)"
+        },
+        "pages": {
+          "type": "array",
+          "description": "Array of website pages (id, name, slug, blocks) for multi-page projects"
         },
         "collaboratorUids": {
           "type": "array",
