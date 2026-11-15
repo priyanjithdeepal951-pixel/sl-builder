@@ -28,6 +28,10 @@
           "maxLength": 50,
           "description": "User role"
         },
+        "isSuspended": {
+          "type": "boolean",
+          "description": "Whether account is suspended by an administrator"
+        },
         "createdAt": {
           "type": "string",
           "description": "Creation timestamp"
@@ -38,6 +42,67 @@
         }
       },
       "required": ["id", "email", "name"]
+    },
+    "SiteSettings": {
+      "title": "SiteSettings",
+      "description": "Global platform configuration, CMS copy, templates, and security toggles",
+      "type": "object",
+      "properties": {
+        "brandName": { "type": "string", "maxLength": 80 },
+        "heroKicker": { "type": "string", "maxLength": 160 },
+        "heroTitle": { "type": "string", "maxLength": 200 },
+        "heroHighlight": { "type": "string", "maxLength": 120 },
+        "heroSubtitle": { "type": "string", "maxLength": 600 },
+        "heroPrimaryCta": { "type": "string", "maxLength": 80 },
+        "heroSecondaryCta": { "type": "string", "maxLength": 80 },
+        "announcementEnabled": { "type": "boolean" },
+        "announcementText": { "type": "string", "maxLength": 240 },
+        "maintenanceMode": { "type": "boolean" },
+        "maintenanceMessage": { "type": "string", "maxLength": 400 },
+        "allowSignups": { "type": "boolean" },
+        "allowDemoLogin": { "type": "boolean" },
+        "maxProjectsPerUser": { "type": "integer" },
+        "defaultTheme": {
+          "type": "string",
+          "enum": ["cosmic", "cyberpunk", "emerald", "amber", "titanium"]
+        },
+        "footerCopyright": { "type": "string", "maxLength": 160 },
+        "footerLinksText": { "type": "string", "maxLength": 160 },
+        "templates": { "type": "array" },
+        "updatedAt": { "type": "string", "maxLength": 64 },
+        "updatedBy": { "type": "string", "maxLength": 200 }
+      },
+      "required": ["brandName", "heroTitle", "maintenanceMode", "allowSignups"]
+    },
+    "AdminRecord": {
+      "title": "AdminRecord",
+      "description": "Trusted administrator allowlist entry keyed by Firebase Auth UID",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "email": { "type": "string", "format": "email", "maxLength": 200 },
+        "name": { "type": "string", "maxLength": 100 },
+        "role": { "type": "string", "enum": ["Super Admin", "Admin"] },
+        "grantedBy": { "type": "string", "maxLength": 200 },
+        "grantedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["uid", "email", "name", "role", "grantedBy", "grantedAt"]
+    },
+    "AuditLogEntry": {
+      "title": "AuditLogEntry",
+      "description": "Immutable administrative security audit event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-zA-Z0-9_\\-]+$", "maxLength": 128 },
+        "actorUid": { "type": "string", "maxLength": 128 },
+        "actorEmail": { "type": "string", "maxLength": 200 },
+        "action": { "type": "string", "maxLength": 100 },
+        "targetType": { "type": "string", "enum": ["settings", "user", "project", "admin", "security"] },
+        "targetId": { "type": "string", "maxLength": 128 },
+        "details": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "actorUid", "actorEmail", "action", "targetType", "targetId", "details", "createdAt"]
     },
     "Project": {
       "title": "Project",
@@ -192,6 +257,18 @@
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User account documents keyed by Auth UID"
+    },
+    "/appConfig/{configId}": {
+      "schema": "SiteSettings",
+      "description": "Global platform configuration and CMS copy managed by administrators"
+    },
+    "/admins/{adminUid}": {
+      "schema": "AdminRecord",
+      "description": "Trusted administrator RBAC registry keyed by Firebase Auth UID"
+    },
+    "/auditLogs/{logId}": {
+      "schema": "AuditLogEntry",
+      "description": "Immutable admin security & mutation audit trail"
     },
     "/projects/{projectId}": {
       "schema": "Project",

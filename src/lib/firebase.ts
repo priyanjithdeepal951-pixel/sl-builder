@@ -35,7 +35,14 @@ import {
   CollaboratorMember,
   ProjectMessage,
   ProjectPresence,
+  SiteSettingsConfig,
+  AdminRecord,
+  AuditLogEntry,
 } from '../types/builder';
+import {
+  DEFAULT_SITE_SETTINGS,
+  SUPER_ADMIN_EMAIL,
+} from '../data/siteSettingsDefaults';
 
 // Initialize Firebase App
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
@@ -131,19 +138,32 @@ export function mapFirebaseUser(user: FirebaseUser): UserProfile {
   };
 }
 
-// Firestore User Profile Sync
+// Firestore User Profile Sync (preserves admin-assigned role & suspension flags)
 export async function syncUserProfile(userProfile: UserProfile): Promise<void> {
   const path = `users/${userProfile.id}`;
+  const now = new Date().toISOString();
   try {
     const userDocRef = doc(db, 'users', userProfile.id);
-    await setDoc(
-      userDocRef,
-      {
-        ...userProfile,
-        updatedAt: new Date().toISOString(),
-      },
-      { merge: true }
-    );
+    const existingSnap = await getDoc(userDocRef);
+    if (!existingSnap.exists()) {
+      await setDoc(userDocRef, {
+        id: userProfile.id,
+        email: userProfile.email,
+        name: userProfile.name,
+        avatar: userProfile.avatar,
+        role: 'Creator',
+        isSuspended: false,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      await updateDoc(userDocRef, {
+        email: userProfile.email,
+        name: userProfile.name,
+        avatar: userProfile.avatar,
+        updatedAt: now,
+      });
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, path);
   }
@@ -448,4 +468,280 @@ export async function removeCollaboratorFromProject(
     handleFirestoreError(error, OperationType.UPDATE, path);
   }
 }
+
+// ============================================================================
+// ADMIN RBAC, SITE CMS SETTINGS & SECURITY AUDIT HELPERS
+// ============================================================================
+
+export async function checkIsAdminInFirestore(
+  uid: string,
+  email?: string | null,
+  emailVerified?: boolean
+): Promise<boolean> {
+  if (!uid || !emailVerified) return false;
+  if (email && email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase()) {
+    return true;
+  }
+  const path = `admins/${uid}`;
+  try {
+    const adminSnap = await getDoc(doc(db, 'admins', uid));
+    return adminSnap.exists();
+  } catch (error) {
+    console.warn('Admin status lookup notice:', error);
+    return false;
+  }
+}
+
+export function subscribeToUserSelf(
+  userId: string,
+  onProfile: (profile: UserProfile | null) => void
+): () => void {
+  const path = `users/${userId}`;
+  return onSnapshot(
+    doc(db, 'users', userId),
+    (snapshot) => {
+      if (snapshot.exists()) {
+        onProfile({ ...(snapshot.data() as UserProfile), id: snapshot.id });
+      } else {
+        onProfile(null);
+      }
+    },
+    (error) => {
+      console.warn(`User self listener notice (${path}):`, error.message);
+    }
+  );
+}
+
+export function subscribeToSiteSettings(
+  onSettings: (settings: SiteSettingsConfig) => void
+): () => void {
+  const path = 'appConfig/siteSettings';
+  return onSnapshot(
+    doc(db, 'appConfig', 'siteSettings'),
+    (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data() as Partial<SiteSettingsConfig>;
+        onSettings({
+          ...DEFAULT_SITE_SETTINGS,
+          ...data,
+          templates:
+            Array.isArray(data.templates) && data.templates.length > 0
+              ? data.templates
+              : DEFAULT_SITE_SETTINGS.templates,
+        });
+      } else {
+        onSettings(DEFAULT_SITE_SETTINGS);
+      }
+    },
+    (error) => {
+      console.warn(`Site settings subscription notice (${path}):`, error.message);
+      onSettings(DEFAULT_SITE_SETTINGS);
+    }
+  );
+}
+
+export async function saveSiteSettings(
+  settings: SiteSettingsConfig,
+  actorEmail: string
+): Promise<void> {
+  const path = 'appConfig/siteSettings';
+  try {
+    const payload = stripUndefined({
+      ...settings,
+      brandName: settings.brandName.slice(0, 80),
+      heroTitle: settings.heroTitle.slice(0, 200),
+      heroKicker: (settings.heroKicker || '').slice(0, 160),
+      heroHighlight: (settings.heroHighlight || '').slice(0, 120),
+      heroSubtitle: (settings.heroSubtitle || '').slice(0, 600),
+      heroPrimaryCta: (settings.heroPrimaryCta || '').slice(0, 80),
+      heroSecondaryCta: (settings.heroSecondaryCta || '').slice(0, 80),
+      announcementText: (settings.announcementText || '').slice(0, 240),
+      maintenanceMessage: (settings.maintenanceMessage || '').slice(0, 400),
+      footerCopyright: (settings.footerCopyright || '').slice(0, 160),
+      footerLinksText: (settings.footerLinksText || '').slice(0, 160),
+      maxProjectsPerUser: Math.min(1000, Math.max(1, Math.round(Number(settings.maxProjectsPerUser) || 50))),
+      templates: (settings.templates || []).slice(0, 24),
+      updatedAt: new Date().toISOString(),
+      updatedBy: actorEmail.slice(0, 200),
+    });
+    await setDoc(doc(db, 'appConfig', 'siteSettings'), payload, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export function subscribeToAllUsers(
+  onUsers: (users: UserProfile[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const path = 'users';
+  return onSnapshot(
+    query(collection(db, path), limit(200)),
+    (snapshot) => {
+      const list: UserProfile[] = [];
+      snapshot.forEach((d) => {
+        list.push({ ...(d.data() as UserProfile), id: d.id });
+      });
+      list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+      onUsers(list);
+    },
+    (error) => {
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function adminUpdateUser(
+  userId: string,
+  patch: Partial<Pick<UserProfile, 'name' | 'role' | 'isSuspended'>>
+): Promise<void> {
+  const path = `users/${userId}`;
+  try {
+    await updateDoc(
+      doc(db, 'users', userId),
+      stripUndefined({
+        ...patch,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, path);
+  }
+}
+
+export async function adminDeleteUser(userId: string): Promise<void> {
+  const path = `users/${userId}`;
+  try {
+    await deleteDoc(doc(db, 'users', userId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export function subscribeToAllProjects(
+  onProjects: (projects: Project[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const path = 'projects';
+  return onSnapshot(
+    query(collection(db, path), limit(200)),
+    (snapshot) => {
+      const list: Project[] = [];
+      snapshot.forEach((d) => {
+        list.push({ ...(d.data() as Project), id: d.id });
+      });
+      list.sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
+      onProjects(list);
+    },
+    (error) => {
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function adminSaveProject(project: Project): Promise<void> {
+  const path = `projects/${project.id}`;
+  try {
+    const payload = stripUndefined({
+      ...project,
+      name: project.name.slice(0, 100),
+      description: (project.description || '').slice(0, 500),
+      updatedAt: new Date().toISOString(),
+    });
+    await setDoc(doc(db, 'projects', project.id), payload, { merge: true });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export function subscribeToAdmins(
+  onAdmins: (admins: AdminRecord[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const path = 'admins';
+  return onSnapshot(
+    query(collection(db, path), limit(100)),
+    (snapshot) => {
+      const list: AdminRecord[] = [];
+      snapshot.forEach((d) => {
+        list.push({ ...(d.data() as AdminRecord), uid: d.id });
+      });
+      onAdmins(list);
+    },
+    (error) => {
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function grantAdminRole(record: AdminRecord): Promise<void> {
+  const path = `admins/${record.uid}`;
+  try {
+    await setDoc(doc(db, 'admins', record.uid), {
+      uid: record.uid.trim(),
+      email: record.email.trim().slice(0, 200),
+      name: record.name.trim().slice(0, 100),
+      role: record.role,
+      grantedBy: record.grantedBy.slice(0, 200),
+      grantedAt: record.grantedAt || new Date().toISOString(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.WRITE, path);
+  }
+}
+
+export async function revokeAdminRole(uid: string): Promise<void> {
+  const path = `admins/${uid}`;
+  try {
+    await deleteDoc(doc(db, 'admins', uid));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export function subscribeToAuditLogs(
+  onLogs: (logs: AuditLogEntry[]) => void,
+  onError?: (err: Error) => void
+): () => void {
+  const path = 'auditLogs';
+  return onSnapshot(
+    query(collection(db, path), orderBy('createdAt', 'desc'), limit(150)),
+    (snapshot) => {
+      const logs: AuditLogEntry[] = [];
+      snapshot.forEach((d) => {
+        logs.push({ ...(d.data() as AuditLogEntry), id: d.id });
+      });
+      onLogs(logs);
+    },
+    (error) => {
+      if (onError) onError(error);
+      handleFirestoreError(error, OperationType.LIST, path);
+    }
+  );
+}
+
+export async function logAdminAudit(
+  entry: Omit<AuditLogEntry, 'id' | 'createdAt'>
+): Promise<void> {
+  const id = `log_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const path = `auditLogs/${id}`;
+  try {
+    await setDoc(doc(db, 'auditLogs', id), {
+      id,
+      actorUid: entry.actorUid.slice(0, 128),
+      actorEmail: entry.actorEmail.slice(0, 200),
+      action: entry.action.slice(0, 100),
+      targetType: entry.targetType,
+      targetId: entry.targetId.slice(0, 128),
+      details: entry.details.slice(0, 500),
+      createdAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.CREATE, path);
+  }
+}
+
 

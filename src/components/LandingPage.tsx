@@ -17,61 +17,39 @@ import {
 } from 'lucide-react';
 import { BentoGridShowcase } from './BentoGridShowcase';
 import { useTheme } from '../context/ThemeContext';
+import { SiteSettingsConfig } from '../types/builder';
+import { DEFAULT_SITE_SETTINGS } from '../data/siteSettingsDefaults';
 
 interface LandingPageProps {
   onGetStarted: () => void;
   onOpenProjects: () => void;
   onOpenTemplate: (templateName: string) => void;
+  siteSettings?: SiteSettingsConfig;
 }
 
 export const LandingPage: React.FC<LandingPageProps> = ({
   onGetStarted,
   onOpenProjects,
   onOpenTemplate,
+  siteSettings = DEFAULT_SITE_SETTINGS,
 }) => {
   const { themeConfig } = useTheme();
   const [heroViewport, setHeroViewport] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [heroCounter, setHeroCounter] = useState(14);
-  const [activeCodeTab, setActiveCodeTab] = useState<'tsx' | 'html' | 'flask'>('tsx');
 
   const scrollToSection = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const templates = [
-    {
-      name: 'Agency Studio Showcase',
-      category: 'Agency',
-      description: 'High-conversion startup showcase with hero narrative, reactive metrics, and CTA triggers.',
-      accent: 'from-indigo-600/30 to-purple-600/10',
-      tag: 'Full Stack',
-      blocksCount: 7,
-    },
-    {
-      name: 'Developer Portfolio',
-      category: 'Portfolio',
-      description: 'Dark-mode minimal portfolio with interactive project cards, skills grid, and contact event wire.',
-      accent: 'from-blue-600/30 to-cyan-600/10',
-      tag: 'Interactive',
-      blocksCount: 5,
-    },
-    {
-      name: 'SaaS Product Waitlist',
-      category: 'SaaS',
-      description: 'Early bird launch page with live email input validation, countdown logic, and social proof.',
-      accent: 'from-purple-600/30 to-pink-600/10',
-      tag: 'Lead Gen',
-      blocksCount: 6,
-    },
-    {
-      name: 'Modern E-Commerce Store',
-      category: 'Commerce',
-      description: 'Electronics catalog with interactive pricing cards, spec badges, and cart simulation.',
-      accent: 'from-emerald-600/30 to-teal-600/10',
-      tag: 'Reactive Store',
-      blocksCount: 8,
-    },
-  ];
+  const templates =
+    siteSettings.templates && siteSettings.templates.length > 0
+      ? siteSettings.templates
+      : DEFAULT_SITE_SETTINGS.templates;
+
+  const kickerParts = (siteSettings.heroKicker || DEFAULT_SITE_SETTINGS.heroKicker)
+    .split('·')
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   return (
     <div className="flex-grow flex flex-col relative z-10 w-full overflow-x-hidden">
@@ -84,25 +62,26 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         />
 
         {/* Clean Unboxed Metadata Header (Anti-Slop §1.A) */}
-        <div className="flex items-center gap-2 text-xs font-mono text-slate-400 mb-6">
-          <span>Visual Drag & Drop</span>
-          <span aria-hidden="true">·</span>
-          <span>Reactive State Wiring</span>
-          <span aria-hidden="true">·</span>
-          <span>4-Way Code Export</span>
+        <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-mono text-slate-400 mb-6">
+          {kickerParts.map((part, idx) => (
+            <React.Fragment key={idx}>
+              {idx > 0 && <span aria-hidden="true">·</span>}
+              <span>{part}</span>
+            </React.Fragment>
+          ))}
         </div>
 
         {/* Hero Title */}
         <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight text-white leading-[1.08] max-w-4xl mb-6">
-          Visual web studio for engineers who{' '}
+          {siteSettings.heroTitle || DEFAULT_SITE_SETTINGS.heroTitle}{' '}
           <span className={`text-transparent bg-clip-text bg-gradient-to-r ${themeConfig.gradientText}`}>
-            ship fast.
+            {siteSettings.heroHighlight || DEFAULT_SITE_SETTINGS.heroHighlight}
           </span>
         </h1>
 
         {/* Hero Subtitle */}
         <p className="text-base sm:text-lg text-slate-300 max-w-2xl font-normal leading-relaxed mb-9">
-          Design responsive layout blocks visually, connect reactive logic wires without configuration, and export pristine HTML, React 19 TSX, and Python Flask REST backends.
+          {siteSettings.heroSubtitle || DEFAULT_SITE_SETTINGS.heroSubtitle}
         </p>
 
         {/* Action CTAs */}
@@ -115,14 +94,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
               boxShadow: `0 12px 28px -6px ${themeConfig.accentHex}40`,
             }}
           >
-            <span>Launch Visual Studio</span>
+            <span>{siteSettings.heroPrimaryCta || DEFAULT_SITE_SETTINGS.heroPrimaryCta}</span>
             <ArrowRight className="w-4 h-4" />
           </button>
           <button
             onClick={() => scrollToSection('features-section')}
             className="w-full sm:w-auto px-6 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 font-semibold text-xs transition-colors flex items-center justify-center gap-2"
           >
-            <span>Inspect Studio Engine</span>
+            <span>{siteSettings.heroSecondaryCta || DEFAULT_SITE_SETTINGS.heroSecondaryCta}</span>
           </button>
         </div>
 
@@ -372,20 +351,27 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <footer className="border-t border-white/5 py-8 px-6 text-xs text-slate-500">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <span className="font-bold text-slate-300">SL Builder</span>
-            <span>·</span>
-            <span>Visual Logic & Web Studio</span>
+            <span className="font-bold text-slate-300">
+              {siteSettings.footerCopyright || DEFAULT_SITE_SETTINGS.footerCopyright}
+            </span>
           </div>
           <div className="flex items-center gap-6">
-            <button onClick={() => scrollToSection('features-section')} className="hover:text-slate-300">
-              Features
-            </button>
-            <button onClick={() => scrollToSection('templates-section')} className="hover:text-slate-300">
-              Blueprints
-            </button>
-            <button onClick={onOpenProjects} className="hover:text-slate-300">
-              Projects Hub
-            </button>
+            {((siteSettings.footerLinksText || DEFAULT_SITE_SETTINGS.footerLinksText)
+              .split('·')
+              .map((s) => s.trim())
+              .filter(Boolean)).map((label, idx) => (
+              <button
+                key={idx}
+                onClick={() => {
+                  if (idx === 0) scrollToSection('features-section');
+                  else if (idx === 1) scrollToSection('templates-section');
+                  else onOpenProjects();
+                }}
+                className="hover:text-slate-300 transition-colors"
+              >
+                {label}
+              </button>
+            ))}
           </div>
         </div>
       </footer>

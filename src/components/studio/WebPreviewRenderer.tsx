@@ -11,18 +11,25 @@ import {
   Check,
   Clock,
 } from 'lucide-react';
-import { CanvasBlock, PageStyleSettings, SitePage } from '../../types/builder';
+import {
+  CanvasBlock,
+  NavbarLinkItem,
+  PageStyleSettings,
+  SitePage,
+} from '../../types/builder';
 import { LiveBackgroundLayer } from './LiveBackgroundLayer';
 import {
   isLightPageBackground,
   resolvePageBackgroundCss,
 } from '../../utils/pageStylePresets';
+import { getEffectiveNavLinks } from '../../utils/navLinkHelpers';
 
 interface WebPreviewRendererProps {
   blocks: CanvasBlock[];
   selectedBlockId: string | null;
   onSelectBlock: (id: string) => void;
-  onTriggerAction: (block: CanvasBlock) => void;
+  onTriggerAction: (block: CanvasBlock, formValues?: Record<string, string>) => void;
+  onTriggerNavLink?: (navBlock: CanvasBlock, link: NavbarLinkItem) => void;
   onUpdateBlock: (block: CanvasBlock) => void;
   accentHex?: string;
   pages?: SitePage[];
@@ -101,6 +108,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
   selectedBlockId,
   onSelectBlock,
   onTriggerAction,
+  onTriggerNavLink,
   onUpdateBlock,
   accentHex = '#4D97FF',
   pages,
@@ -202,9 +210,15 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
               }`
         }`;
 
+        const effectiveNavLinks =
+          block.type === 'ui-navbar'
+            ? getEffectiveNavLinks(block, pages, blocks)
+            : [];
+
         return (
           <div
             key={block.id}
+            id={`sl-el-${block.id}`}
             onClick={(e) => {
               e.stopPropagation();
               onSelectBlock(block.id);
@@ -236,41 +250,37 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                   </span>
                 </div>
                 <nav className="flex items-center gap-3 overflow-x-auto">
-                  {pages && pages.length > 1
-                    ? pages.map((p) => (
-                        <button
-                          key={p.id}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectPage?.(p.id);
-                          }}
-                          style={subtitleStyle}
-                          className={`text-[11px] whitespace-nowrap cursor-pointer ${
-                            isLightPage
-                              ? 'text-slate-600 hover:text-slate-950'
-                              : 'text-slate-300 hover:text-white'
-                          }`}
-                        >
-                          {p.name}
-                        </button>
-                      ))
-                    : block.subtitle &&
-                      block.subtitle
-                        .split(/[·,|]+/)
-                        .map((item) => item.trim())
-                        .filter(Boolean)
-                        .map((item, idx) => (
-                          <span
-                            key={idx}
-                            style={subtitleStyle}
-                            className={`text-[11px] whitespace-nowrap ${
-                              isLightPage ? 'text-slate-600' : 'text-slate-400'
-                            }`}
-                          >
-                            {item}
-                          </span>
-                        ))}
+                  {effectiveNavLinks.map((link) => (
+                    <button
+                      key={link.id}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onTriggerNavLink) {
+                          onTriggerNavLink(block, link);
+                        } else if (link.action === 'navigate-page' && link.targetPageId) {
+                          onSelectPage?.(link.targetPageId);
+                        }
+                      }}
+                      style={subtitleStyle}
+                      title={
+                        link.action === 'navigate-page'
+                          ? 'Click to open page'
+                          : link.action === 'scroll-to-block'
+                          ? 'Click to scroll to section'
+                          : link.action === 'open-url'
+                          ? link.url || 'External link'
+                          : 'Click navbar button'
+                      }
+                      className={`text-[11px] font-medium whitespace-nowrap cursor-pointer transition-colors hover:underline underline-offset-4 ${
+                        isLightPage
+                          ? 'text-slate-600 hover:text-slate-950'
+                          : 'text-slate-300 hover:text-white'
+                      }`}
+                    >
+                      {link.label}
+                    </button>
+                  ))}
                 </nav>
               </header>
             )}
@@ -521,13 +531,13 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                   onClick={(e) => {
                     e.stopPropagation();
                     onSelectBlock(block.id);
-                    onTriggerAction(block);
+                    onTriggerAction(block, formInputs);
                   }}
                   style={{
                     ...(block.buttonVariant === 'primary' &&
                     !block.style?.customBgHex &&
                     (!customBg || customBg === 'bg-indigo-600')
-                      ? { backgroundColor: accentHex }
+                      ? { backgroundColor: resolvedAccent }
                       : {}),
                     ...(block.style?.customBgHex
                       ? { backgroundColor: block.style.customBgHex }
@@ -544,7 +554,9 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       : `${customBg || ''} ${customTextColor || 'text-white'} hover:opacity-95`
                   }`}
                 >
-                  <Zap className="w-3.5 h-3.5" />
+                  {!(block.content || '').trim().startsWith('⚡') && (
+                    <Zap className="w-3.5 h-3.5 shrink-0" />
+                  )}
                   <span>{block.content}</span>
                 </button>
               </div>
@@ -793,7 +805,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      onTriggerAction(block);
+                      onTriggerAction(block, formInputs);
                     }}
                     className="px-2.5 py-1 rounded-lg bg-amber-500 text-slate-950 text-[11px] font-bold cursor-pointer shrink-0"
                   >

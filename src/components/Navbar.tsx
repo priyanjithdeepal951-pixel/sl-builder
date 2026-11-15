@@ -1,19 +1,24 @@
 import React, { useState } from 'react';
-import { Sparkles, FolderKanban, LogOut, Code2, Menu, X, ArrowUpRight } from 'lucide-react';
-import { UserProfile } from '../types/builder';
+import { Sparkles, FolderKanban, LogOut, Code2, Menu, X, ArrowUpRight, ShieldCheck } from 'lucide-react';
+import { UserProfile, SiteSettingsConfig } from '../types/builder';
+import { DEFAULT_SITE_SETTINGS } from '../data/siteSettingsDefaults';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { PWAInstallButton } from './PWAInstallButton';
 import { useTheme } from '../context/ThemeContext';
 
+type AppPage = 'welcome' | 'auth' | 'projects' | 'editor' | 'admin';
+
 interface NavbarProps {
-  currentPage: 'welcome' | 'auth' | 'projects' | 'editor';
-  onNavigate: (page: 'welcome' | 'auth' | 'projects' | 'editor') => void;
+  currentPage: AppPage;
+  onNavigate: (page: AppPage) => void;
   currentUser: UserProfile | null;
   onLogout: () => void;
   hasActiveProject?: boolean;
   onOpenActiveEditor?: () => void;
   isMeteorShower?: boolean;
   onToggleMeteorShower?: () => void;
+  isAdmin?: boolean;
+  siteSettings?: SiteSettingsConfig;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -25,23 +30,38 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenActiveEditor,
   isMeteorShower = false,
   onToggleMeteorShower,
+  isAdmin = false,
+  siteSettings = DEFAULT_SITE_SETTINGS,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
   const { themeConfig } = useTheme();
 
-  if (currentPage === 'editor') {
+  if (currentPage === 'editor' || currentPage === 'admin') {
     return null;
   }
 
-  const handleNavClick = (page: 'welcome' | 'auth' | 'projects' | 'editor') => {
+  const handleNavClick = (page: AppPage) => {
     onNavigate(page);
     setMobileMenuOpen(false);
   };
 
   return (
-    <header className="sticky top-3 z-40 px-4 sm:px-6 transition-all duration-200">
+    <header className="sticky top-3 z-40 px-4 sm:px-6 transition-all duration-200 space-y-2">
+      {siteSettings.announcementEnabled && siteSettings.announcementText && (
+        <div
+          className="max-w-6xl mx-auto rounded-xl px-4 py-1.5 text-[11px] font-medium text-center text-white border border-white/15 shadow-lg backdrop-blur-xl flex items-center justify-center gap-2"
+          style={{
+            backgroundColor: `${themeConfig.accentHex}26`,
+            borderColor: `${themeConfig.accentHex}55`,
+          }}
+        >
+          <Sparkles className="w-3.5 h-3.5 shrink-0" style={{ color: themeConfig.accentHex }} />
+          <span>{siteSettings.announcementText}</span>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto studio-glass rounded-2xl px-5 py-3 shadow-2xl flex items-center justify-between gap-6 border border-white/10">
         {/* Zone 1: Brand Wordmark */}
         <div
@@ -59,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <Sparkles className="w-4 h-4" />
           </div>
           <span className="text-base font-bold tracking-tight text-white whitespace-nowrap">
-            SL Builder
+            {siteSettings.brandName || 'SL Builder'}
           </span>
         </div>
 
@@ -225,6 +245,19 @@ export const Navbar: React.FC<NavbarProps> = ({
                     </button>
                   )}
 
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setSettingsDropdownOpen(false);
+                        onNavigate('admin');
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 flex items-center gap-2 border border-emerald-500/20"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Admin Command Center</span>
+                    </button>
+                  )}
+
                   <div className="pt-1.5 border-t border-white/10">
                     <PWAInstallButton variant="menu-item" />
                   </div>
@@ -263,6 +296,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                     <FolderKanban className="w-3.5 h-3.5" style={{ color: themeConfig.accentHex }} />
                     <span>Projects</span>
                   </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        onNavigate('admin');
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-emerald-500/15 text-emerald-300 hover:text-emerald-200 flex items-center gap-2"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Admin Panel</span>
+                    </button>
+                  )}
                   <button
                     onClick={() => {
                       setUserMenuOpen(false);
@@ -324,6 +369,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Projects Hub</span>
             <FolderKanban className="w-4 h-4 text-indigo-400" />
           </button>
+          {isAdmin && (
+            <button
+              onClick={() => handleNavClick('admin')}
+              className="w-full text-left px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 flex items-center justify-between"
+            >
+              <span>Admin Panel</span>
+              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+            </button>
+          )}
           {!currentUser ? (
             <button
               onClick={() => handleNavClick('auth')}

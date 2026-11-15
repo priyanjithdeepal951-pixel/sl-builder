@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { ArrowLeft, Check, Eye, EyeOff, Sparkles, Mail, Lock, KeyRound, Loader2 } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { ArrowLeft, Check, Eye, EyeOff, Sparkles, Mail, Lock, KeyRound, Loader2, ShieldAlert } from 'lucide-react';
 import { UserProfile } from '../types/builder';
 import { useTheme } from '../context/ThemeContext';
 import {
@@ -20,11 +20,19 @@ interface AuthPageProps {
   onBackToHome: () => void;
   onLoginSuccess: (user: UserProfile) => void;
   onToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
+  allowSignups?: boolean;
+  allowDemoLogin?: boolean;
 }
 
-export const AuthPage: React.FC<AuthPageProps> = ({ onBackToHome, onLoginSuccess, onToast }) => {
+export const AuthPage: React.FC<AuthPageProps> = ({
+  onBackToHome,
+  onLoginSuccess,
+  onToast,
+  allowSignups = true,
+  allowDemoLogin = true,
+}) => {
   const { themeConfig } = useTheme();
-  const [mode, setMode] = useState<'signup' | 'login'>('signup');
+  const [mode, setMode] = useState<'signup' | 'login'>(allowSignups ? 'signup' : 'login');
   const [email, setEmail] = useState('');
   const [confirmEmail, setConfirmEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,9 +42,20 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBackToHome, onLoginSuccess
   const [forgotEmail, setForgotEmail] = useState('');
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (!allowSignups && mode === 'signup') {
+      setMode('login');
+    }
+  }, [allowSignups]);
+
   // REAL FIREBASE EMAIL/PASSWORD AUTH
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (mode === 'signup' && !allowSignups) {
+      onToast('New user registrations are currently paused by the administrator.', 'error');
+      return;
+    }
 
     if (!email || !email.includes('@')) {
       onToast('Please enter a valid email address.', 'error');
@@ -200,22 +219,24 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBackToHome, onLoginSuccess
           </div>
 
           {/* Quick Demo Access */}
-          <div className="pt-2">
-            <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
-              <div>
-                <p className="text-xs font-bold text-white">Instant Sandbox Mode</p>
-                <p className="text-[11px] text-slate-400">Test without creating an account</p>
+          {allowDemoLogin && (
+            <div className="pt-2">
+              <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-bold text-white">Instant Sandbox Mode</p>
+                  <p className="text-[11px] text-slate-400">Test without creating an account</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDemoLogin}
+                  className="px-3 py-1.5 rounded-lg text-white text-xs font-semibold transition-all hover:opacity-90"
+                  style={{ backgroundColor: themeConfig.accentHex }}
+                >
+                  Demo Login
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={handleDemoLogin}
-                className="px-3 py-1.5 rounded-lg text-white text-xs font-semibold transition-all hover:opacity-90"
-                style={{ backgroundColor: themeConfig.accentHex }}
-              >
-                Demo Login
-              </button>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Right Column: Form Card */}
@@ -242,6 +263,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBackToHome, onLoginSuccess
                 Log In
               </button>
             </div>
+
+            {mode === 'signup' && !allowSignups && (
+              <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
+                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold text-amber-300">Registrations Temporarily Paused</p>
+                  <p className="text-[11px] text-amber-200/80 mt-0.5">
+                    New account signups are disabled by the platform administrator. Existing members and admins can still log in.
+                  </p>
+                </div>
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
               <div>
@@ -330,7 +363,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({ onBackToHome, onLoginSuccess
 
               <button
                 type="submit"
-                disabled={loading}
+                disabled={loading || (mode === 'signup' && !allowSignups)}
                 className="w-full py-2.5 rounded-xl text-white font-semibold text-xs shadow-lg transition-all mt-2 flex items-center justify-center gap-2 disabled:opacity-50"
                 style={{ backgroundColor: themeConfig.accentHex }}
               >

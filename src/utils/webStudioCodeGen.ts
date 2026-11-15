@@ -5,6 +5,7 @@ import {
   isLightPageBackground,
   resolvePageBackgroundCss,
 } from './pageStylePresets';
+import { getEffectiveNavLinks } from './navLinkHelpers';
 
 function escapeHtml(text: string): string {
   return text
@@ -326,18 +327,6 @@ export function generateHtmlExport(
   const resolvedAccent = pageStyle?.accentColor || '#4f46e5';
   const animBundle = buildLiveAnimationCssAndHtml(pageStyle);
 
-  const navPagesLinks =
-    pages && pages.length > 1
-      ? pages
-          .map(
-            (p) =>
-              `<a href="${escapeHtml(p.slug)}.html" class="text-sm opacity-80 hover:opacity-100 transition-opacity">${escapeHtml(
-                p.name
-              )}</a>`
-          )
-          .join('\n          ')
-      : '';
-
   const renderedBlocks = blocks
     .map((b) => {
       const content = escapeHtml(b.content || b.name);
@@ -351,25 +340,37 @@ export function generateHtmlExport(
       const fontWt = getCssFontWeight(b.style?.fontWeight, b.type === 'ui-paragraph' ? '400' : '700');
       const bgVal = getCssBgColor(b.style?.bgColor, b.style?.customBgHex);
       const radiusClass = b.style?.borderRadius || 'rounded-xl';
+      const elId = `sl-el-${escapeHtml(b.id)}`;
 
       switch (b.type) {
         case 'ui-navbar': {
-          const linksHtml = navPagesLinks
-            ? navPagesLinks
-            : subtitle
-            ? subtitle
-                .split(/[·,|]+/)
-                .map((item) => item.trim())
-                .filter(Boolean)
-                .map(
-                  (item) =>
-                    `<a href="#" class="text-sm opacity-80 hover:opacity-100 transition-opacity">${escapeHtml(
-                      item
-                    )}</a>`
-                )
-                .join('\n          ')
-            : '';
-          return `  <header style="font-family: ${fontFam}; background: ${
+          const effectiveLinks = getEffectiveNavLinks(b, pages, blocks);
+          const linksHtml = effectiveLinks
+            .map((link) => {
+              const label = escapeHtml(link.label);
+              if (link.action === 'navigate-page') {
+                const targetPage = pages?.find((p) => p.id === link.targetPageId);
+                const href = targetPage ? `${escapeHtml(targetPage.slug)}.html` : '#';
+                return `<a href="${href}" class="text-sm opacity-80 hover:opacity-100 transition-opacity no-underline">${label}</a>`;
+              }
+              if (link.action === 'scroll-to-block' && link.targetBlockId) {
+                const targetDomId = `sl-el-${escapeHtml(link.targetBlockId)}`;
+                return `<a href="#${targetDomId}" data-scroll-target="${targetDomId}" class="sl-nav-link text-sm opacity-80 hover:opacity-100 transition-opacity no-underline cursor-pointer">${label}</a>`;
+              }
+              if (link.action === 'open-url') {
+                const rawUrl = (link.url || '#').trim();
+                const isInternalHash = rawUrl.startsWith('#');
+                return isInternalHash
+                  ? `<a href="${escapeHtml(rawUrl)}" class="sl-nav-link text-sm opacity-80 hover:opacity-100 transition-opacity no-underline">${label}</a>`
+                  : `<a href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener noreferrer" class="text-sm opacity-80 hover:opacity-100 transition-opacity no-underline">${label}</a>`;
+              }
+              const msg = escapeHtml(
+                link.message || `Clicked "${link.label}"`
+              );
+              return `<button type="button" data-nav-msg="${msg}" class="sl-nav-link text-sm opacity-80 hover:opacity-100 transition-opacity bg-transparent border-0 p-0 cursor-pointer text-inherit font-inherit">${label}</button>`;
+            })
+            .join('\n        ');
+          return `  <header id="${elId}" style="font-family: ${fontFam}; background: ${
             bgVal || (isLightPage ? 'rgba(255, 255, 255, 0.86)' : 'rgba(13, 17, 26, 0.86)')
           };" class="w-full sticky top-0 z-50 border-b ${
             isLightPage ? 'border-slate-200' : 'border-white/10'
@@ -392,7 +393,7 @@ export function generateHtmlExport(
         }
 
         case 'ui-heading':
-          return `  <section style="font-family: ${fontFam}; ${
+          return `  <section id="${elId}" style="font-family: ${fontFam}; ${
             bgVal && bgVal !== 'rgba(255, 255, 255, 0.04)' ? `background: ${bgVal};` : ''
           }" class="w-full py-16 sm:py-20 px-6">
     <div class="max-w-4xl mx-auto space-y-4 ${alignClass}">
@@ -414,7 +415,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-paragraph':
-          return `  <section style="font-family: ${fontFam}; ${
+          return `  <section id="${elId}" style="font-family: ${fontFam}; ${
             bgVal ? `background: ${bgVal};` : ''
           }" class="w-full py-4 px-6">
     <div class="max-w-4xl mx-auto ${alignClass} space-y-2 ${
@@ -433,7 +434,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-badge':
-          return `  <div style="font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 pt-8 pb-2 ${alignClass}">
+          return `  <div id="${elId}" style="font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 pt-8 pb-2 ${alignClass}">
     <span style="color: ${getCssColor(
       b.style?.textColor,
       b.style?.customTextHex,
@@ -445,7 +446,7 @@ export function generateHtmlExport(
   </div>`;
 
         case 'ui-stat':
-          return `  <section class="max-w-5xl mx-auto px-6 py-4">
+          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
           };" class="p-6 ${radiusClass} border border-white/10 ${alignClass}">
@@ -463,7 +464,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-card':
-          return `  <section class="max-w-5xl mx-auto px-6 py-4">
+          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
           };" class="p-6 ${radiusClass} border border-white/10 space-y-2 ${alignClass}">
@@ -476,7 +477,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-pricing':
-          return `  <section class="max-w-5xl mx-auto px-6 py-4">
+          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'linear-gradient(135deg, rgba(30,27,75,0.55), rgba(15,23,42,0.9))'
           };" class="p-7 ${radiusClass} border border-indigo-500/30 space-y-3 ${alignClass}">
@@ -494,7 +495,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-testimonial':
-          return `  <section class="max-w-5xl mx-auto px-6 py-4">
+          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
     <blockquote style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
           };" class="p-6 ${radiusClass} border border-white/10 space-y-4 ${alignClass}">
@@ -516,8 +517,8 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-accordion':
-          return `  <section class="max-w-5xl mx-auto px-6 py-3">
-    <details style="font-family: ${fontFam}; background: ${
+          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-3">
+    <details id="${escapeHtml(b.id)}-details" style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
           };" class="${radiusClass} border border-white/10 group">
       <summary style="color: ${primaryColor}; font-weight: ${fontWt};" class="p-5 cursor-pointer list-none flex items-center justify-between ${getHtmlTextSizeClass(
@@ -537,21 +538,25 @@ export function generateHtmlExport(
 
         case 'ui-input':
         case 'ui-textarea':
-          return `  <section class="max-w-3xl mx-auto px-6 py-3">
+          return `  <section id="${elId}" class="max-w-3xl mx-auto px-6 py-3">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
           };" class="p-5 ${radiusClass} border border-white/10 space-y-2 ${alignClass}">
       ${subtitle ? `<label style="color: ${subColor};" class="block text-xs font-semibold">${subtitle}</label>` : ''}
       ${
         b.type === 'ui-textarea'
-          ? `<textarea rows="3" placeholder="${content}" class="w-full rounded-lg bg-[#0B0F17] border border-white/15 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500"></textarea>`
-          : `<input type="text" placeholder="${content}" class="w-full rounded-lg bg-[#0B0F17] border border-white/15 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500" />`
+          ? `<textarea rows="3" data-sl-input-id="${escapeHtml(b.id)}" data-sl-input-label="${escapeHtml(
+              b.subtitle || b.name
+            )}" placeholder="${content}" class="w-full rounded-lg bg-[#0B0F17] border border-white/15 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500"></textarea>`
+          : `<input type="text" data-sl-input-id="${escapeHtml(b.id)}" data-sl-input-label="${escapeHtml(
+              b.subtitle || b.name
+            )}" placeholder="${content}" class="w-full rounded-lg bg-[#0B0F17] border border-white/15 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500" />`
       }
     </div>
   </section>`;
 
         case 'ui-image':
-          return `  <section class="max-w-5xl mx-auto px-6 py-6">
+          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-6">
     <figure style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(17, 24, 39, 0.7)'
           };" class="overflow-hidden ${radiusClass} border border-white/10 p-6 ${alignClass} space-y-3">
@@ -571,7 +576,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-avatar':
-          return `  <section class="max-w-5xl mx-auto px-6 py-3">
+          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-3">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
           };" class="p-5 ${radiusClass} border border-white/10 flex items-center gap-4">
@@ -589,7 +594,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'logic-counter':
-          return `  <section class="max-w-5xl mx-auto px-6 py-4">
+          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
     <div id="${b.id}" style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(30, 27, 75, 0.4)'
           };" class="p-6 ${radiusClass} border border-indigo-500/30 flex items-center justify-between gap-4">
@@ -604,7 +609,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'logic-toggle':
-          return `  <section class="max-w-5xl mx-auto px-6 py-3">
+          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-3">
     <label style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(69, 26, 3, 0.25)'
           };" class="p-5 ${radiusClass} border border-amber-500/25 flex items-center justify-between gap-4 cursor-pointer">
@@ -612,20 +617,51 @@ export function generateHtmlExport(
         <div style="color: ${primaryColor}; font-weight: ${fontWt};" class="text-sm">${content}</div>
         ${subtitle ? `<div style="color: ${subColor};" class="text-xs mt-0.5">${subtitle}</div>` : ''}
       </div>
-      <input type="checkbox" ${b.isExpanded ? 'checked' : ''} class="w-5 h-5 accent-emerald-500" />
+      <input id="${escapeHtml(b.id)}-toggle" type="checkbox" ${b.isExpanded ? 'checked' : ''} class="w-5 h-5 accent-emerald-500" />
     </label>
   </section>`;
 
-        case 'ui-button':
-          return `  <div class="max-w-5xl mx-auto px-6 py-4 ${alignClass}">
-    <button data-block-id="${b.id}" data-target="${b.targetId || ''}" data-action="${
+        case 'logic-click': {
+          const targetPage = pages?.find((p) => p.id === b.targetPageId);
+          const targetHref = targetPage ? `${escapeHtml(targetPage.slug)}.html` : '';
+          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-3">
+    <div style="font-family: ${fontFam}; background: ${
+            bgVal || 'rgba(69, 26, 3, 0.25)'
+          };" class="p-5 ${radiusClass} border border-amber-500/25 flex items-center justify-between gap-4">
+      <div>
+        <div style="color: ${primaryColor}; font-weight: ${fontWt};" class="text-sm">${content}</div>
+        ${subtitle ? `<div style="color: ${subColor};" class="text-xs mt-0.5">${subtitle}</div>` : ''}
+      </div>
+      <button type="button" data-block-id="${escapeHtml(b.id)}" data-target="${escapeHtml(
+            b.targetId || ''
+          )}" data-target-page="${targetHref}" data-action="${escapeHtml(
             b.action || ''
-          }" style="font-family: ${fontFam}; color: ${primaryColor}; background: ${
-            bgVal || '#4f46e5'
+          )}" data-payload="${escapeHtml(b.actionPayload || '')}" data-endpoint="${escapeHtml(
+            b.apiEndpoint || ''
+          )}" class="sl-action-btn px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold cursor-pointer">${escapeHtml(
+            b.badgeText || 'Fire'
+          )}</button>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-button': {
+          const targetPage = pages?.find((p) => p.id === b.targetPageId);
+          const targetHref = targetPage ? `${escapeHtml(targetPage.slug)}.html` : '';
+          return `  <div id="${elId}" class="max-w-5xl mx-auto px-6 py-4 ${alignClass}">
+    <button type="button" data-block-id="${escapeHtml(b.id)}" data-target="${escapeHtml(
+            b.targetId || ''
+          )}" data-target-page="${targetHref}" data-action="${escapeHtml(
+            b.action || ''
+          )}" data-payload="${escapeHtml(b.actionPayload || '')}" data-endpoint="${escapeHtml(
+            b.apiEndpoint || ''
+          )}" style="font-family: ${fontFam}; color: ${primaryColor}; background: ${
+            bgVal || resolvedAccent
           }; font-weight: ${fontWt};" class="sl-action-btn px-7 py-3 ${radiusClass} text-sm shadow-lg hover:opacity-95 transition-opacity cursor-pointer">
       ${content}
     </button>
   </div>`;
+        }
 
         case 'backend-flask':
         case 'backend-fetch':
@@ -691,12 +727,97 @@ ${renderedBlocks}
   </div>
 
   <script>
-    document.querySelectorAll('.sl-action-btn').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const targetId = btn.dataset.target;
-        const counterEl = targetId ? document.getElementById(targetId + '-val') : document.querySelector('[id$="-val"]');
+    function slShowToast(message) {
+      var existing = document.getElementById('sl-runtime-toast');
+      if (existing) existing.remove();
+      var toast = document.createElement('div');
+      toast.id = 'sl-runtime-toast';
+      toast.textContent = message;
+      toast.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;background:#111827;color:#f8fafc;border:1px solid rgba(99,102,241,0.5);padding:12px 18px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 12px 30px rgba(0,0,0,0.45);max-width:340px;';
+      document.body.appendChild(toast);
+      setTimeout(function() { if (toast.parentNode) toast.remove(); }, 3200);
+    }
+
+    document.querySelectorAll('.sl-nav-link').forEach(function(link) {
+      link.addEventListener('click', function(e) {
+        var scrollTarget = link.getAttribute('data-scroll-target');
+        var msg = link.getAttribute('data-nav-msg');
+        if (scrollTarget) {
+          var el = document.getElementById(scrollTarget);
+          if (el) {
+            e.preventDefault();
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        } else if (msg) {
+          e.preventDefault();
+          slShowToast(msg);
+        }
+      });
+    });
+
+    document.querySelectorAll('.sl-action-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var action = btn.dataset.action || 'increment-counter';
+        var targetId = btn.dataset.target || '';
+        var targetPage = btn.dataset.targetPage || '';
+        var payload = btn.dataset.payload || '';
+        var endpoint = btn.dataset.endpoint || '/api/v1/metrics';
+
+        if (action === 'navigate-page' && targetPage) {
+          window.location.href = targetPage;
+          return;
+        }
+        if (action === 'scroll-to-block' && targetId) {
+          var section = document.getElementById('sl-el-' + targetId);
+          if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+        if (action === 'submit-form') {
+          var inputs = Array.from(document.querySelectorAll('[data-sl-input-id]'));
+          var values = inputs
+            .map(function(inp) {
+              return (inp.getAttribute('data-sl-input-label') || 'Field') + ': ' + (inp.value || '').trim();
+            })
+            .filter(function(item) { return !item.endsWith(': '); });
+          slShowToast(payload || (values.length ? 'Submitted -> ' + values.join(' | ') : 'Form submitted successfully!'));
+          return;
+        }
+        if (action === 'open-url' && payload) {
+          if (payload.startsWith('#')) {
+            var anchor = document.querySelector(payload);
+            if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          } else {
+            var a = document.createElement('a');
+            a.href = payload;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+            a.click();
+          }
+          return;
+        }
+        if (action === 'toggle-visibility') {
+          var details = targetId ? document.getElementById(targetId + '-details') : document.querySelector('details');
+          if (details) { details.open = !details.open; return; }
+          var chk = targetId ? document.getElementById(targetId + '-toggle') : document.querySelector('input[type="checkbox"]');
+          if (chk) { chk.checked = !chk.checked; return; }
+        }
+        if (action === 'call-api') {
+          fetch(endpoint).then(function(r) { return r.json(); }).then(function(d) {
+            slShowToast('API 200 OK: ' + JSON.stringify(d));
+          }).catch(function() {
+            slShowToast('Called endpoint: ' + endpoint);
+          });
+          return;
+        }
+        if (action === 'alert') {
+          slShowToast(payload || 'Action executed!');
+          return;
+        }
+        var counterEl = targetId ? document.getElementById(targetId + '-val') : document.querySelector('[id$="-val"]');
         if (counterEl) {
           counterEl.textContent = String(Number(counterEl.textContent || 0) + 1);
+        } else {
+          slShowToast(payload || 'Button clicked!');
         }
       });
     });
@@ -750,15 +871,26 @@ export function generateReactTsxExport(
           <p className="text-3xl font-bold text-white tabular-nums">{counter}</p>
         </div>
       </section>`;
-        case 'ui-button':
-          return `      <div className="max-w-5xl mx-auto px-6 py-4 text-center">
+        case 'ui-button': {
+          const clickCode =
+            b.action === 'alert'
+              ? `console.log(${JSON.stringify(b.actionPayload || `Clicked ${b.name}`)})`
+              : b.action === 'scroll-to-block' && b.targetId
+              ? `document.getElementById(${JSON.stringify(`sl-el-${b.targetId}`)})?.scrollIntoView({ behavior: 'smooth' })`
+              : b.action === 'submit-form'
+              ? `console.log(${JSON.stringify(b.actionPayload || 'Form submitted!')})`
+              : hasCounter
+              ? `setCounter((c) => c + 1)`
+              : `console.log(${JSON.stringify(b.actionPayload || `Clicked ${b.name}`)})`;
+          return `      <div id="sl-el-${b.id}" className="max-w-5xl mx-auto px-6 py-4 text-center">
         <button
-          onClick={() => ${hasCounter ? 'setCounter((c) => c + 1)' : 'console.log("Clicked")'}}
+          onClick={() => ${clickCode}}
           className="px-7 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold"
         >
           {${safeTitle}}
         </button>
       </div>`;
+        }
         case 'ui-accordion':
           return `      <section className="max-w-5xl mx-auto px-6 py-3">
         <div className="rounded-xl bg-white/5 border border-white/10 overflow-hidden">
@@ -936,13 +1068,54 @@ ${animBundle.css ? `\n/* Live Page Animation: ${pageStyle?.liveAnimation} */${an
 ${blockRules}`;
 }
 
-export function generateJsExport(projectName: string, blocks: CanvasBlock[]): string {
+export function generateJsExport(
+  projectName: string,
+  blocks: CanvasBlock[],
+  pages?: SitePage[]
+): string {
   const wiredBlocks = blocks.filter(
-    (b) => b.action || b.type.startsWith('logic-') || b.type.startsWith('backend-') || b.type === 'ui-button'
+    (b) =>
+      b.action ||
+      b.type.startsWith('logic-') ||
+      b.type.startsWith('backend-') ||
+      b.type === 'ui-button' ||
+      b.type === 'ui-navbar'
   );
 
   const listeners = wiredBlocks
     .map((b) => {
+      if (b.type === 'ui-navbar') {
+        const navLinks = getEffectiveNavLinks(b, pages, blocks);
+        const linkSummary = navLinks
+          .map(
+            (l) =>
+              `//   - "${l.label}" -> ${l.action}${
+                l.action === 'navigate-page' && l.targetPageId
+                  ? ` (${pages?.find((p) => p.id === l.targetPageId)?.slug || 'page'}.html)`
+                  : l.action === 'scroll-to-block' && l.targetBlockId
+                  ? ` (#sl-el-${l.targetBlockId})`
+                  : l.action === 'open-url' && l.url
+                  ? ` (${l.url})`
+                  : ''
+              }`
+          )
+          .join('\n');
+        return `// Navbar Navigation Wire: ${b.name}
+${linkSummary || '//   (Configure navbar links in Studio JavaScript tab)'}
+document.querySelectorAll('#sl-el-${b.id} .sl-nav-link').forEach((linkEl) => {
+  linkEl.addEventListener('click', (e) => {
+    const scrollTarget = linkEl.getAttribute('data-scroll-target');
+    const msg = linkEl.getAttribute('data-nav-msg');
+    if (scrollTarget) {
+      e.preventDefault();
+      document.getElementById(scrollTarget)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (msg) {
+      e.preventDefault();
+      slShowToast(msg);
+    }
+  });
+});`;
+      }
       if (b.type === 'logic-counter') {
         return `// Reactive Counter State: ${b.name}
 let counter_${b.id.replace(/[^a-zA-Z0-9_]/g, '_')} = ${b.counterValue ?? 0};`;
@@ -959,16 +1132,40 @@ async function call_${b.id.replace(/[^a-zA-Z0-9_]/g, '_')}() {
       }
       if (b.type === 'ui-button' || b.type === 'logic-click') {
         const targetId = b.targetId || blocks.find((t) => t.type === 'logic-counter')?.id || '';
-        return `// Event Listener: ${b.name}
+        const action = b.action || 'increment-counter';
+        let bodyCode = '';
+        if (action === 'navigate-page') {
+          const pg = pages?.find((p) => p.id === b.targetPageId);
+          bodyCode = pg
+            ? `window.location.href = ${JSON.stringify(`${pg.slug}.html`)};`
+            : `slShowToast('Select a target page in the JavaScript tab.');`;
+        } else if (action === 'scroll-to-block' && b.targetId) {
+          bodyCode = `document.getElementById(${JSON.stringify(`sl-el-${b.targetId}`)})?.scrollIntoView({ behavior: 'smooth', block: 'center' });`;
+        } else if (action === 'submit-form') {
+          bodyCode = `const fields = Array.from(document.querySelectorAll('[data-sl-input-id]'))
+    .map((el) => (el.getAttribute('data-sl-input-label') || 'Field') + ': ' + (el.value || '').trim())
+    .filter((v) => !v.endsWith(': '));
+  slShowToast(${JSON.stringify(b.actionPayload || '')} || (fields.length ? 'Submitted -> ' + fields.join(' | ') : 'Form submitted!'));`;
+        } else if (action === 'open-url') {
+          const url = b.actionPayload || 'https://example.com';
+          bodyCode = `window.open(${JSON.stringify(url)}, '_blank', 'noopener,noreferrer');`;
+        } else if (action === 'toggle-visibility') {
+          bodyCode = `const details = document.getElementById(${JSON.stringify(`${b.targetId || ''}-details`)});
+  if (details) details.open = !details.open;`;
+        } else if (action === 'call-api') {
+          bodyCode = `fetch(${JSON.stringify(b.apiEndpoint || '/api/v1/metrics')}).then((r) => r.json()).then((d) => slShowToast('API 200 OK: ' + JSON.stringify(d)));`;
+        } else if (action === 'alert') {
+          bodyCode = `slShowToast(${JSON.stringify(b.actionPayload || `Clicked ${b.name}`)});`;
+        } else if (targetId) {
+          bodyCode = `const el = document.getElementById('${targetId}-val');
+  if (el) el.textContent = String(Number(el.textContent || 0) + 1);`;
+        } else {
+          bodyCode = `slShowToast(${JSON.stringify(b.actionPayload || `Clicked ${b.name}`)});`;
+        }
+
+        return `// Event Listener (${action}): ${b.name}
 document.querySelector('[data-block-id="${b.id}"]')?.addEventListener('click', () => {
-  ${
-    b.action === 'call-api'
-      ? `fetch(${JSON.stringify(b.apiEndpoint || '/api/v1/metrics')}).then((r) => r.json()).then(console.log);`
-      : targetId
-      ? `const el = document.getElementById('${targetId}-val');
-  if (el) el.textContent = String(Number(el.textContent || 0) + 1);`
-      : `console.log(${JSON.stringify(b.actionPayload || `Clicked ${b.name}`)});`
-  }
+  ${bodyCode}
 });`;
       }
       return `// Block Behavior: ${b.name} (${b.type})
@@ -977,6 +1174,17 @@ console.log('Initialized module:', ${JSON.stringify(b.name)});`;
     .join('\n\n');
 
   return `// SL Builder WebStudio — script.js for "${projectName}"
+function slShowToast(message) {
+  const old = document.getElementById('sl-runtime-toast');
+  if (old) old.remove();
+  const toast = document.createElement('div');
+  toast.id = 'sl-runtime-toast';
+  toast.textContent = message;
+  toast.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;background:#111827;color:#f8fafc;border:1px solid rgba(99,102,241,0.5);padding:12px 18px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 12px 30px rgba(0,0,0,0.45);';
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 3200);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   console.log('SL Builder WebStudio app booted:', ${JSON.stringify(projectName)});
 

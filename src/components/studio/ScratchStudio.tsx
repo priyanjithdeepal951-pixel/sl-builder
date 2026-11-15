@@ -38,9 +38,13 @@ import {
   AlignRight,
   Droplets,
   Wand2,
+  MousePointerClick,
+  Link2,
 } from 'lucide-react';
 import {
   CanvasBlock,
+  NavbarLinkAction,
+  NavbarLinkItem,
   PageStyleSettings,
   Project,
   SitePage,
@@ -68,6 +72,7 @@ import {
   PAGE_THEME_PRESETS,
   resolvePageBackgroundCss,
 } from '../../utils/pageStylePresets';
+import { getEffectiveNavLinks } from '../../utils/navLinkHelpers';
 import { useTheme } from '../../context/ThemeContext';
 
 interface ScratchStudioProps {
@@ -388,12 +393,103 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     setSelectedBlockId(copy.id);
   };
 
-  // Reactive Logic Action Executor in Preview Stage
-  const handleTriggerAction = (sourceBlock: CanvasBlock) => {
-    const action = sourceBlock.action || 'increment-counter';
+  // Reactive Logic, Navigation & Form Action Executor in Preview Stage
+  const handleTriggerAction = (
+    sourceBlock: CanvasBlock,
+    formValues?: Record<string, string>
+  ) => {
+    const hasCounter = blocks.some((b) => b.type === 'logic-counter');
+    const inputBlocks = blocks.filter(
+      (b) => b.type === 'ui-input' || b.type === 'ui-textarea'
+    );
+    const filledInputs = inputBlocks
+      .map((inp) => ({
+        label: inp.subtitle || inp.name,
+        val: (formValues?.[inp.id] || '').trim(),
+      }))
+      .filter((item) => item.val.length > 0);
+
+    // Smart fallback if user hasn't picked an explicit action yet
+    const action =
+      sourceBlock.action ||
+      (hasCounter
+        ? 'increment-counter'
+        : filledInputs.length > 0
+        ? 'submit-form'
+        : 'increment-counter');
+
+    if (action === 'navigate-page') {
+      const targetPage =
+        pages.find((p) => p.id === sourceBlock.targetPageId) ||
+        pages.find((p) => p.id !== activePage?.id);
+      if (targetPage) {
+        handleSelectPage(targetPage.id);
+        onToast(`Navigated to "${targetPage.name}"`, 'success');
+      } else {
+        onToast('Add another page or select a Target Page in the JavaScript tab!', 'info');
+      }
+      return;
+    }
+
+    if (action === 'scroll-to-block') {
+      const targetBlock =
+        blocks.find((b) => b.id === sourceBlock.targetId) ||
+        blocks.find((b) => b.id !== sourceBlock.id);
+      if (targetBlock) {
+        const el = document.getElementById(`sl-el-${targetBlock.id}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        setSelectedBlockId(targetBlock.id);
+        onToast(`Scrolled to "${targetBlock.name}"`, 'success');
+      } else {
+        onToast('Select a Target Block to scroll to in the JavaScript tab.', 'info');
+      }
+      return;
+    }
+
+    if (action === 'submit-form') {
+      if (inputBlocks.length > 0 && filledInputs.length === 0) {
+        onToast('Type something into your form inputs above, then click Submit!', 'info');
+        return;
+      }
+      const summary = filledInputs.map((i) => `${i.label}: ${i.val}`).join(' · ');
+      const customMsg = (sourceBlock.actionPayload || '').trim();
+      onToast(
+        customMsg
+          ? summary
+            ? `${customMsg} (${summary})`
+            : customMsg
+          : summary
+          ? `Submitted → ${summary}`
+          : 'Form submitted successfully!',
+        'success'
+      );
+      return;
+    }
+
+    if (action === 'open-url') {
+      const rawUrl = (sourceBlock.actionPayload || '').trim();
+      if (!rawUrl) {
+        onToast('Enter a URL (e.g. https://... or mailto:...) in the JavaScript tab.', 'info');
+        return;
+      }
+      if (rawUrl.startsWith('#')) {
+        const targetId = rawUrl.slice(1);
+        const el =
+          document.getElementById(targetId) ||
+          document.getElementById(`sl-el-${targetId}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        onToast(`Jumped to ${rawUrl}`, 'success');
+      } else {
+        onToast(`Link ready: ${rawUrl} (opens when exported)`, 'success');
+      }
+      return;
+    }
+
     if (action === 'increment-counter') {
       const targetCounter =
-        blocks.find((b) => b.id === sourceBlock.targetId) ||
+        blocks.find((b) => b.id === sourceBlock.targetId && b.type === 'logic-counter') ||
         blocks.find((b) => b.type === 'logic-counter');
       if (targetCounter) {
         const nextVal = (targetCounter.counterValue ?? 0) + 1;
@@ -404,7 +500,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         });
         onToast(`Triggered "${targetCounter.name}" → ${nextVal}`, 'success');
       } else {
-        onToast('No counter block wired yet. Add a Reactive State Counter!', 'info');
+        onToast(
+          'Button ready! Choose an action (Submit Form, Go to Page, Scroll, or URL) in "When Clicked" below or the JavaScript tab.',
+          'info'
+        );
       }
     } else if (action === 'toggle-visibility') {
       const toggleTarget =
@@ -413,6 +512,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       if (toggleTarget) {
         handleUpdateBlock({ ...toggleTarget, isExpanded: !toggleTarget.isExpanded });
         onToast(`Toggled "${toggleTarget.name}" state`, 'info');
+      } else {
+        onToast('Add a Toggle Switch or FAQ Accordion to wire this action.', 'info');
       }
     } else if (action === 'call-api') {
       onToast(
@@ -422,6 +523,53 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     } else {
       onToast(sourceBlock.actionPayload || `Executed "${sourceBlock.name}"`, 'info');
     }
+  };
+
+  const handleTriggerNavLink = (navBlock: CanvasBlock, link: NavbarLinkItem) => {
+    if (link.action === 'navigate-page') {
+      const targetPage =
+        pages.find((p) => p.id === link.targetPageId) ||
+        pages.find((p) => p.name.toLowerCase() === link.label.toLowerCase());
+      if (targetPage) {
+        handleSelectPage(targetPage.id);
+        onToast(`Navigated to "${targetPage.name}"`, 'success');
+      } else {
+        setSelectedBlockId(navBlock.id);
+        onToast(`"${link.label}" — select a Target Page in the JavaScript tab.`, 'info');
+      }
+      return;
+    }
+
+    if (link.action === 'scroll-to-block') {
+      const targetBlock = blocks.find((b) => b.id === link.targetBlockId);
+      if (targetBlock) {
+        const el = document.getElementById(`sl-el-${targetBlock.id}`);
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setSelectedBlockId(targetBlock.id);
+        onToast(`Scrolled to "${targetBlock.name}"`, 'success');
+      } else {
+        setSelectedBlockId(navBlock.id);
+        onToast(`"${link.label}" — pick a section to scroll to in JavaScript tab.`, 'info');
+      }
+      return;
+    }
+
+    if (link.action === 'open-url') {
+      const url = (link.url || '').trim();
+      onToast(
+        url
+          ? `Navbar Link "${link.label}" → ${url}`
+          : `Enter a URL for "${link.label}" in the JavaScript tab.`,
+        url ? 'success' : 'info'
+      );
+      return;
+    }
+
+    setSelectedBlockId(navBlock.id);
+    onToast(
+      link.message || `Clicked "${link.label}" — wire this navbar button in JavaScript tab!`,
+      'info'
+    );
   };
 
   const handleRunSimulation = () => {
@@ -510,7 +658,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
   const htmlCode = generateHtmlExport(projectName, blocks, pages, activePage?.pageStyle);
   const cssCode = generateCssExport(projectName, blocks, activePage?.pageStyle);
-  const jsCode = generateJsExport(projectName, blocks);
+  const jsCode = generateJsExport(projectName, blocks, pages);
   const reactCode = generateReactTsxExport(projectName, blocks, activePage?.pageStyle);
   const flaskCode = generateFlaskExport(projectName, blocks);
 
@@ -2249,7 +2397,269 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                 {/* Main JS Event Wiring & Generated script.js */}
                 <div className="flex-1 p-5 overflow-y-auto space-y-5">
                   <div className="max-w-3xl mx-auto space-y-5">
-                    {selectedBlock && (
+                    {/* Quick Block / Navbar Selector Strip */}
+                    {blocks.length > 0 && (
+                      <div className="bg-[#11151E] p-3 rounded-2xl border border-white/10 space-y-2">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-bold text-slate-300 flex items-center gap-1.5">
+                            <MousePointerClick className="w-3.5 h-3.5 text-amber-300" />
+                            Select Button, Navbar, or Element to Wire
+                          </span>
+                          <span className="text-[10px] text-slate-500">
+                            {blocks.length} elements on page
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {blocks.map((b) => {
+                            const isSel = selectedBlock?.id === b.id;
+                            const isInteractive =
+                              b.type === 'ui-navbar' ||
+                              b.type === 'ui-button' ||
+                              b.type === 'logic-click' ||
+                              Boolean(b.action);
+                            return (
+                              <button
+                                key={b.id}
+                                type="button"
+                                onClick={() => setSelectedBlockId(b.id)}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold border transition-all cursor-pointer flex items-center gap-1.5 ${
+                                  isSel
+                                    ? 'bg-amber-400 text-slate-950 border-amber-300 font-bold'
+                                    : isInteractive
+                                    ? 'bg-[#171E2C] text-slate-100 border-white/15 hover:border-amber-400/50'
+                                    : 'bg-[#090B10] text-slate-400 border-white/10 hover:text-white'
+                                }`}
+                              >
+                                <span
+                                  className={`w-1.5 h-1.5 rounded-full ${
+                                    b.type === 'ui-navbar'
+                                      ? 'bg-sky-400'
+                                      : b.type === 'ui-button' || b.type === 'logic-click'
+                                      ? 'bg-emerald-400'
+                                      : 'bg-slate-500'
+                                  }`}
+                                />
+                                <span className="truncate max-w-[140px]">{b.name}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {selectedBlock && selectedBlock.type === 'ui-navbar' && (
+                      <div className="bg-[#11151E] p-4 rounded-2xl border border-sky-500/25 space-y-4 text-xs">
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
+                          <div>
+                            <span className="text-[10px] font-mono text-sky-400 uppercase flex items-center gap-1">
+                              <Link2 className="w-3 h-3" /> Navbar Buttons &amp; Navigation Wiring
+                            </span>
+                            <h3 className="text-sm font-bold text-white">
+                              {selectedBlock.content || selectedBlock.name}
+                            </h3>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const currentLinks = getEffectiveNavLinks(
+                                selectedBlock,
+                                pages,
+                                blocks
+                              );
+                              const nextLinks: NavbarLinkItem[] = [
+                                ...currentLinks,
+                                {
+                                  id: `nav_${Date.now()}`,
+                                  label: `Button ${currentLinks.length + 1}`,
+                                  action: pages.length > 1 ? 'navigate-page' : 'scroll-to-block',
+                                  targetPageId: pages[0]?.id,
+                                  targetBlockId: blocks.find((b) => b.id !== selectedBlock.id)?.id,
+                                },
+                              ];
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                navLinks: nextLinks,
+                                subtitle: nextLinks.map((l) => l.label).join(' · '),
+                              });
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <Plus className="w-3.5 h-3.5" /> Add Nav Button
+                          </button>
+                        </div>
+
+                        {(() => {
+                          const effectiveLinks = getEffectiveNavLinks(
+                            selectedBlock,
+                            pages,
+                            blocks
+                          );
+                          const updateNavLinkAt = (
+                            idx: number,
+                            patch: Partial<NavbarLinkItem>
+                          ) => {
+                            const next = effectiveLinks.map((item, i) =>
+                              i === idx ? { ...item, ...patch } : item
+                            );
+                            handleUpdateBlock({
+                              ...selectedBlock,
+                              navLinks: next,
+                              subtitle: next.map((l) => l.label).join(' · '),
+                            });
+                          };
+                          const removeNavLinkAt = (idx: number) => {
+                            const next = effectiveLinks.filter((_, i) => i !== idx);
+                            handleUpdateBlock({
+                              ...selectedBlock,
+                              navLinks: next,
+                              subtitle: next.map((l) => l.label).join(' · '),
+                            });
+                          };
+
+                          return (
+                            <div className="space-y-2.5">
+                              {effectiveLinks.length === 0 && (
+                                <p className="text-slate-400 text-center py-4">
+                                  No navbar buttons yet. Click &ldquo;+ Add Nav Button&rdquo; above.
+                                </p>
+                              )}
+                              {effectiveLinks.map((link, idx) => (
+                                <div
+                                  key={link.id}
+                                  className="p-3 rounded-xl bg-[#090B10] border border-white/10 grid grid-cols-1 sm:grid-cols-12 gap-2 items-center"
+                                >
+                                  <div className="sm:col-span-3 space-y-1">
+                                    <label className="text-[10px] text-slate-500 font-semibold block">
+                                      Button Text
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={link.label}
+                                      onChange={(e) =>
+                                        updateNavLinkAt(idx, { label: e.target.value })
+                                      }
+                                      className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none focus:border-sky-400"
+                                    />
+                                  </div>
+
+                                  <div className="sm:col-span-4 space-y-1">
+                                    <label className="text-[10px] text-slate-500 font-semibold block">
+                                      When Clicked
+                                    </label>
+                                    <select
+                                      value={link.action}
+                                      onChange={(e) =>
+                                        updateNavLinkAt(idx, {
+                                          action: e.target.value as NavbarLinkAction,
+                                        })
+                                      }
+                                      className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none focus:border-sky-400"
+                                    >
+                                      <option value="scroll-to-block">
+                                        Scroll to Section / Block
+                                      </option>
+                                      <option value="navigate-page">Go to Page</option>
+                                      <option value="open-url">Open URL / Link</option>
+                                      <option value="alert">Show Message Toast</option>
+                                    </select>
+                                  </div>
+
+                                  <div className="sm:col-span-4 space-y-1">
+                                    <label className="text-[10px] text-slate-500 font-semibold block">
+                                      {link.action === 'navigate-page'
+                                        ? 'Target Page'
+                                        : link.action === 'scroll-to-block'
+                                        ? 'Target Section'
+                                        : link.action === 'open-url'
+                                        ? 'Link URL'
+                                        : 'Notification Message'}
+                                    </label>
+                                    {link.action === 'navigate-page' ? (
+                                      <select
+                                        value={link.targetPageId || ''}
+                                        onChange={(e) =>
+                                          updateNavLinkAt(idx, {
+                                            targetPageId: e.target.value,
+                                          })
+                                        }
+                                        className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                                      >
+                                        <option value="">Select page...</option>
+                                        {pages.map((p) => (
+                                          <option key={p.id} value={p.id}>
+                                            {p.name} ({p.slug}.html)
+                                          </option>
+                                        ))}
+                                      </select>
+                                    ) : link.action === 'scroll-to-block' ? (
+                                      <select
+                                        value={link.targetBlockId || ''}
+                                        onChange={(e) =>
+                                          updateNavLinkAt(idx, {
+                                            targetBlockId: e.target.value,
+                                          })
+                                        }
+                                        className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                                      >
+                                        <option value="">Select block...</option>
+                                        {blocks
+                                          .filter((b) => b.id !== selectedBlock.id)
+                                          .map((b) => (
+                                            <option key={b.id} value={b.id}>
+                                              {b.name} — {(b.content || '').slice(0, 22)}
+                                            </option>
+                                          ))}
+                                      </select>
+                                    ) : link.action === 'open-url' ? (
+                                      <input
+                                        type="text"
+                                        value={link.url || ''}
+                                        onChange={(e) =>
+                                          updateNavLinkAt(idx, { url: e.target.value })
+                                        }
+                                        placeholder="https://example.com"
+                                        className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-sky-300 outline-none"
+                                      />
+                                    ) : (
+                                      <input
+                                        type="text"
+                                        value={link.message || ''}
+                                        onChange={(e) =>
+                                          updateNavLinkAt(idx, { message: e.target.value })
+                                        }
+                                        placeholder="Welcome to this section!"
+                                        className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-200 outline-none"
+                                      />
+                                    )}
+                                  </div>
+
+                                  <div className="sm:col-span-1 flex items-center justify-end gap-1 pt-3 sm:pt-4">
+                                    <button
+                                      type="button"
+                                      onClick={() => handleTriggerNavLink(selectedBlock, link)}
+                                      title="Test this navbar button"
+                                      className="p-1.5 rounded-lg bg-amber-400/15 hover:bg-amber-400/30 text-amber-300 cursor-pointer"
+                                    >
+                                      <Play className="w-3 h-3 fill-current" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeNavLinkAt(idx)}
+                                      title="Delete nav button"
+                                      className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {selectedBlock && selectedBlock.type !== 'ui-navbar' && (
                       <div className="bg-[#11151E] p-4 rounded-2xl border border-white/10 space-y-4 text-xs">
                         <div className="flex items-center justify-between pb-2 border-b border-white/10">
                           <div>
@@ -2263,7 +2673,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             onClick={() => handleTriggerAction(selectedBlock)}
                             className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold flex items-center gap-1.5 cursor-pointer"
                           >
-                            <Play className="w-3 h-3 fill-current" /> Run Event
+                            <Play className="w-3 h-3 fill-current" /> Test Click
                           </button>
                         </div>
 
@@ -2282,20 +2692,74 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                               }
                               className="w-full px-3 py-2 rounded-lg bg-[#090B10] border border-white/15 text-white outline-none focus:border-amber-400"
                             >
-                              <option value="">None</option>
+                              <option value="">Auto / Default</option>
+                              <option value="navigate-page">Go to Page (Navigate)</option>
+                              <option value="scroll-to-block">Scroll to Section / Block</option>
+                              <option value="submit-form">Submit Form Inputs</option>
+                              <option value="open-url">Open URL / Email Link</option>
                               <option value="increment-counter">Increment Counter (+1)</option>
                               <option value="toggle-visibility">Toggle State / Accordion</option>
                               <option value="call-api">Fetch API Endpoint</option>
-                              <option value="alert">Dispatch Toast Alert</option>
+                              <option value="alert">Show Notification Toast</option>
                             </select>
                           </div>
 
                           <div className="space-y-1.5">
                             <label className="text-slate-400 font-semibold">
-                              Target Element / Endpoint
+                              {selectedBlock.action === 'navigate-page'
+                                ? 'Target Page'
+                                : selectedBlock.action === 'submit-form'
+                                ? 'Confirmation Message (Optional)'
+                                : selectedBlock.action === 'open-url'
+                                ? 'Destination URL'
+                                : selectedBlock.action === 'alert'
+                                ? 'Toast Message'
+                                : selectedBlock.type.startsWith('backend-') ||
+                                  selectedBlock.action === 'call-api'
+                                ? 'API Endpoint'
+                                : 'Target Element'}
                             </label>
-                            {selectedBlock.type.startsWith('backend-') ||
-                            selectedBlock.action === 'call-api' ? (
+                            {selectedBlock.action === 'navigate-page' ? (
+                              <select
+                                value={selectedBlock.targetPageId || ''}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    targetPageId: e.target.value,
+                                  })
+                                }
+                                className="w-full px-3 py-2 rounded-lg bg-[#090B10] border border-white/15 text-white outline-none"
+                              >
+                                <option value="">Select page...</option>
+                                {pages.map((p) => (
+                                  <option key={p.id} value={p.id}>
+                                    {p.name} ({p.slug}.html)
+                                  </option>
+                                ))}
+                              </select>
+                            ) : selectedBlock.action === 'submit-form' ||
+                              selectedBlock.action === 'open-url' ||
+                              selectedBlock.action === 'alert' ? (
+                              <input
+                                type="text"
+                                value={selectedBlock.actionPayload || ''}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    actionPayload: e.target.value,
+                                  })
+                                }
+                                placeholder={
+                                  selectedBlock.action === 'open-url'
+                                    ? 'https://example.com or mailto:hi@site.com'
+                                    : selectedBlock.action === 'submit-form'
+                                    ? 'Thanks! We received your submission.'
+                                    : 'Action completed!'
+                                }
+                                className="w-full px-3 py-2 rounded-lg bg-[#090B10] border border-white/15 text-amber-200 outline-none focus:border-amber-400"
+                              />
+                            ) : selectedBlock.type.startsWith('backend-') ||
+                              selectedBlock.action === 'call-api' ? (
                               <input
                                 type="text"
                                 value={selectedBlock.apiEndpoint || '/api/v1/metrics'}
@@ -2319,11 +2783,13 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 className="w-full px-3 py-2 rounded-lg bg-[#090B10] border border-white/15 text-white outline-none"
                               >
                                 <option value="">Auto-detect target block</option>
-                                {blocks.map((b) => (
-                                  <option key={b.id} value={b.id}>
-                                    {b.name} ({b.type})
-                                  </option>
-                                ))}
+                                {blocks
+                                  .filter((b) => b.id !== selectedBlock.id)
+                                  .map((b) => (
+                                    <option key={b.id} value={b.id}>
+                                      {b.name} ({b.type})
+                                    </option>
+                                  ))}
                               </select>
                             )}
                           </div>
@@ -2479,6 +2945,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                   selectedBlockId={selectedBlock?.id || null}
                   onSelectBlock={setSelectedBlockId}
                   onTriggerAction={handleTriggerAction}
+                  onTriggerNavLink={handleTriggerNavLink}
                   onUpdateBlock={handleUpdateBlock}
                   accentHex={themeConfig.accentHex}
                   pages={pages}
@@ -2727,6 +3194,111 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                           />
                         </label>
                       </div>
+
+                      {/* Quick Button Click Wiring / Navbar Shortcut */}
+                      {(selectedBlock.type === 'ui-button' ||
+                        selectedBlock.type === 'logic-click') && (
+                        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-400/25 space-y-1.5">
+                          <span className="font-semibold text-amber-300 flex items-center gap-1">
+                            <MousePointerClick className="w-3 h-3" /> When Clicked (Action)
+                          </span>
+                          <select
+                            value={selectedBlock.action || ''}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                action: (e.target.value || undefined) as CanvasBlock['action'],
+                              })
+                            }
+                            className="w-full px-2 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-slate-100 outline-none cursor-pointer"
+                          >
+                            <option value="">Auto / Default</option>
+                            <option value="submit-form">Submit Form Inputs</option>
+                            <option value="navigate-page">Go to Page</option>
+                            <option value="scroll-to-block">Scroll to Section</option>
+                            <option value="open-url">Open URL / Link</option>
+                            <option value="increment-counter">Increment Counter (+1)</option>
+                            <option value="toggle-visibility">Toggle State / FAQ</option>
+                            <option value="call-api">Fetch API Endpoint</option>
+                            <option value="alert">Show Toast Message</option>
+                          </select>
+                          {selectedBlock.action === 'navigate-page' && (
+                            <select
+                              value={selectedBlock.targetPageId || ''}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  targetPageId: e.target.value,
+                                })
+                              }
+                              className="w-full px-2 py-1 rounded-lg bg-[#090B10] border border-white/15 text-slate-100 outline-none cursor-pointer"
+                            >
+                              <option value="">Pick target page...</option>
+                              {pages.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                  {p.name}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                          {selectedBlock.action === 'scroll-to-block' && (
+                            <select
+                              value={selectedBlock.targetId || ''}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  targetId: e.target.value,
+                                })
+                              }
+                              className="w-full px-2 py-1 rounded-lg bg-[#090B10] border border-white/15 text-slate-100 outline-none cursor-pointer"
+                            >
+                              <option value="">Pick section to scroll to...</option>
+                              {blocks
+                                .filter((b) => b.id !== selectedBlock.id)
+                                .map((b) => (
+                                  <option key={b.id} value={b.id}>
+                                    {b.name}
+                                  </option>
+                                ))}
+                            </select>
+                          )}
+                          {(selectedBlock.action === 'open-url' ||
+                            selectedBlock.action === 'submit-form' ||
+                            selectedBlock.action === 'alert') && (
+                            <input
+                              type="text"
+                              value={selectedBlock.actionPayload || ''}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  actionPayload: e.target.value,
+                                })
+                              }
+                              placeholder={
+                                selectedBlock.action === 'open-url'
+                                  ? 'https://...'
+                                  : 'Confirmation message...'
+                              }
+                              className="w-full px-2 py-1 rounded-lg bg-[#090B10] border border-white/15 text-amber-200 outline-none"
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-navbar' && (
+                        <button
+                          type="button"
+                          onClick={() => setActiveTab('js')}
+                          className="w-full py-1.5 px-2.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/30 text-sky-300 font-semibold flex items-center justify-between cursor-pointer"
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Link2 className="w-3.5 h-3.5" />
+                            Configure Navbar Buttons (
+                            {getEffectiveNavLinks(selectedBlock, pages, blocks).length})
+                          </span>
+                          <span>&rarr;</span>
+                        </button>
+                      )}
 
                       <div className="flex items-center justify-between pt-1">
                         <div className="flex items-center gap-3">

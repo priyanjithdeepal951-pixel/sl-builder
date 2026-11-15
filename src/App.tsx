@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Project, UserProfile } from './types/builder';
+import { ShieldCheck, AlertTriangle, LogOut } from 'lucide-react';
+import { Project, SiteSettingsConfig, UserProfile } from './types/builder';
 import { DEFAULT_PROJECTS } from './data/defaultTemplates';
+import { DEFAULT_SITE_SETTINGS } from './data/siteSettingsDefaults';
 import { CosmicBackground } from './components/CosmicBackground';
 import { Navbar } from './components/Navbar';
 import { LandingPage } from './components/LandingPage';
 import { AuthPage } from './components/AuthPage';
 import { ProjectsHub } from './components/ProjectsHub';
 import { ScratchStudio } from './components/studio/ScratchStudio';
+import { AdminPanel } from './components/admin/AdminPanel';
 import { ToastContainer, ToastMessage } from './components/Toast';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
@@ -17,17 +20,22 @@ import {
   saveProjectToFirestore,
   deleteProjectFromFirestore,
   subscribeToUserProjects,
+  checkIsAdminInFirestore,
+  subscribeToSiteSettings,
+  subscribeToUserSelf,
 } from './lib/firebase';
 import { onAuthStateChanged, signOut as fbSignOut } from 'firebase/auth';
 
+type AppPage = 'welcome' | 'auth' | 'projects' | 'editor' | 'admin';
+
 function AppContent() {
-  const [currentPage, setCurrentPage] = useState<'welcome' | 'auth' | 'projects' | 'editor'>('welcome');
+  const [currentPage, setCurrentPage] = useState<AppPage>('welcome');
   const [projects, setProjects] = useState<Project[]>(() => {
     const saved = localStorage.getItem('sl_builder_projects');
     if (saved) {
       try {
         return JSON.parse(saved);
-      } catch (e) {
+      } catch {
         return DEFAULT_PROJECTS;
       }
     }
@@ -40,23 +48,47 @@ function AppContent() {
 
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [isAuthChecking, setIsAuthChecking] = useState<boolean>(true);
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+  const [isSuspendedUser, setIsSuspendedUser] = useState<boolean>(false);
+  const [siteSettings, setSiteSettings] = useState<SiteSettingsConfig>(DEFAULT_SITE_SETTINGS);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [isMeteorShower, setIsMeteorShower] = useState<boolean>(false);
+
+  const { themeConfig, setTheme } = useTheme();
 
   // Test Firestore Connection on Boot
   useEffect(() => {
     testConnection().catch((err) => console.warn('Firestore initial ping:', err));
   }, []);
 
-  // Listen to Firebase Auth state
+  // Subscribe to Global CMS / Platform Settings in Firestore
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = subscribeToSiteSettings((settings) => {
+      setSiteSettings(settings);
+      if (!localStorage.getItem('sl_builder_theme') && settings.defaultTheme) {
+        setTheme(settings.defaultTheme);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Listen to Firebase Auth state & verify Admin RBAC
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setIsAuthChecking(false);
       if (firebaseUser) {
         const profile = mapFirebaseUser(firebaseUser);
         setCurrentUser(profile);
+        const adminStatus = await checkIsAdminInFirestore(
+          firebaseUser.uid,
+          firebaseUser.email,
+          firebaseUser.emailVerified
+        );
+        setIsAdmin(adminStatus);
       } else {
         setCurrentUser(null);
+        setIsAdmin(false);
+        setIsSuspendedUser(false);
       }
     });
     return () => unsubscribe();
@@ -70,6 +102,27 @@ function AppContent() {
       currentUser.id !== 'demo_user'
   );
 
+  // Listen to own user document in Firestore for role updates & suspension enforcement
+  useEffect(() => {
+    if (!isCloudAuthenticated || !currentUser) return;
+    const unsubscribe = subscribeToUserSelf(currentUser.id, (cloudProfile) => {
+      if (cloudProfile) {
+        setIsSuspendedUser(Boolean(cloudProfile.isSuspended));
+        setCurrentUser((prev) =>
+          prev
+            ? {
+                ...prev,
+                name: cloudProfile.name || prev.name,
+                role: cloudProfile.role || prev.role,
+                isSuspended: cloudProfile.isSuspended,
+              }
+            : prev
+        );
+      }
+    });
+    return () => unsubscribe();
+  }, [isCloudAuthenticated, currentUser?.id]);
+
   // Listen to User Projects in Firestore in Real Time (only when Firebase Auth is ready & signed in)
   useEffect(() => {
     if (!isCloudAuthenticated || !currentUser) return;
@@ -79,12 +132,10 @@ function AppContent() {
       (cloudProjects) => {
         if (cloudProjects.length > 0) {
           setProjects(cloudProjects);
-          // If active project is not in cloud projects, choose the first
           if (!currentProject || !cloudProjects.some((p) => p.id === currentProject.id)) {
             setCurrentProject(cloudProjects[0]);
           }
         } else {
-          // New user without projects: seed default templates into their Firestore account
           console.log('Seeding initial projects to Firestore for user:', currentUser.id);
           DEFAULT_PROJECTS.forEach((p, idx) => {
             const seedProject: Project = {
@@ -106,19 +157,6 @@ function AppContent() {
     return () => unsubscribe();
   }, [isCloudAuthenticated, currentUser?.id]);
 
-  const handleToggleMeteorShower = () => {
-    setIsMeteorShower((prev) => {
-      const next = !prev;
-      addToast(
-        next
-          ? '🌠 Live Meteor Shower (උල්කාපාත වර්ෂාව) Active! Click or drag anywhere to summon meteors!'
-          : 'Meteor intensity normalized',
-        'success'
-      );
-      return next;
-    });
-  };
-
   // Toast dispatcher helper
   const addToast = (text: string, type: 'success' | 'error' | 'info' = 'info') => {
     const id = 'toast_' + Date.now() + Math.random().toString(36).substring(2, 5);
@@ -133,9 +171,32 @@ function AppContent() {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
+  const handleToggleMeteorShower = () => {
+    setIsMeteorShower((prev) => {
+      const next = !prev;
+      addToast(
+        next
+          ? 'Live Meteor Shower Active! Click or drag anywhere to summon meteors!'
+          : 'Meteor intensity normalized',
+        'success'
+      );
+      return next;
+    });
+  };
+
   // Auth handlers
-  const handleLoginSuccess = (user: UserProfile) => {
+  const handleLoginSuccess = async (user: UserProfile) => {
     setCurrentUser(user);
+    if (auth.currentUser && auth.currentUser.uid === user.id) {
+      const adminStatus = await checkIsAdminInFirestore(
+        auth.currentUser.uid,
+        auth.currentUser.email,
+        auth.currentUser.emailVerified
+      );
+      setIsAdmin(adminStatus);
+    } else {
+      setIsAdmin(false);
+    }
     setCurrentPage('projects');
   };
 
@@ -146,6 +207,8 @@ function AppContent() {
       console.error('Sign out error:', err);
     }
     setCurrentUser(null);
+    setIsAdmin(false);
+    setIsSuspendedUser(false);
     setCurrentPage('welcome');
     addToast('You have been logged out from Firebase.', 'info');
   };
@@ -158,6 +221,14 @@ function AppContent() {
   };
 
   const handleCreateProject = (newProject: Project) => {
+    if (!isAdmin && projects.length >= (siteSettings.maxProjectsPerUser || 50)) {
+      addToast(
+        `Project limit reached (${siteSettings.maxProjectsPerUser} max per user). Delete an old project or contact an admin.`,
+        'error'
+      );
+      return;
+    }
+
     const updated = [newProject, ...projects];
     setProjects(updated);
     setCurrentProject(newProject);
@@ -193,13 +264,21 @@ function AppContent() {
   };
 
   const handleDuplicateProject = (id: string) => {
+    if (!isAdmin && projects.length >= (siteSettings.maxProjectsPerUser || 50)) {
+      addToast(
+        `Project limit reached (${siteSettings.maxProjectsPerUser} max per user).`,
+        'error'
+      );
+      return;
+    }
+
     const target = projects.find((p) => p.id === id);
     if (!target) return;
     const duplicated: Project = {
       ...target,
       id: 'proj_' + Date.now(),
       name: `${target.name} (Copy)`,
-      updatedAt: 'Just now',
+      updatedAt: new Date().toISOString(),
     };
     setProjects((prev) => {
       const next = [duplicated, ...prev];
@@ -213,7 +292,7 @@ function AppContent() {
       saveProjectToFirestore(duplicated, currentUser.id).catch((err) => {
         console.warn('Firestore duplicate project notice:', err);
       });
-      addToast(`Duplicated project synced to Firebase Cloud!`, 'success');
+      addToast('Duplicated project synced to Firebase Cloud!', 'success');
     }
   };
 
@@ -246,7 +325,7 @@ function AppContent() {
         id: 'proj_tpl_' + Date.now(),
         name: templateName,
         category: 'Landing',
-        updatedAt: 'Just now',
+        updatedAt: new Date().toISOString(),
         status: 'Active',
         description: `Template cloned from ${templateName}`,
         blocks: currentProject?.blocks || DEFAULT_PROJECTS[0].blocks,
@@ -255,7 +334,79 @@ function AppContent() {
     }
   };
 
-  const { themeConfig } = useTheme();
+  // Security Gate 1: Suspended User Lockout (never locks out verified Admin)
+  if (isSuspendedUser && !isAdmin) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center p-6 text-[#f3f4f6] relative"
+        style={{ backgroundColor: themeConfig.bgHex }}
+      >
+        <CosmicBackground meteorShowerMode={false} />
+        <div className="relative z-10 max-w-md w-full rounded-2xl bg-[#0c101b]/95 border border-rose-500/30 p-7 text-center shadow-2xl space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <h1 className="text-xl font-bold text-white">Account Suspended</h1>
+          <p className="text-xs text-slate-400 leading-relaxed">
+            Your workspace access has been temporarily suspended by an administrator. If you believe this is an error, please contact platform support.
+          </p>
+          <button
+            onClick={handleLogout}
+            className="w-full py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span>Sign Out</span>
+          </button>
+        </div>
+        <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
+      </div>
+    );
+  }
+
+  // Security Gate 2: Maintenance Mode Lockout (Admins & Auth/Admin login remain accessible)
+  if (
+    siteSettings.maintenanceMode &&
+    !isAdmin &&
+    currentPage !== 'auth' &&
+    currentPage !== 'admin'
+  ) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center p-6 text-[#f3f4f6] relative"
+        style={{ backgroundColor: themeConfig.bgHex }}
+      >
+        <CosmicBackground meteorShowerMode={false} />
+        <div className="relative z-10 max-w-md w-full rounded-2xl bg-[#0c101b]/95 border border-amber-500/30 p-7 text-center shadow-2xl space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+            <ShieldCheck className="w-6 h-6" />
+          </div>
+          <div className="text-[10px] font-mono uppercase tracking-wider text-amber-400">
+            Maintenance Mode Active
+          </div>
+          <h1 className="text-xl font-bold text-white">{siteSettings.brandName}</h1>
+          <p className="text-xs text-slate-300 leading-relaxed">
+            {siteSettings.maintenanceMessage || DEFAULT_SITE_SETTINGS.maintenanceMessage}
+          </p>
+          <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
+            <button
+              onClick={() => setCurrentPage('auth')}
+              className="flex-1 py-2.5 px-4 rounded-xl text-white text-xs font-semibold transition-all hover:opacity-90"
+              style={{ backgroundColor: themeConfig.accentHex }}
+            >
+              Admin Sign In
+            </button>
+            <button
+              onClick={() => setCurrentPage('admin')}
+              className="flex-1 py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-xs font-semibold transition-colors"
+            >
+              Admin Console
+            </button>
+          </div>
+        </div>
+        <ToastContainer toasts={toasts} onDismiss={handleDismissToast} />
+      </div>
+    );
+  }
 
   return (
     <div
@@ -277,11 +428,14 @@ function AppContent() {
         onOpenActiveEditor={() => setCurrentPage('editor')}
         isMeteorShower={isMeteorShower}
         onToggleMeteorShower={handleToggleMeteorShower}
+        isAdmin={isAdmin}
+        siteSettings={siteSettings}
       />
 
       {/* Page Routing */}
       {currentPage === 'welcome' && (
         <LandingPage
+          siteSettings={siteSettings}
           onGetStarted={() => {
             if (currentUser) {
               setCurrentPage('projects');
@@ -299,6 +453,8 @@ function AppContent() {
           onBackToHome={() => setCurrentPage('welcome')}
           onLoginSuccess={handleLoginSuccess}
           onToast={addToast}
+          allowSignups={siteSettings.allowSignups}
+          allowDemoLogin={siteSettings.allowDemoLogin}
         />
       )}
 
@@ -318,6 +474,22 @@ function AppContent() {
           project={currentProject}
           onUpdateProject={handleUpdateProject}
           onBackToProjects={() => setCurrentPage('projects')}
+          onToast={addToast}
+        />
+      )}
+
+      {currentPage === 'admin' && (
+        <AdminPanel
+          currentUser={currentUser}
+          isAdmin={isAdmin}
+          isCloudAuthenticated={isCloudAuthenticated}
+          siteSettings={siteSettings}
+          localProjects={projects}
+          onUpdateLocalProject={handleUpdateProject}
+          onDeleteLocalProject={handleDeleteProject}
+          onOpenProjectInStudio={handleOpenProject}
+          onBackToApp={() => setCurrentPage(currentUser ? 'projects' : 'welcome')}
+          onNavigateAuth={() => setCurrentPage('auth')}
           onToast={addToast}
         />
       )}

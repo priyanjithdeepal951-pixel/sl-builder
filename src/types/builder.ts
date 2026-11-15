@@ -46,6 +46,22 @@ export interface BlockStyle {
   shadow?: string;
 }
 
+export type NavbarLinkAction =
+  | 'navigate-page'
+  | 'scroll-to-block'
+  | 'open-url'
+  | 'alert';
+
+export interface NavbarLinkItem {
+  id: string;
+  label: string;
+  action: NavbarLinkAction;
+  targetPageId?: string;
+  targetBlockId?: string;
+  url?: string;
+  message?: string;
+}
+
 export interface CanvasBlock {
   id: string;
   type: BlockType;
@@ -54,11 +70,22 @@ export interface CanvasBlock {
   content: string;
   subtitle?: string;
   style: BlockStyle;
-  // Logic wiring
+  // Logic & navigation wiring
   targetId?: string;
-  action?: 'change-text' | 'increment-counter' | 'toggle-visibility' | 'call-api' | 'alert';
+  targetPageId?: string;
+  action?:
+    | 'change-text'
+    | 'increment-counter'
+    | 'toggle-visibility'
+    | 'call-api'
+    | 'alert'
+    | 'navigate-page'
+    | 'scroll-to-block'
+    | 'open-url'
+    | 'submit-form';
   actionPayload?: string;
   apiEndpoint?: string;
+  navLinks?: NavbarLinkItem[];
   // Custom metadata
   imageUrl?: string;
   badgeText?: string;
@@ -157,6 +184,62 @@ export interface UserProfile {
   name: string;
   avatar: string;
   role: string;
+  isSuspended?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SiteTemplateItem {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  tag: string;
+  blocksCount: number;
+  accent: string;
+}
+
+export interface SiteSettingsConfig {
+  brandName: string;
+  heroKicker: string;
+  heroTitle: string;
+  heroHighlight: string;
+  heroSubtitle: string;
+  heroPrimaryCta: string;
+  heroSecondaryCta: string;
+  announcementEnabled: boolean;
+  announcementText: string;
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+  allowSignups: boolean;
+  allowDemoLogin: boolean;
+  maxProjectsPerUser: number;
+  defaultTheme: 'cosmic' | 'cyberpunk' | 'emerald' | 'amber' | 'titanium';
+  footerCopyright: string;
+  footerLinksText: string;
+  templates: SiteTemplateItem[];
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface AdminRecord {
+  uid: string;
+  email: string;
+  name: string;
+  role: 'Super Admin' | 'Admin';
+  grantedBy: string;
+  grantedAt: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  actorUid: string;
+  actorEmail: string;
+  action: string;
+  targetType: 'settings' | 'user' | 'project' | 'admin' | 'security';
+  targetId: string;
+  details: string;
+  createdAt: string;
 }
 
 export type ViewportMode = 'desktop' | 'tablet' | 'mobile';
