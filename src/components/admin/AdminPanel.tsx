@@ -23,11 +23,17 @@ import {
   KeyRound,
   FileJson,
   RefreshCw,
+  Download,
+  Upload,
+  Copy,
+  Activity,
+  Server,
 } from 'lucide-react';
 import {
   AdminRecord,
   AuditLogEntry,
   Project,
+  SitePage,
   SiteSettingsConfig,
   SiteTemplateItem,
   UserProfile,
@@ -39,6 +45,7 @@ import {
 } from '../../data/siteSettingsDefaults';
 import {
   auth,
+  testConnection,
   saveSiteSettings,
   subscribeToAllUsers,
   subscribeToAllProjects,
@@ -52,6 +59,19 @@ import {
   revokeAdminRole,
   logAdminAudit,
 } from '../../lib/firebase';
+import { generateHtmlExport } from '../../utils/webStudioCodeGen';
+
+function triggerDownloadFile(filename: string, content: string, mimeType: string) {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 type AdminTab = 'overview' | 'cms' | 'projects' | 'users' | 'security';
 
@@ -105,6 +125,13 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [loadingCloud, setLoadingCloud] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
+  const [streamError, setStreamError] = useState<string | null>(null);
+  const [checkingHealth, setCheckingHealth] = useState(false);
+  const [healthResult, setHealthResult] = useState<{
+    ok: boolean;
+    latencyMs: number;
+    checkedAt: string;
+  } | null>(null);
 
   // CMS Draft State
   const [draftSettings, setDraftSettings] = useState<SiteSettingsConfig>(siteSettings);
@@ -114,7 +141,10 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [projectSearch, setProjectSearch] = useState('');
   const [projectCategoryFilter, setProjectCategoryFilter] = useState<string>('all');
   const [projectStatusFilter, setProjectStatusFilter] = useState<string>('all');
+  const [ownerFilterUid, setOwnerFilterUid] = useState<string>('');
   const [userSearch, setUserSearch] = useState('');
+  const [userRoleFilter, setUserRoleFilter] = useState<string>('all');
+  const [userStatusFilter, setUserStatusFilter] = useState<string>('all');
   const [auditSearch, setAuditSearch] = useState('');
 
   // Modals / Edit Drawers
@@ -122,6 +152,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   const [projectJsonMode, setProjectJsonMode] = useState(false);
   const [projectJsonText, setProjectJsonText] = useState('');
   const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+  const [createProjectModal, setCreateProjectModal] = useState<{
+    name: string;
+    category: Project['category'];
+    status: Project['status'];
+    description: string;
+  } | null>(null);
 
   // Confirmation modal (zero native alert/confirm)
   const [confirmDialog, setConfirmDialog] = useState<{
@@ -154,6 +190,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     }
 
     setLoadingCloud(true);
+    setStreamError(null);
     const unsubs: Array<() => void> = [];
 
     unsubs.push(
@@ -164,6 +201,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         },
         (err) => {
           console.warn('Admin users stream notice:', err.message);
+          setStreamError(`Users sync notice: ${err.message}`);
           setLoadingCloud(false);
         }
       )
@@ -176,6 +214,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         },
         (err) => {
           console.warn('Admin projects stream notice:', err.message);
+          setStreamError(`Projects sync notice: ${err.message}`);
         }
       )
     );
@@ -187,6 +226,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         },
         (err) => {
           console.warn('Admins allowlist stream notice:', err.message);
+          setStreamError(`Admin allowlist sync notice: ${err.message}`);
         }
       )
     );
@@ -198,6 +238,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         },
         (err) => {
           console.warn('Audit logs stream notice:', err.message);
+          setStreamError(`Audit stream notice: ${err.message}`);
         }
       )
     );
@@ -217,31 +258,62 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     );
   }, [cloudProjects, localProjects]);
 
+  const userByUid = useMemo(() => {
+    const map = new Map<string, UserProfile>();
+    cloudUsers.forEach((u) => map.set(u.id, u));
+    return map;
+  }, [cloudUsers]);
+
+  const adminUidSet = useMemo(() => {
+    const set = new Set<string>();
+    admins.forEach((a) => set.add(a.uid));
+    return set;
+  }, [admins]);
+
+  const projectCountByUid = useMemo(() => {
+    const counts = new Map<string, number>();
+    mergedProjects.forEach((p) => {
+      if (p.userId) {
+        counts.set(p.userId, (counts.get(p.userId) || 0) + 1);
+      }
+    });
+    return counts;
+  }, [mergedProjects]);
+
   const filteredProjects = useMemo(() => {
     return mergedProjects.filter((p) => {
       const q = projectSearch.toLowerCase().trim();
+      const owner = p.userId ? userByUid.get(p.userId) : undefined;
+      const matchOwnerFilter = !ownerFilterUid || p.userId === ownerFilterUid;
       const matchQuery =
         !q ||
         p.name.toLowerCase().includes(q) ||
         (p.description || '').toLowerCase().includes(q) ||
-        (p.userId || '').toLowerCase().includes(q);
+        (p.userId || '').toLowerCase().includes(q) ||
+        (owner?.email || '').toLowerCase().includes(q) ||
+        (owner?.name || '').toLowerCase().includes(q);
       const matchCat = projectCategoryFilter === 'all' || p.category === projectCategoryFilter;
       const matchStat = projectStatusFilter === 'all' || p.status === projectStatusFilter;
-      return matchQuery && matchCat && matchStat;
+      return matchOwnerFilter && matchQuery && matchCat && matchStat;
     });
-  }, [mergedProjects, projectSearch, projectCategoryFilter, projectStatusFilter]);
+  }, [mergedProjects, projectSearch, projectCategoryFilter, projectStatusFilter, ownerFilterUid, userByUid]);
 
   const filteredUsers = useMemo(() => {
     const q = userSearch.toLowerCase().trim();
-    return cloudUsers.filter(
-      (u) =>
+    return cloudUsers.filter((u) => {
+      const matchQ =
         !q ||
         u.name.toLowerCase().includes(q) ||
         u.email.toLowerCase().includes(q) ||
         u.id.toLowerCase().includes(q) ||
-        u.role.toLowerCase().includes(q)
-    );
-  }, [cloudUsers, userSearch]);
+        u.role.toLowerCase().includes(q);
+      const matchRole = userRoleFilter === 'all' || u.role === userRoleFilter;
+      const matchStat =
+        userStatusFilter === 'all' ||
+        (userStatusFilter === 'suspended' ? Boolean(u.isSuspended) : !u.isSuspended);
+      return matchQ && matchRole && matchStat;
+    });
+  }, [cloudUsers, userSearch, userRoleFilter, userStatusFilter]);
 
   const filteredLogs = useMemo(() => {
     const q = auditSearch.toLowerCase().trim();
@@ -537,11 +609,12 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleSaveUserEdit = async () => {
     if (!editingUser) return;
+    const isRoot = editingUser.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
     try {
       await adminUpdateUser(editingUser.id, {
         name: editingUser.name,
-        role: editingUser.role,
-        isSuspended: Boolean(editingUser.isSuspended),
+        role: isRoot ? 'Admin' : editingUser.role,
+        isSuspended: isRoot ? false : Boolean(editingUser.isSuspended),
       });
       if (editingUser.role === 'Admin') {
         await grantAdminRole({
@@ -552,6 +625,8 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           grantedBy: currentUser.email,
           grantedAt: new Date().toISOString(),
         });
+      } else if (!isRoot && adminUidSet.has(editingUser.id)) {
+        await revokeAdminRole(editingUser.id);
       }
       await recordAudit(
         'Updated User Account',
@@ -566,6 +641,257 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch (err: any) {
       onToast(err?.message || 'Failed to update user.', 'error');
     }
+  };
+
+  const handleQuickToggleAdmin = async (user: UserProfile) => {
+    const isRoot = user.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+    if (isRoot) {
+      onToast('Root Super Admin privileges cannot be modified.', 'error');
+      return;
+    }
+    const currentlyAdmin = adminUidSet.has(user.id) || user.role === 'Admin';
+    if (currentlyAdmin) {
+      setConfirmDialog({
+        title: `Revoke Admin Role for ${user.name}?`,
+        message: `${user.email} will be reverted to Creator and removed from the Firestore admin allowlist.`,
+        confirmLabel: 'Revoke Admin',
+        onConfirm: async () => {
+          try {
+            await adminUpdateUser(user.id, { role: 'Creator' });
+            if (adminUidSet.has(user.id)) {
+              await revokeAdminRole(user.id);
+            }
+            await recordAudit(
+              'Revoked User Admin Role',
+              'admin',
+              user.id,
+              `Demoted ${user.email} to Creator`
+            );
+            onToast(`Revoked admin role from ${user.email}.`, 'info');
+          } catch (err: any) {
+            onToast(err?.message || 'Failed to revoke admin role.', 'error');
+          } finally {
+            setConfirmDialog(null);
+          }
+        },
+      });
+    } else {
+      try {
+        await adminUpdateUser(user.id, { role: 'Admin' });
+        await grantAdminRole({
+          uid: user.id,
+          email: user.email,
+          name: user.name,
+          role: 'Admin',
+          grantedBy: currentUser.email,
+          grantedAt: new Date().toISOString(),
+        });
+        await recordAudit(
+          'Promoted User to Admin',
+          'admin',
+          user.id,
+          `Granted Admin allowlist & role to ${user.email}`
+        );
+        onToast(`Promoted ${user.name} to Admin!`, 'success');
+      } catch (err: any) {
+        onToast(err?.message || 'Failed to promote user.', 'error');
+      }
+    }
+  };
+
+  const handleCloneProject = async (proj: Project) => {
+    const now = new Date().toISOString();
+    const clonedId = `proj_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const cloned: Project = {
+      ...proj,
+      id: clonedId,
+      name: `${proj.name} (Copy)`.slice(0, 100),
+      status: 'Draft',
+      userId: currentUser.id,
+      collaborators: [],
+      collaboratorUids: [],
+      updatedAt: now,
+    };
+    try {
+      await adminSaveProject(cloned);
+      onUpdateLocalProject(cloned);
+      await recordAudit(
+        'Cloned Project',
+        'project',
+        clonedId,
+        `Cloned "${proj.name}" (${proj.id}) as "${cloned.name}"`
+      );
+      onToast(`Cloned "${proj.name}" as Draft.`, 'success');
+    } catch (err: any) {
+      onToast(err?.message || 'Clone failed.', 'error');
+    }
+  };
+
+  const handleExportProjectHtml = (proj: Project) => {
+    const html = generateHtmlExport(
+      proj.name,
+      proj.blocks || [],
+      proj.pages,
+      proj.pages?.[0]?.pageStyle
+    );
+    const safeSlug = proj.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'project';
+    triggerDownloadFile(`${safeSlug}.html`, html, 'text/html;charset=utf-8');
+    onToast(`Exported "${proj.name}" HTML bundle.`, 'success');
+  };
+
+  const handleCreateAdminProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!createProjectModal || !createProjectModal.name.trim()) {
+      onToast('Enter a project name.', 'error');
+      return;
+    }
+    const now = new Date().toISOString();
+    const newId = `proj_${Date.now()}`;
+    const starterPage: SitePage = {
+      id: 'page-home',
+      name: 'Home',
+      slug: '/index',
+      blocks: [
+        {
+          id: `blk_${Date.now()}`,
+          type: 'ui-heading',
+          name: 'Hero Heading',
+          content: createProjectModal.name.trim(),
+          subtitle: createProjectModal.description.trim() || 'Created from SL Builder Admin Console',
+          category: 'ui',
+          style: {
+            fontSize: '3xl',
+            fontWeight: 'extrabold',
+            textAlign: 'center',
+          },
+        },
+      ],
+    };
+    const newProj: Project = {
+      id: newId,
+      name: createProjectModal.name.trim().slice(0, 100),
+      category: createProjectModal.category,
+      status: createProjectModal.status,
+      description: createProjectModal.description.trim(),
+      userId: currentUser.id,
+      pages: [starterPage],
+      blocks: starterPage.blocks,
+      updatedAt: now,
+    };
+    try {
+      await adminSaveProject(newProj);
+      onUpdateLocalProject(newProj);
+      await recordAudit(
+        'Created Project',
+        'project',
+        newId,
+        `Admin provisioned "${newProj.name}" (${newProj.category} · ${newProj.status})`
+      );
+      setCreateProjectModal(null);
+      onToast(`Created project "${newProj.name}".`, 'success');
+    } catch (err: any) {
+      onToast(err?.message || 'Failed to create project.', 'error');
+    }
+  };
+
+  const handleRunHealthCheck = async () => {
+    setCheckingHealth(true);
+    const started = performance.now();
+    const ok = await testConnection();
+    const latencyMs = Math.max(1, Math.round(performance.now() - started));
+    setHealthResult({
+      ok,
+      latencyMs,
+      checkedAt: new Date().toLocaleTimeString(),
+    });
+    setCheckingHealth(false);
+    onToast(
+      ok ? `Firestore Cloud responded in ${latencyMs} ms.` : 'Firestore Cloud unreachable or offline.',
+      ok ? 'success' : 'error'
+    );
+  };
+
+  const handleExportCmsJson = () => {
+    triggerDownloadFile(
+      `sl-builder-cms-${new Date().toISOString().slice(0, 10)}.json`,
+      JSON.stringify(draftSettings, null, 2),
+      'application/json'
+    );
+    onToast('Exported CMS settings JSON.', 'success');
+  };
+
+  const handleImportCmsJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const parsed = JSON.parse(String(reader.result || '{}')) as Partial<SiteSettingsConfig>;
+        if (!parsed || typeof parsed !== 'object' || typeof parsed.brandName !== 'string') {
+          onToast('Invalid CMS configuration JSON.', 'error');
+          return;
+        }
+        setDraftSettings({
+          ...DEFAULT_SITE_SETTINGS,
+          ...parsed,
+          templates: Array.isArray(parsed.templates) ? parsed.templates : draftSettings.templates,
+        });
+        setHasUnsavedCms(true);
+        onToast('Imported CMS JSON into draft. Click Save & Publish to apply live.', 'info');
+      } catch {
+        onToast('Could not parse JSON file.', 'error');
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleExportPlatformSnapshot = () => {
+    const snapshot = {
+      exportedAt: new Date().toISOString(),
+      exportedBy: currentUser.email,
+      siteSettings: draftSettings,
+      counts: {
+        users: cloudUsers.length,
+        projects: mergedProjects.length,
+        admins: admins.length + 1,
+        auditLogs: auditLogs.length,
+      },
+      users: cloudUsers,
+      projects: mergedProjects,
+      admins,
+      auditLogs,
+    };
+    triggerDownloadFile(
+      `sl-builder-snapshot-${new Date().toISOString().slice(0, 10)}.json`,
+      JSON.stringify(snapshot, null, 2),
+      'application/json'
+    );
+    recordAudit('Exported Platform Snapshot', 'settings', 'snapshot', `Exported ${mergedProjects.length} projects & ${cloudUsers.length} users`);
+    onToast('Downloaded full platform JSON backup.', 'success');
+  };
+
+  const handleExportAuditCsv = () => {
+    const escapeCsv = (val: string) => `"${String(val || '').replace(/"/g, '""')}"`;
+    const rows = [
+      ['Timestamp', 'ActorEmail', 'Action', 'TargetType', 'TargetId', 'Details'].join(','),
+      ...filteredLogs.map((l) =>
+        [
+          escapeCsv(l.createdAt),
+          escapeCsv(l.actorEmail),
+          escapeCsv(l.action),
+          escapeCsv(l.targetType),
+          escapeCsv(l.targetId),
+          escapeCsv(l.details),
+        ].join(',')
+      ),
+    ];
+    triggerDownloadFile(
+      `sl-builder-audit-${new Date().toISOString().slice(0, 10)}.csv`,
+      rows.join('\n'),
+      'text/csv;charset=utf-8'
+    );
+    onToast(`Exported ${filteredLogs.length} audit events to CSV.`, 'success');
   };
 
   const handleToggleUserSuspend = async (user: UserProfile) => {
@@ -752,6 +1078,22 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         {/* CONTENT VIEWPORT */}
         <main className="flex-1 p-6 overflow-y-auto">
           <div className="max-w-6xl mx-auto space-y-6">
+            {streamError && (
+              <div className="px-4 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-center justify-between gap-3">
+                <span className="flex items-center gap-2 min-w-0">
+                  <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span className="truncate">{streamError}</span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setStreamError(null)}
+                  className="text-amber-300 hover:text-white cursor-pointer shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             {/* ==================== TAB 1: OVERVIEW ==================== */}
             {activeTab === 'overview' && (
               <div className="space-y-6">
@@ -759,8 +1101,28 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <div>
                     <h1 className="text-xl font-bold text-white">Platform Overview</h1>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Real-time Firestore telemetry, security switches, and recent administrative activity.
+                      Live Firestore workspace metrics, security switches, and recent administrative activity.
                     </p>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    {healthResult && (
+                      <div className="px-3 py-1.5 rounded-lg bg-[#0E131D] border border-white/10 text-[11px] font-mono tabular-nums text-slate-300 flex items-center gap-2">
+                        <span className={healthResult.ok ? 'text-emerald-400' : 'text-rose-400'}>
+                          {healthResult.ok ? 'ONLINE' : 'OFFLINE'}
+                        </span>
+                        <span className="text-slate-500">·</span>
+                        <span>{healthResult.latencyMs} ms</span>
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handleRunHealthCheck}
+                      disabled={checkingHealth}
+                      className="px-3.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <Activity className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>{checkingHealth ? 'Probing Cloud...' : 'Check Cloud Health'}</span>
+                    </button>
                   </div>
                 </div>
 
@@ -914,6 +1276,67 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   </div>
                 </div>
 
+                {/* Category & Role Breakdown */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="bg-[#0E131D] border border-white/10 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <h2 className="font-bold text-white">Projects by Category</h2>
+                      <span className="text-slate-500 font-mono tabular-nums">{mergedProjects.length} total</span>
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      {(['Landing', 'Portfolio', 'E-Commerce', 'Web Apps'] as const).map((cat) => {
+                        const count = mergedProjects.filter((p) => p.category === cat).length;
+                        const pct = mergedProjects.length > 0 ? Math.round((count / mergedProjects.length) * 100) : 0;
+                        return (
+                          <div key={cat} className="space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-slate-300">{cat}</span>
+                              <span className="font-mono tabular-nums text-slate-400">
+                                {count} ({pct}%)
+                              </span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                              <div
+                                className="h-full bg-indigo-500 rounded-full"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#0E131D] border border-white/10 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between text-xs">
+                      <h2 className="font-bold text-white">Accounts by Role</h2>
+                      <span className="text-slate-500 font-mono tabular-nums">{cloudUsers.length} synced</span>
+                    </div>
+                    <div className="space-y-2 text-xs">
+                      {(['Creator', 'Pro Creator', 'Moderator', 'Admin'] as const).map((r) => {
+                        const count = cloudUsers.filter((u) => u.role === r).length;
+                        const pct = cloudUsers.length > 0 ? Math.round((count / cloudUsers.length) * 100) : 0;
+                        return (
+                          <div key={r} className="space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="text-slate-300">{r}</span>
+                              <span className="font-mono tabular-nums text-slate-400">
+                                {count} ({pct}%)
+                              </span>
+                            </div>
+                            <div className="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                              <div
+                                className="h-full bg-emerald-500 rounded-full"
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
                 {/* Recent Audit Logs */}
                 <div className="bg-[#0E131D] border border-white/10 rounded-xl overflow-hidden">
                   <div className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between">
@@ -963,7 +1386,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       Edit website branding, hero copy, CTAs, theme defaults, and featured blueprint templates.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs font-semibold flex items-center gap-1.5 cursor-pointer">
+                      <Upload className="w-3.5 h-3.5" /> Import JSON
+                      <input
+                        type="file"
+                        accept=".json,application/json"
+                        onChange={handleImportCmsJson}
+                        className="hidden"
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      onClick={handleExportCmsJson}
+                      className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Download className="w-3.5 h-3.5" /> Export JSON
+                    </button>
                     <button
                       type="button"
                       onClick={() => {
@@ -1035,6 +1474,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         onChange={(e) => updateCmsField('announcementText', e.target.value)}
                         className="w-full px-3 py-2 rounded-lg bg-[#07090F] border border-white/15 text-white outline-none focus:border-indigo-400"
                       />
+                      {draftSettings.announcementEnabled && draftSettings.announcementText.trim() && (
+                        <div className="mt-2 px-3 py-2 rounded-lg bg-indigo-600/20 border border-indigo-400/30 text-indigo-100 text-[11px] text-center">
+                          Preview: {draftSettings.announcementText}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1235,9 +1679,23 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                   <div>
                     <h1 className="text-xl font-bold text-white">All Projects &amp; Workspaces</h1>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Inspect, rename, edit JSON structures, change publication status, or launch any project in Visual Studio.
+                      Inspect, create, clone, export HTML, edit JSON structures, or launch any project in Visual Studio.
                     </p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCreateProjectModal({
+                        name: '',
+                        category: 'Landing',
+                        status: 'Draft',
+                        description: '',
+                      })
+                    }
+                    className="px-3.5 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> New Project
+                  </button>
                 </div>
 
                 {/* Filter Bar */}
@@ -1248,10 +1706,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       type="text"
                       value={projectSearch}
                       onChange={(e) => setProjectSearch(e.target.value)}
-                      placeholder="Search by project name, description, or owner UID..."
+                      placeholder="Search by project name, owner email, or UID..."
                       className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[#07090F] border border-white/10 text-white placeholder-slate-500 outline-none focus:border-indigo-400"
                     />
                   </div>
+                  {ownerFilterUid && (
+                    <button
+                      type="button"
+                      onClick={() => setOwnerFilterUid('')}
+                      className="px-2.5 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-400/30 text-indigo-200 flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <span>Owner: {userByUid.get(ownerFilterUid)?.email || ownerFilterUid.slice(0, 10)}</span>
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                   <select
                     value={projectCategoryFilter}
                     onChange={(e) => setProjectCategoryFilter(e.target.value)}
@@ -1286,7 +1754,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       <table className="w-full text-left text-xs">
                         <thead className="bg-[#090C13] text-slate-400 border-b border-white/10 font-medium">
                           <tr>
-                            <th className="py-2.5 px-4">Project</th>
+                            <th className="py-2.5 px-4">Project &amp; Owner</th>
                             <th className="py-2.5 px-4">Category</th>
                             <th className="py-2.5 px-4">Status</th>
                             <th className="py-2.5 px-4 text-right">Structure</th>
@@ -1294,80 +1762,100 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                          {filteredProjects.map((proj) => (
-                            <tr key={proj.id} className="hover:bg-white/[0.02]">
-                              <td className="py-2.5 px-4 max-w-[260px]">
-                                <div className="font-semibold text-white truncate">{proj.name}</div>
-                                <div className="text-[11px] text-slate-500 font-mono truncate">
-                                  {proj.id} {proj.userId ? `· ${proj.userId.slice(0, 10)}` : ''}
-                                </div>
-                              </td>
-                              <td className="py-2.5 px-4 text-slate-300">{proj.category}</td>
-                              <td className="py-2.5 px-4">
-                                <select
-                                  value={proj.status}
-                                  onChange={(e) =>
-                                    handleQuickProjectStatus(
-                                      proj,
-                                      e.target.value as Project['status']
-                                    )
-                                  }
-                                  className={`px-2 py-1 rounded-md bg-[#07090F] border border-white/15 font-mono text-[11px] outline-none cursor-pointer ${
-                                    proj.status === 'Published'
-                                      ? 'text-emerald-400'
-                                      : proj.status === 'Active'
-                                      ? 'text-indigo-300'
-                                      : 'text-amber-300'
-                                  }`}
-                                >
-                                  <option value="Active">Active</option>
-                                  <option value="Published">Published</option>
-                                  <option value="Draft">Draft</option>
-                                </select>
-                              </td>
-                              <td className="py-2.5 px-4 text-right font-mono tabular-nums text-slate-300">
-                                {proj.blocks?.length || 0} blocks · {proj.pages?.length || 1} pages
-                              </td>
-                              <td className="py-2.5 px-4">
-                                <div className="flex items-center justify-end gap-1.5">
-                                  <button
-                                    type="button"
-                                    onClick={() => onOpenProjectInStudio(proj)}
-                                    title="Edit in Visual Studio"
-                                    className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                          {filteredProjects.map((proj) => {
+                            const owner = proj.userId ? userByUid.get(proj.userId) : undefined;
+                            return (
+                              <tr key={proj.id} className="hover:bg-white/[0.02]">
+                                <td className="py-2.5 px-4 max-w-[280px]">
+                                  <div className="font-semibold text-white truncate">{proj.name}</div>
+                                  <div className="text-[11px] text-slate-500 font-mono truncate">
+                                    {owner ? `${owner.email} · ` : proj.userId ? `${proj.userId.slice(0, 10)} · ` : ''}
+                                    {proj.id}
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-4 text-slate-300">{proj.category}</td>
+                                <td className="py-2.5 px-4">
+                                  <select
+                                    value={proj.status}
+                                    onChange={(e) =>
+                                      handleQuickProjectStatus(
+                                        proj,
+                                        e.target.value as Project['status']
+                                      )
+                                    }
+                                    className={`px-2 py-1 rounded-md bg-[#07090F] border border-white/15 font-mono text-[11px] outline-none cursor-pointer ${
+                                      proj.status === 'Published'
+                                        ? 'text-emerald-400'
+                                        : proj.status === 'Active'
+                                        ? 'text-indigo-300'
+                                        : 'text-amber-300'
+                                    }`}
                                   >
-                                    <ExternalLink className="w-3 h-3" /> Studio
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => {
-                                      setEditingProject({ ...proj });
-                                      setProjectJsonMode(false);
-                                      setProjectJsonText(
-                                        JSON.stringify(
-                                          { blocks: proj.blocks, pages: proj.pages || [] },
-                                          null,
-                                          2
-                                        )
-                                      );
-                                    }}
-                                    title="Edit Metadata & JSON"
-                                    className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 cursor-pointer"
-                                  >
-                                    <Edit3 className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteProjectConfirm(proj)}
-                                    title="Delete Project"
-                                    className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 cursor-pointer"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                                    <option value="Active">Active</option>
+                                    <option value="Published">Published</option>
+                                    <option value="Draft">Draft</option>
+                                  </select>
+                                </td>
+                                <td className="py-2.5 px-4 text-right font-mono tabular-nums text-slate-300 whitespace-nowrap">
+                                  {proj.blocks?.length || 0} blocks · {proj.pages?.length || 1} pages
+                                </td>
+                                <td className="py-2.5 px-4">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <button
+                                      type="button"
+                                      onClick={() => onOpenProjectInStudio(proj)}
+                                      title="Edit in Visual Studio"
+                                      className="px-2.5 py-1 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/35 text-indigo-300 font-semibold flex items-center gap-1 cursor-pointer whitespace-nowrap"
+                                    >
+                                      <ExternalLink className="w-3 h-3" /> Studio
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleCloneProject(proj)}
+                                      title="Clone Project"
+                                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 cursor-pointer"
+                                    >
+                                      <Copy className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleExportProjectHtml(proj)}
+                                      title="Export Standalone HTML"
+                                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-emerald-300 cursor-pointer"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditingProject({ ...proj });
+                                        setProjectJsonMode(false);
+                                        setProjectJsonText(
+                                          JSON.stringify(
+                                            { blocks: proj.blocks, pages: proj.pages || [] },
+                                            null,
+                                            2
+                                          )
+                                        );
+                                      }}
+                                      title="Edit Metadata & JSON"
+                                      className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 cursor-pointer"
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteProjectConfirm(proj)}
+                                      title="Delete Project"
+                                      className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 cursor-pointer"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1379,15 +1867,24 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {/* ==================== TAB 4: USERS & RBAC ==================== */}
             {activeTab === 'users' && (
               <div className="space-y-5">
-                <div>
-                  <h1 className="text-xl font-bold text-white">Users &amp; Account Permissions</h1>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Manage registered Firebase accounts, assign roles, or suspend unauthorized users.
-                  </p>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h1 className="text-xl font-bold text-white">Users &amp; Account Permissions</h1>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Manage registered Firebase accounts, inspect owned projects, toggle Admin RBAC, or suspend access.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 text-xs font-mono tabular-nums text-slate-400">
+                    <span>{cloudUsers.length} total</span>
+                    <span>·</span>
+                    <span className="text-emerald-400">{cloudUsers.filter((u) => !u.isSuspended).length} active</span>
+                    <span>·</span>
+                    <span className="text-rose-400">{cloudUsers.filter((u) => u.isSuspended).length} suspended</span>
+                  </div>
                 </div>
 
-                <div className="bg-[#0E131D] border border-white/10 rounded-xl p-3 flex items-center gap-3 text-xs">
-                  <div className="relative flex-1">
+                <div className="bg-[#0E131D] border border-white/10 rounded-xl p-3 flex flex-wrap items-center gap-3 text-xs">
+                  <div className="relative flex-1 min-w-[200px]">
                     <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input
                       type="text"
@@ -1397,6 +1894,26 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                       className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[#07090F] border border-white/10 text-white placeholder-slate-500 outline-none focus:border-indigo-400"
                     />
                   </div>
+                  <select
+                    value={userRoleFilter}
+                    onChange={(e) => setUserRoleFilter(e.target.value)}
+                    className="px-3 py-1.5 rounded-lg bg-[#07090F] border border-white/10 text-slate-200 outline-none"
+                  >
+                    <option value="all">All Roles</option>
+                    <option value="Creator">Creator</option>
+                    <option value="Pro Creator">Pro Creator</option>
+                    <option value="Moderator">Moderator</option>
+                    <option value="Admin">Admin</option>
+                  </select>
+                  <select
+                    value={userStatusFilter}
+                    onChange={(e) => setUserStatusFilter(e.target.value)}
+                    className="px-3 py-1.5 rounded-lg bg-[#07090F] border border-white/10 text-slate-200 outline-none"
+                  >
+                    <option value="all">All Statuses</option>
+                    <option value="active">Active Only</option>
+                    <option value="suspended">Suspended Only</option>
+                  </select>
                 </div>
 
                 <div className="bg-[#0E131D] border border-white/10 rounded-xl overflow-hidden">
@@ -1404,7 +1921,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <div className="p-10 text-center text-xs text-slate-500">
                       {loadingCloud
                         ? 'Loading users from Firestore...'
-                        : 'No synced user accounts found.'}
+                        : 'No matching user accounts found.'}
                     </div>
                   ) : (
                     <div className="overflow-x-auto">
@@ -1412,96 +1929,129 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         <thead className="bg-[#090C13] text-slate-400 border-b border-white/10 font-medium">
                           <tr>
                             <th className="py-2.5 px-4">User</th>
-                            <th className="py-2.5 px-4">UID</th>
+                            <th className="py-2.5 px-4">Projects</th>
                             <th className="py-2.5 px-4">Role</th>
                             <th className="py-2.5 px-4">Account Status</th>
                             <th className="py-2.5 px-4 text-right">Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
-                          {filteredUsers.map((u) => (
-                            <tr key={u.id} className="hover:bg-white/[0.02]">
-                              <td className="py-2.5 px-4">
-                                <div className="font-semibold text-white">{u.name}</div>
-                                <div className="text-[11px] text-slate-400 font-mono">{u.email}</div>
-                              </td>
-                              <td className="py-2.5 px-4 font-mono text-[11px] text-slate-400">
-                                {u.id.slice(0, 14)}
-                              </td>
-                              <td className="py-2.5 px-4 text-slate-200 font-medium">{u.role}</td>
-                              <td className="py-2.5 px-4">
-                                <span
-                                  className={`inline-flex items-center gap-1 font-mono text-[11px] ${
-                                    u.isSuspended ? 'text-rose-400' : 'text-emerald-400'
-                                  }`}
-                                >
-                                  {u.isSuspended ? (
-                                    <>
-                                      <UserX className="w-3.5 h-3.5" /> Suspended
-                                    </>
-                                  ) : (
-                                    <>
-                                      <UserCheck className="w-3.5 h-3.5" /> Active
-                                    </>
-                                  )}
-                                </span>
-                              </td>
-                              <td className="py-2.5 px-4">
-                                <div className="flex items-center justify-end gap-1.5">
+                          {filteredUsers.map((u) => {
+                            const isRoot = u.email.toLowerCase() === SUPER_ADMIN_EMAIL.toLowerCase();
+                            const isUserAdmin = isRoot || adminUidSet.has(u.id) || u.role === 'Admin';
+                            const ownedCount = projectCountByUid.get(u.id) || 0;
+                            return (
+                              <tr key={u.id} className="hover:bg-white/[0.02]">
+                                <td className="py-2.5 px-4">
+                                  <div className="font-semibold text-white">{u.name}</div>
+                                  <div className="text-[11px] text-slate-400 font-mono">
+                                    {u.email} · {u.id.slice(0, 12)}
+                                  </div>
+                                </td>
+                                <td className="py-2.5 px-4">
                                   <button
                                     type="button"
-                                    onClick={() => setEditingUser({ ...u })}
-                                    className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 cursor-pointer"
+                                    onClick={() => {
+                                      setOwnerFilterUid(u.id);
+                                      setActiveTab('projects');
+                                    }}
+                                    className="font-mono tabular-nums text-indigo-300 hover:text-indigo-200 underline cursor-pointer"
                                   >
-                                    Edit
+                                    {ownedCount} projects
                                   </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleToggleUserSuspend(u)}
-                                    className={`px-2.5 py-1 rounded-lg border cursor-pointer ${
-                                      u.isSuspended
-                                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
-                                        : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                                </td>
+                                <td className="py-2.5 px-4 text-slate-200 font-medium">
+                                  {isRoot ? 'Root Super Admin' : u.role}
+                                </td>
+                                <td className="py-2.5 px-4">
+                                  <span
+                                    className={`inline-flex items-center gap-1 font-mono text-[11px] ${
+                                      u.isSuspended ? 'text-rose-400' : 'text-emerald-400'
                                     }`}
                                   >
-                                    {u.isSuspended ? 'Restore' : 'Suspend'}
-                                  </button>
-                                  {u.email.toLowerCase() !== SUPER_ADMIN_EMAIL.toLowerCase() && (
+                                    {u.isSuspended ? (
+                                      <>
+                                        <UserX className="w-3.5 h-3.5" /> Suspended
+                                      </>
+                                    ) : (
+                                      <>
+                                        <UserCheck className="w-3.5 h-3.5" /> Active
+                                      </>
+                                    )}
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-4">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    {!isRoot && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleQuickToggleAdmin(u)}
+                                        className={`px-2.5 py-1 rounded-lg border cursor-pointer whitespace-nowrap ${
+                                          isUserAdmin
+                                            ? 'bg-indigo-500/15 border-indigo-400/30 text-indigo-300'
+                                            : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'
+                                        }`}
+                                      >
+                                        {isUserAdmin ? 'Revoke Admin' : 'Make Admin'}
+                                      </button>
+                                    )}
                                     <button
                                       type="button"
-                                      onClick={() =>
-                                        setConfirmDialog({
-                                          title: `Remove User Profile "${u.name}"?`,
-                                          message: `Deletes the Firestore profile record for ${u.email}.`,
-                                          confirmLabel: 'Remove Profile',
-                                          onConfirm: async () => {
-                                            try {
-                                              await adminDeleteUser(u.id);
-                                              await recordAudit(
-                                                'Deleted User Profile',
-                                                'user',
-                                                u.id,
-                                                `Removed ${u.email}`
-                                              );
-                                              onToast(`Removed profile for ${u.email}`, 'info');
-                                            } catch (err: any) {
-                                              onToast(err?.message || 'Delete failed.', 'error');
-                                            } finally {
-                                              setConfirmDialog(null);
-                                            }
-                                          },
-                                        })
-                                      }
-                                      className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 cursor-pointer"
-                                      title="Delete User Profile"
+                                      onClick={() => setEditingUser({ ...u })}
+                                      className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 cursor-pointer"
                                     >
-                                      <Trash2 className="w-3.5 h-3.5" />
+                                      Edit
                                     </button>
-                                  )}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                                    {!isRoot && (
+                                      <button
+                                        type="button"
+                                        onClick={() => handleToggleUserSuspend(u)}
+                                        className={`px-2.5 py-1 rounded-lg border cursor-pointer ${
+                                          u.isSuspended
+                                            ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-300'
+                                            : 'bg-amber-500/15 border-amber-500/30 text-amber-300'
+                                        }`}
+                                      >
+                                        {u.isSuspended ? 'Restore' : 'Suspend'}
+                                      </button>
+                                    )}
+                                    {!isRoot && (
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setConfirmDialog({
+                                            title: `Remove User Profile "${u.name}"?`,
+                                            message: `Deletes the Firestore profile record for ${u.email}.`,
+                                            confirmLabel: 'Remove Profile',
+                                            onConfirm: async () => {
+                                              try {
+                                                await adminDeleteUser(u.id);
+                                                await recordAudit(
+                                                  'Deleted User Profile',
+                                                  'user',
+                                                  u.id,
+                                                  `Removed ${u.email}`
+                                                );
+                                                onToast(`Removed profile for ${u.email}`, 'info');
+                                              } catch (err: any) {
+                                                onToast(err?.message || 'Delete failed.', 'error');
+                                              } finally {
+                                                setConfirmDialog(null);
+                                              }
+                                            },
+                                          })
+                                        }
+                                        className="p-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/25 text-rose-400 cursor-pointer"
+                                        title="Delete User Profile"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
                     </div>
@@ -1513,11 +2063,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             {/* ==================== TAB 5: SECURITY & AUDIT LOGS ==================== */}
             {activeTab === 'security' && (
               <div className="space-y-6">
-                <div>
-                  <h1 className="text-xl font-bold text-white">Security Hardening &amp; Audit Logs</h1>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Configure verified Admin allowlists, platform quotas, session PIN lock, and inspect immutable audit logs.
-                  </p>
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h1 className="text-xl font-bold text-white">Security Hardening &amp; Audit Logs</h1>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Configure verified Admin allowlists, platform quotas, session PIN lock, and export audit backups.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleExportPlatformSnapshot}
+                      className="px-3.5 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                    >
+                      <Server className="w-3.5 h-3.5 text-indigo-400" /> Export Snapshot (JSON)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRunHealthCheck}
+                      disabled={checkingHealth}
+                      className="px-3.5 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                    >
+                      <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>{checkingHealth ? 'Checking...' : 'Test Firestore'}</span>
+                    </button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
@@ -1556,6 +2126,19 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                         >
                           Set PIN
                         </button>
+                        {sessionPin && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              sessionStorage.removeItem('sl_admin_lock_pin');
+                              setSessionPin('');
+                              onToast('Session Lock PIN cleared.', 'info');
+                            }}
+                            className="px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-semibold cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        )}
                       </div>
                     </div>
 
@@ -1699,15 +2282,25 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                 <div className="bg-[#0E131D] border border-white/10 rounded-xl overflow-hidden">
                   <div className="p-4 border-b border-white/10 flex flex-wrap items-center justify-between gap-3">
                     <h2 className="text-sm font-bold text-white">Immutable Audit Log Stream</h2>
-                    <div className="relative w-full sm:w-64 text-xs">
-                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
-                      <input
-                        type="text"
-                        value={auditSearch}
-                        onChange={(e) => setAuditSearch(e.target.value)}
-                        placeholder="Filter audit logs..."
-                        className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[#07090F] border border-white/10 text-white outline-none"
-                      />
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                      <div className="relative flex-1 sm:w-64 text-xs">
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={auditSearch}
+                          onChange={(e) => setAuditSearch(e.target.value)}
+                          placeholder="Filter audit logs..."
+                          className="w-full pl-8 pr-3 py-1.5 rounded-lg bg-[#07090F] border border-white/10 text-white outline-none"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleExportAuditCsv}
+                        disabled={filteredLogs.length === 0}
+                        className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-40 whitespace-nowrap"
+                      >
+                        <Download className="w-3.5 h-3.5" /> CSV
+                      </button>
                     </div>
                   </div>
                   {filteredLogs.length === 0 ? (
@@ -1967,6 +2560,109 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ==================== CREATE PROJECT MODAL ==================== */}
+      {createProjectModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <form
+            onSubmit={handleCreateAdminProject}
+            className="bg-[#0E131D] border border-white/15 rounded-2xl max-w-md w-full p-5 space-y-4 text-xs shadow-2xl"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <h3 className="text-sm font-bold text-white">Create New Project</h3>
+              <button
+                type="button"
+                onClick={() => setCreateProjectModal(null)}
+                className="text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-slate-400 font-semibold block">Project Name</label>
+                <input
+                  type="text"
+                  required
+                  value={createProjectModal.name}
+                  onChange={(e) =>
+                    setCreateProjectModal({ ...createProjectModal, name: e.target.value })
+                  }
+                  placeholder="e.g. Enterprise Landing Portal"
+                  className="w-full px-3 py-2 rounded-lg bg-[#07090F] border border-white/15 text-white outline-none focus:border-indigo-400"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold block">Category</label>
+                  <select
+                    value={createProjectModal.category}
+                    onChange={(e) =>
+                      setCreateProjectModal({
+                        ...createProjectModal,
+                        category: e.target.value as Project['category'],
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-lg bg-[#07090F] border border-white/15 text-white outline-none"
+                  >
+                    <option value="Landing">Landing</option>
+                    <option value="Portfolio">Portfolio</option>
+                    <option value="E-Commerce">E-Commerce</option>
+                    <option value="Web Apps">Web Apps</option>
+                  </select>
+                </div>
+                <div className="space-y-1">
+                  <label className="text-slate-400 font-semibold block">Initial Status</label>
+                  <select
+                    value={createProjectModal.status}
+                    onChange={(e) =>
+                      setCreateProjectModal({
+                        ...createProjectModal,
+                        status: e.target.value as Project['status'],
+                      })
+                    }
+                    className="w-full px-3 py-2 rounded-lg bg-[#07090F] border border-white/15 text-white outline-none"
+                  >
+                    <option value="Draft">Draft</option>
+                    <option value="Active">Active</option>
+                    <option value="Published">Published</option>
+                  </select>
+                </div>
+              </div>
+              <div className="space-y-1">
+                <label className="text-slate-400 font-semibold block">Description</label>
+                <textarea
+                  rows={2}
+                  value={createProjectModal.description}
+                  onChange={(e) =>
+                    setCreateProjectModal({
+                      ...createProjectModal,
+                      description: e.target.value,
+                    })
+                  }
+                  placeholder="Optional description or tagline..."
+                  className="w-full px-3 py-2 rounded-lg bg-[#07090F] border border-white/15 text-white outline-none focus:border-indigo-400"
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-white/10">
+              <button
+                type="button"
+                onClick={() => setCreateProjectModal(null)}
+                className="px-3.5 py-1.5 rounded-lg bg-white/5 text-slate-300 font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold cursor-pointer"
+              >
+                Create Project
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

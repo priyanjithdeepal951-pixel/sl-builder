@@ -38,6 +38,16 @@ import {
   X,
   Pencil,
   GripVertical,
+  Music,
+  Mail,
+  Phone,
+  Home,
+  Search,
+  Settings,
+  ShoppingBag,
+  Flame,
+  Crown,
+  Compass,
 } from 'lucide-react';
 import {
   CanvasBlock,
@@ -59,6 +69,7 @@ import {
   parseOptionsList,
 } from '../../utils/studioRuntime';
 import { readAndCompressImageFile } from '../../utils/imageUpload';
+import { ICON_LIBRARY, parseVideoUrl } from '../../utils/mediaHelpers';
 
 export interface PreviewConfirmDialog {
   id: string;
@@ -164,7 +175,7 @@ const PADDING_MAP: Record<string, string> = {
   'py-4 px-2': 'py-4 px-2',
 };
 
-function renderVectorIcon(iconName: string | undefined, className = 'w-6 h-6') {
+export function renderVectorIcon(iconName: string | undefined, className = 'w-6 h-6') {
   switch ((iconName || 'sparkles').toLowerCase()) {
     case 'zap':
       return <Zap className={className} />;
@@ -188,6 +199,30 @@ function renderVectorIcon(iconName: string | undefined, className = 'w-6 h-6') {
       return <User className={className} />;
     case 'check':
       return <Check className={className} />;
+    case 'camera':
+      return <Camera className={className} />;
+    case 'video':
+      return <Video className={className} />;
+    case 'music':
+      return <Music className={className} />;
+    case 'mail':
+      return <Mail className={className} />;
+    case 'phone':
+      return <Phone className={className} />;
+    case 'home':
+      return <Home className={className} />;
+    case 'search':
+      return <Search className={className} />;
+    case 'settings':
+      return <Settings className={className} />;
+    case 'shopping-bag':
+      return <ShoppingBag className={className} />;
+    case 'flame':
+      return <Flame className={className} />;
+    case 'crown':
+      return <Crown className={className} />;
+    case 'compass':
+      return <Compass className={className} />;
     default:
       return <Sparkles className={className} />;
   }
@@ -215,6 +250,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
   onDismissSubmission,
 }) => {
   const [apiResponses, setApiResponses] = useState<Record<string, string>>({});
+  const [apiLoading, setApiLoading] = useState<Record<string, boolean>>({});
+  const [storageOutputs, setStorageOutputs] = useState<Record<string, string>>({});
+  const [dbDraftInputs, setDbDraftInputs] = useState<Record<string, string>>({});
+  const [authDrafts, setAuthDrafts] = useState<
+    Record<string, { email: string; password: string }>
+  >({});
+  const [deviceOutputs, setDeviceOutputs] = useState<Record<string, string>>({});
+  const [cameraStreams, setCameraStreams] = useState<Record<string, MediaStream | null>>({});
   const [localFormInputs, setLocalFormInputs] = useState<Record<string, string>>({});
   const [uploadedPreviews, setUploadedPreviews] = useState<
     Record<string, { name: string; sizeKb: number; imageUrl?: string }>
@@ -222,6 +265,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
   const [sidebarActiveIdx, setSidebarActiveIdx] = useState<Record<string, number>>({});
   const [inlineEditBlockId, setInlineEditBlockId] = useState<string | null>(null);
   const [stageDropIdx, setStageDropIdx] = useState<number | null>(null);
+
+  React.useEffect(() => {
+    return () => {
+      Object.values(cameraStreams).forEach((s) => {
+        s?.getTracks().forEach((t) => t.stop());
+      });
+    };
+  }, [cameraStreams]);
 
   const handleStageDragOver = (e: React.DragEvent, idx: number) => {
     if (!onDropAtStageIndex) return;
@@ -1239,6 +1290,22 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         value={formInputs[block.id] ?? ''}
                         onClick={(e) => e.stopPropagation()}
                         onChange={(e) => setFormInput(block.id, e.target.value, true)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            const hasCustomKeyHat = blocks.some(
+                              (b) => b.type === 'logic-onkey' && (b.triggerKey || 'Enter') === 'Enter'
+                            );
+                            if (!hasCustomKeyHat) {
+                              const submitBtn = blocks.find(
+                                (b) => b.type === 'ui-button' && b.action === 'submit-form'
+                              );
+                              if (submitBtn) {
+                                e.preventDefault();
+                                onTriggerAction(submitBtn, formInputs);
+                              }
+                            }
+                          }
+                        }}
                         style={primaryStyle}
                         placeholder={block.content}
                         className={`w-full rounded-lg bg-[#0B0F17] border border-white/15 px-2.5 py-1.5 ${
@@ -1563,37 +1630,76 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                 </div>
               )}
 
-              {block.type === 'ui-video' && (
-                <div className="px-5 py-1.5">
-                  <div
-                    style={surfaceStyle}
-                    className={`${customPad || 'p-3.5'} ${customRadius} ${
-                      customBg || 'bg-white/[0.04]'
-                    } border border-white/10 space-y-2`}
-                  >
-                    {block.videoUrl ? (
-                      <video
-                        controls
-                        playsInline
-                        src={block.videoUrl}
-                        onClick={(e) => e.stopPropagation()}
-                        className="w-full max-h-44 rounded-lg bg-black border border-white/10"
-                      />
-                    ) : (
-                      <div className="h-28 rounded-lg bg-[#090B10] border border-white/10 flex items-center justify-center text-sky-400 gap-2 text-xs">
-                        <Video className="w-5 h-5" />
-                        <span>Add Video MP4 URL in properties</span>
+              {block.type === 'ui-video' && (() => {
+                const parsedVid = parseVideoUrl(block.videoUrl);
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2`}
+                    >
+                      {parsedVid.kind === 'youtube' || parsedVid.kind === 'vimeo' ? (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="relative w-full aspect-video rounded-lg overflow-hidden bg-black border border-white/10"
+                        >
+                          <iframe
+                            src={parsedVid.embedUrl}
+                            title={displayContent}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                            className="w-full h-full border-0"
+                          />
+                        </div>
+                      ) : parsedVid.kind === 'direct' ? (
+                        <video
+                          controls
+                          playsInline
+                          src={parsedVid.embedUrl}
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full max-h-48 rounded-lg bg-black border border-white/10"
+                        />
+                      ) : (
+                        <div className="h-28 rounded-lg bg-[#090B10] border border-dashed border-sky-400/30 flex flex-col items-center justify-center text-sky-400 gap-1.5 text-xs">
+                          <Video className="w-5 h-5" />
+                          <span>Paste a YouTube link or MP4 video URL</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                          {block.subtitle && (
+                            <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                          )}
+                        </div>
+                        {parsedVid.kind !== 'empty' && (
+                          <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-300 shrink-0">
+                            {parsedVid.kind}
+                          </span>
+                        )}
                       </div>
-                    )}
-                    <div>
-                      <p className="text-xs font-bold text-white">{displayContent}</p>
-                      {block.subtitle && (
-                        <p className="text-[10px] text-slate-400">{block.subtitle}</p>
+                      {isSelected && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          className="pt-1 flex items-center gap-1.5"
+                        >
+                          <input
+                            type="text"
+                            value={block.videoUrl || ''}
+                            onChange={(e) =>
+                              onUpdateBlock({ ...block, videoUrl: e.target.value })
+                            }
+                            placeholder="Paste YouTube URL (youtube.com/watch?v=... / youtu.be/...) or MP4 URL"
+                            className="flex-1 px-2.5 py-1 rounded-lg bg-[#090B10] border border-sky-400/35 text-[11px] text-sky-100 placeholder-slate-500 outline-none focus:border-sky-400"
+                          />
+                        </div>
                       )}
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {block.type === 'ui-avatar' && (
                 <div className="px-5 py-1.5">
@@ -2139,149 +2245,436 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
               )}
 
               {/* 15. STORAGE / CLOUD DB / AUTH / FETCH / FLASK / DEVICE */}
-              {block.type === 'backend-storage' && (
-                <div className="px-5 py-1.5">
-                  <div
-                    style={surfaceStyle}
-                    className={`${customPad || 'p-3'} ${customRadius} ${
-                      customBg || 'bg-emerald-950/25'
-                    } border border-emerald-500/30 flex items-center justify-between gap-2`}
-                  >
-                    <div className="min-w-0">
-                      <span className="text-[10px] font-mono text-emerald-300 flex items-center gap-1">
-                        <HardDrive className="w-3 h-3" />
-                        LocalStorage [{block.logicConfig?.storageKey || 'sl_user_data'}] ·{' '}
-                        {(block.logicConfig?.storageOp || 'save').toUpperCase()}
-                      </span>
-                      <p className="text-xs font-semibold text-white truncate">
-                        {block.logicConfig?.varValue || displayContent}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onTriggerAction(block, formInputs);
-                      }}
-                      className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold cursor-pointer shrink-0"
-                    >
-                      Execute
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {block.type === 'backend-db' && (() => {
-                const colName = block.logicConfig?.collectionName || 'users';
-                const rows = runtimeState.dbCollections[colName] || [];
+              {block.type === 'backend-storage' && (() => {
+                const sKey = block.logicConfig?.storageKey || 'sl_user_data';
+                const sVal = block.logicConfig?.varValue ?? 'Saved from SL Builder!';
+                let liveStored: string | null = null;
+                try {
+                  liveStored = typeof window !== 'undefined' ? window.localStorage.getItem(sKey) : null;
+                } catch {
+                  liveStored = null;
+                }
+                const runLocalStorage = (op: 'save' | 'load' | 'remove') => {
+                  onUpdateBlock({
+                    ...block,
+                    logicConfig: { ...block.logicConfig, storageKey: sKey, storageOp: op, varValue: sVal },
+                  });
+                  onTriggerAction(
+                    {
+                      ...block,
+                      logicConfig: { ...block.logicConfig, storageKey: sKey, storageOp: op, varValue: sVal },
+                    },
+                    formInputs
+                  );
+                  if (op === 'save') {
+                    setStorageOutputs((p) => ({ ...p, [block.id]: `Saved [${sKey}] = "${sVal}"` }));
+                  } else if (op === 'remove') {
+                    setStorageOutputs((p) => ({ ...p, [block.id]: `Removed [${sKey}]` }));
+                  } else {
+                    let loadedVal: string | null = null;
+                    try {
+                      loadedVal = window.localStorage.getItem(sKey);
+                    } catch {
+                      loadedVal = null;
+                    }
+                    setStorageOutputs((p) => ({
+                      ...p,
+                      [block.id]: `Loaded [${sKey}] = ${loadedVal ?? '(empty)'}`,
+                    }));
+                  }
+                };
                 return (
                   <div className="px-5 py-1.5">
                     <div
                       style={surfaceStyle}
-                      className={`${customPad || 'p-3'} ${customRadius} ${
+                      onClick={(e) => e.stopPropagation()}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
                         customBg || 'bg-emerald-950/25'
-                      } border border-emerald-500/30 space-y-1.5`}
+                      } border border-emerald-500/30 space-y-2`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-mono text-emerald-300 flex items-center gap-1 font-bold">
+                          <HardDrive className="w-3 h-3" />
+                          LocalStorage [{sKey}]
+                        </span>
+                        <span className="text-[10px] font-mono text-emerald-400/90 truncate max-w-[140px]">
+                          {liveStored !== null ? `Stored: "${liveStored}"` : 'Empty'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <input
+                          type="text"
+                          value={sKey}
+                          onChange={(e) =>
+                            onUpdateBlock({
+                              ...block,
+                              logicConfig: { ...block.logicConfig, storageKey: e.target.value },
+                            })
+                          }
+                          placeholder="Storage key..."
+                          className="px-2 py-1 rounded bg-[#05070B] border border-emerald-500/25 text-[11px] font-mono text-emerald-200 outline-none focus:border-emerald-400"
+                        />
+                        <input
+                          type="text"
+                          value={sVal}
+                          onChange={(e) =>
+                            onUpdateBlock({
+                              ...block,
+                              logicConfig: { ...block.logicConfig, varValue: e.target.value },
+                            })
+                          }
+                          placeholder="Value to save..."
+                          className="px-2 py-1 rounded bg-[#05070B] border border-emerald-500/25 text-[11px] text-white outline-none focus:border-emerald-400"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => runLocalStorage('save')}
+                          className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold cursor-pointer"
+                        >
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => runLocalStorage('load')}
+                          className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-slate-100 text-[10px] font-semibold cursor-pointer"
+                        >
+                          Load
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => runLocalStorage('remove')}
+                          className="px-2.5 py-1 rounded bg-rose-500/20 hover:bg-rose-500/35 text-rose-300 text-[10px] font-semibold cursor-pointer"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      {storageOutputs[block.id] && (
+                        <div className="px-2 py-1 rounded bg-[#05070B] border border-emerald-500/20 text-[10px] font-mono text-emerald-300 truncate">
+                          {storageOutputs[block.id]}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'backend-db' && (() => {
+                const colName = block.logicConfig?.collectionName || 'users';
+                const rows = runtimeState.dbCollections[colName] || [];
+                const draftVal = dbDraftInputs[block.id] ?? (block.logicConfig?.varValue || '{"name":"Nimali","role":"Creator"}');
+                const runDbAction = (dbOp: 'save' | 'get' | 'delete') => {
+                  onTriggerAction(
+                    {
+                      ...block,
+                      logicConfig: {
+                        ...block.logicConfig,
+                        collectionName: colName,
+                        dbOp,
+                        varValue: draftVal,
+                      },
+                    },
+                    formInputs
+                  );
+                };
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-emerald-950/25'
+                      } border border-emerald-500/30 space-y-2`}
                     >
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-[10px] font-mono text-emerald-300 flex items-center gap-1 font-bold">
                           <Database className="w-3 h-3" />
                           Cloud DB [{colName}] · {rows.length} docs
                         </span>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onTriggerAction(block, formInputs);
-                          }}
-                          className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold cursor-pointer shrink-0"
-                        >
-                          {(block.logicConfig?.dbOp || 'save').toUpperCase()}
-                        </button>
-                      </div>
-                      {rows.slice(-2).map((doc) => (
-                        <div
-                          key={doc.id}
-                          className="px-2 py-1 rounded bg-[#05070B] border border-emerald-500/20 text-[10px] font-mono text-emerald-200 truncate"
-                        >
-                          {doc.id}: {JSON.stringify(doc.data)}
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => runDbAction('save')}
+                            className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold cursor-pointer"
+                          >
+                            + Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => runDbAction('get')}
+                            className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-slate-100 text-[10px] font-semibold cursor-pointer"
+                          >
+                            Get
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => runDbAction('delete')}
+                            className="px-2 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/35 text-rose-300 text-[10px] font-semibold cursor-pointer"
+                          >
+                            Delete
+                          </button>
                         </div>
-                      ))}
+                      </div>
+                      <input
+                        type="text"
+                        value={draftVal}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setDbDraftInputs((p) => ({ ...p, [block.id]: v }));
+                          onUpdateBlock({
+                            ...block,
+                            logicConfig: { ...block.logicConfig, varValue: v },
+                          });
+                        }}
+                        placeholder='{"name":"Creator","role":"Admin"}'
+                        className="w-full px-2 py-1 rounded bg-[#05070B] border border-emerald-500/25 text-[11px] font-mono text-emerald-100 outline-none focus:border-emerald-400"
+                      />
+                      {rows.length === 0 ? (
+                        <div className="text-[10px] text-slate-400 font-mono px-1">
+                          No documents yet — click &ldquo;+ Save&rdquo; to insert a record.
+                        </div>
+                      ) : (
+                        <div className="space-y-1 max-h-28 overflow-y-auto">
+                          {rows.slice(-4).map((doc) => (
+                            <div
+                              key={doc.id}
+                              className="px-2 py-1 rounded bg-[#05070B] border border-emerald-500/20 text-[10px] font-mono text-emerald-200 truncate"
+                            >
+                              {doc.id}: {JSON.stringify(doc.data)}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
               })()}
 
-              {block.type === 'backend-auth' && (
-                <div className="px-5 py-1.5">
-                  <div
-                    style={surfaceStyle}
-                    className={`${customPad || 'p-3'} ${customRadius} ${
-                      customBg || 'bg-emerald-950/25'
-                    } border border-emerald-500/30 flex items-center justify-between gap-2`}
-                  >
-                    <div className="min-w-0">
-                      <span className="text-[10px] font-mono text-emerald-300 flex items-center gap-1">
-                        <Lock className="w-3 h-3" />
-                        AUTH · {(block.logicConfig?.authOp || 'login').toUpperCase()}
-                      </span>
-                      <p className="text-xs font-semibold text-white truncate">
-                        {runtimeState.authUser
-                          ? `Signed in: ${runtimeState.authUser.email}`
-                          : block.logicConfig?.varValue || 'Not signed in'}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onTriggerAction(block, formInputs);
-                      }}
-                      className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold cursor-pointer shrink-0"
+              {block.type === 'backend-auth' && (() => {
+                const draft = authDrafts[block.id] || {
+                  email: block.logicConfig?.varValue || 'creator@slbuilder.app',
+                  password: '••••••••',
+                };
+                const runAuthOp = (authOp: 'signup' | 'login' | 'logout' | 'current-user') => {
+                  onTriggerAction(
+                    {
+                      ...block,
+                      logicConfig: {
+                        ...block.logicConfig,
+                        authOp,
+                        varValue: draft.email || 'creator@slbuilder.app',
+                      },
+                    },
+                    formInputs
+                  );
+                };
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-emerald-950/25'
+                      } border border-emerald-500/30 space-y-2`}
                     >
-                      Run Auth
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {block.type === 'backend-device' && (
-                <div className="px-5 py-1.5">
-                  <div
-                    style={surfaceStyle}
-                    className={`${customPad || 'p-3'} ${customRadius} ${
-                      customBg || 'bg-emerald-950/25'
-                    } border border-emerald-500/30 flex items-center justify-between gap-2`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {block.logicConfig?.deviceOp === 'camera' ? (
-                        <Camera className="w-4 h-4 text-emerald-400 shrink-0" />
-                      ) : block.logicConfig?.deviceOp === 'vibrate' ? (
-                        <Smartphone className="w-4 h-4 text-emerald-400 shrink-0" />
-                      ) : (
-                        <MapPin className="w-4 h-4 text-emerald-400 shrink-0" />
-                      )}
-                      <div className="min-w-0">
-                        <span className="text-[10px] font-mono text-emerald-300 uppercase">
-                          Device · {block.logicConfig?.deviceOp || 'gps'}
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-mono text-emerald-300 flex items-center gap-1 font-bold">
+                          <Lock className="w-3 h-3" />
+                          AUTH SESSION
                         </span>
-                        <p className="text-xs font-semibold text-white truncate">
-                          {displayContent}
-                        </p>
+                        <span
+                          className={`text-[10px] font-mono font-semibold truncate ${
+                            runtimeState.authUser ? 'text-emerald-300' : 'text-slate-400'
+                          }`}
+                        >
+                          {runtimeState.authUser
+                            ? `Signed in: ${runtimeState.authUser.email}`
+                            : 'Signed Out'}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <input
+                          type="email"
+                          value={draft.email}
+                          onChange={(e) =>
+                            setAuthDrafts((p) => ({
+                              ...p,
+                              [block.id]: { ...draft, email: e.target.value },
+                            }))
+                          }
+                          placeholder="Email address..."
+                          className="px-2 py-1 rounded bg-[#05070B] border border-emerald-500/25 text-[11px] text-white outline-none focus:border-emerald-400"
+                        />
+                        <input
+                          type="password"
+                          value={draft.password}
+                          onChange={(e) =>
+                            setAuthDrafts((p) => ({
+                              ...p,
+                              [block.id]: { ...draft, password: e.target.value },
+                            }))
+                          }
+                          placeholder="Password..."
+                          className="px-2 py-1 rounded bg-[#05070B] border border-emerald-500/25 text-[11px] text-white outline-none focus:border-emerald-400"
+                        />
+                      </div>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => runAuthOp('signup')}
+                          className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold cursor-pointer"
+                        >
+                          Sign Up
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => runAuthOp('login')}
+                          className="px-2.5 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold cursor-pointer"
+                        >
+                          Login
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => runAuthOp('logout')}
+                          className="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 text-slate-200 text-[10px] font-semibold cursor-pointer"
+                        >
+                          Logout
+                        </button>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onTriggerAction(block, formInputs);
-                      }}
-                      className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold cursor-pointer shrink-0"
-                    >
-                      Access
-                    </button>
                   </div>
-                </div>
-              )}
+                );
+              })()}
+
+              {block.type === 'backend-device' && (() => {
+                const activeStream = cameraStreams[block.id];
+                const runDevice = async (deviceOp: 'gps' | 'camera' | 'vibrate') => {
+                  onUpdateBlock({
+                    ...block,
+                    logicConfig: { ...block.logicConfig, deviceOp },
+                  });
+                  if (deviceOp === 'vibrate') {
+                    if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+                      navigator.vibrate([120, 60, 120]);
+                    }
+                    setDeviceOutputs((p) => ({
+                      ...p,
+                      [block.id]: 'Vibrate pattern [120, 60, 120]ms dispatched',
+                    }));
+                    onTriggerAction(
+                      { ...block, logicConfig: { ...block.logicConfig, deviceOp: 'vibrate' } },
+                      formInputs
+                    );
+                  } else if (deviceOp === 'camera') {
+                    if (activeStream) {
+                      activeStream.getTracks().forEach((t) => t.stop());
+                      setCameraStreams((p) => ({ ...p, [block.id]: null }));
+                      setDeviceOutputs((p) => ({ ...p, [block.id]: 'Camera stream stopped' }));
+                      return;
+                    }
+                    if (navigator.mediaDevices?.getUserMedia) {
+                      try {
+                        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                        setCameraStreams((p) => ({ ...p, [block.id]: stream }));
+                        setDeviceOutputs((p) => ({ ...p, [block.id]: 'Live camera stream active' }));
+                      } catch {
+                        setDeviceOutputs((p) => ({
+                          ...p,
+                          [block.id]: 'Camera permission denied or no camera device detected',
+                        }));
+                      }
+                    } else {
+                      setDeviceOutputs((p) => ({ ...p, [block.id]: 'MediaDevices API unavailable' }));
+                    }
+                  } else {
+                    if (navigator.geolocation) {
+                      navigator.geolocation.getCurrentPosition(
+                        (pos) => {
+                          const coords = `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+                          setDeviceOutputs((p) => ({ ...p, [block.id]: `GPS: ${coords}` }));
+                          onTriggerAction(
+                            { ...block, logicConfig: { ...block.logicConfig, deviceOp: 'gps' } },
+                            formInputs
+                          );
+                        },
+                        () => {
+                          setDeviceOutputs((p) => ({
+                            ...p,
+                            [block.id]: 'GPS Demo Fallback: 6.9271, 79.8612 (Colombo)',
+                          }));
+                        },
+                        { timeout: 3500 }
+                      );
+                    } else {
+                      setDeviceOutputs((p) => ({
+                        ...p,
+                        [block.id]: 'GPS Demo: 6.9271, 79.8612 (Colombo)',
+                      }));
+                    }
+                  }
+                };
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-emerald-950/25'
+                      } border border-emerald-500/30 space-y-2`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-mono text-emerald-300 uppercase font-bold flex items-center gap-1">
+                          <Smartphone className="w-3 h-3" /> Device &amp; Sensor APIs
+                        </span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => void runDevice('gps')}
+                            className="px-2 py-0.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <MapPin className="w-2.5 h-2.5" /> GPS
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void runDevice('camera')}
+                            className={`px-2 py-0.5 rounded text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer ${
+                              activeStream ? 'bg-rose-600 hover:bg-rose-500' : 'bg-sky-600 hover:bg-sky-500'
+                            }`}
+                          >
+                            <Camera className="w-2.5 h-2.5" /> {activeStream ? 'Stop' : 'Camera'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void runDevice('vibrate')}
+                            className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-slate-100 text-[10px] font-semibold cursor-pointer"
+                          >
+                            Vibrate
+                          </button>
+                        </div>
+                      </div>
+                      {activeStream && (
+                        <video
+                          autoPlay
+                          muted
+                          playsInline
+                          ref={(videoEl) => {
+                            if (videoEl && videoEl.srcObject !== activeStream) {
+                              videoEl.srcObject = activeStream;
+                            }
+                          }}
+                          className="w-full max-h-36 rounded-lg bg-black object-cover border border-emerald-500/30"
+                        />
+                      )}
+                      {deviceOutputs[block.id] && (
+                        <div className="px-2 py-1 rounded bg-[#05070B] border border-emerald-500/20 text-[10px] font-mono text-emerald-300">
+                          {deviceOutputs[block.id]}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
 
               {(block.type === 'backend-flask' ||
                 block.type === 'backend-fetch' ||
@@ -2289,44 +2682,93 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                 <div className="px-5 py-1.5">
                   <div
                     style={surfaceStyle}
-                    className={`${customPad || 'p-3'} ${customRadius} ${
+                    onClick={(e) => e.stopPropagation()}
+                    className={`${customPad || 'p-3.5'} ${customRadius} ${
                       customBg || 'bg-emerald-950/25'
                     } border border-emerald-500/30 space-y-2`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
                         <Server className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                        <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[9px] font-mono font-bold shrink-0">
-                          {block.httpMethod || 'GET'}
-                        </span>
-                        <span
-                          style={primaryStyle}
-                          className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} font-mono ${
-                            customTextColor || 'text-emerald-300'
-                          } truncate`}
+                        <select
+                          value={block.httpMethod || 'GET'}
+                          onChange={(e) =>
+                            onUpdateBlock({
+                              ...block,
+                              httpMethod: e.target.value as CanvasBlock['httpMethod'],
+                            })
+                          }
+                          className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold outline-none cursor-pointer"
                         >
-                          {block.apiEndpoint || displayContent}
-                        </span>
+                          <option value="GET">GET</option>
+                          <option value="POST">POST</option>
+                          <option value="PUT">PUT</option>
+                          <option value="DELETE">DEL</option>
+                        </select>
+                        <input
+                          type="text"
+                          value={block.apiEndpoint || '/api/v1/metrics'}
+                          onChange={(e) =>
+                            onUpdateBlock({ ...block, apiEndpoint: e.target.value })
+                          }
+                          className="flex-1 min-w-0 px-2 py-0.5 rounded bg-[#05070B] border border-emerald-500/25 text-[11px] font-mono text-emerald-200 outline-none focus:border-emerald-400"
+                        />
                       </div>
                       <button
                         type="button"
-                        onClick={(e) => {
+                        disabled={Boolean(apiLoading[block.id])}
+                        onClick={async (e) => {
                           e.stopPropagation();
-                          const endpoint = block.apiEndpoint || '/api/v1/metrics';
-                          setApiResponses((prev) => ({
-                            ...prev,
-                            [block.id]: JSON.stringify({
-                              status: 200,
-                              method: block.httpMethod || 'GET',
-                              endpoint,
-                              timestamp: new Date().toLocaleTimeString(),
-                            }),
-                          }));
-                          onTriggerAction(block, formInputs);
+                          const endpoint = (block.apiEndpoint || '/api/v1/metrics').trim();
+                          const method = block.httpMethod || 'GET';
+                          setApiLoading((p) => ({ ...p, [block.id]: true }));
+                          try {
+                            let isRealResponse = false;
+                            let outText = '';
+                            if (/^https?:\/\//i.test(endpoint)) {
+                              const fetchOpts: RequestInit = { method };
+                              if (method !== 'GET' && method !== 'DELETE' && block.requestBody) {
+                                fetchOpts.headers = { 'Content-Type': 'application/json' };
+                                fetchOpts.body = block.requestBody;
+                              }
+                              const resp = await fetch(endpoint, fetchOpts);
+                              const rawText = await resp.text();
+                              isRealResponse = true;
+                              outText = `HTTP ${resp.status} ${resp.statusText} · ${rawText.slice(0, 180)}`;
+                            } else {
+                              outText = JSON.stringify({
+                                status: 200,
+                                mode: block.type === 'backend-flask' ? 'flask-route-preview' : 'mock-api',
+                                method,
+                                endpoint,
+                                timestamp: new Date().toLocaleTimeString(),
+                              });
+                            }
+                            setApiResponses((prev) => ({ ...prev, [block.id]: outText }));
+                            onTriggerAction(block, formInputs);
+                            if (isRealResponse) {
+                              // handled cleanly
+                            }
+                          } catch {
+                            setApiResponses((prev) => ({
+                              ...prev,
+                              [block.id]: JSON.stringify({
+                                status: 200,
+                                fallback: true,
+                                method,
+                                endpoint,
+                                note: 'CORS/offline sandbox fallback',
+                              }),
+                            }));
+                            onTriggerAction(block, formInputs);
+                          } finally {
+                            setApiLoading((p) => ({ ...p, [block.id]: false }));
+                          }
                         }}
-                        className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer shrink-0"
+                        className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
                       >
-                        <Play className="w-2.5 h-2.5 fill-current" /> Test
+                        <Play className="w-2.5 h-2.5 fill-current" />{' '}
+                        {apiLoading[block.id] ? 'Sending' : 'Send'}
                       </button>
                     </div>
                     {block.subtitle && (
@@ -2335,8 +2777,8 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       </p>
                     )}
                     {apiResponses[block.id] && (
-                      <div className="p-2 rounded bg-[#05070B] border border-emerald-500/20 text-[10px] font-mono text-emerald-300 break-all flex items-center gap-1.5">
-                        <Check className="w-3 h-3 text-emerald-400 shrink-0" />
+                      <div className="p-2 rounded bg-[#05070B] border border-emerald-500/20 text-[10px] font-mono text-emerald-300 break-all flex items-start gap-1.5">
+                        <Check className="w-3 h-3 text-emerald-400 shrink-0 mt-0.5" />
                         <span>{apiResponses[block.id]}</span>
                       </div>
                     )}
@@ -2584,6 +3026,66 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     }
                     placeholder="Or paste Image URL (https://...)"
                     className="w-full px-2.5 py-1 rounded-lg bg-[#11151E] border border-white/10 text-[11px] text-slate-200 outline-none focus:border-sky-400"
+                  />
+                </div>
+              )}
+
+              {inlineEditBlock.type === 'ui-icon' && (
+                <div className="space-y-1.5 p-2.5 rounded-xl bg-[#090B10] border border-sky-500/25">
+                  <span className="text-[10px] text-sky-300 font-semibold block">
+                    Choose Real Vector Icon ({ICON_LIBRARY.length} Icons)
+                  </span>
+                  <div className="grid grid-cols-6 gap-1.5 max-h-40 overflow-y-auto">
+                    {ICON_LIBRARY.map((ic) => {
+                      const active = (inlineEditBlock.iconName || 'sparkles') === ic.id;
+                      return (
+                        <button
+                          key={ic.id}
+                          type="button"
+                          onClick={() => onUpdateBlock({ ...inlineEditBlock, iconName: ic.id })}
+                          title={ic.label}
+                          className={`p-2 rounded-lg border flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${
+                            active
+                              ? 'bg-sky-500/25 border-sky-400 text-sky-200'
+                              : 'bg-[#11151E] border-white/10 text-slate-300 hover:text-white hover:border-white/25'
+                          }`}
+                        >
+                          {renderVectorIcon(ic.id, 'w-4 h-4')}
+                          <span className="text-[8px] truncate w-full text-center">{ic.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {inlineEditBlock.type === 'ui-video' && (
+                <div className="space-y-1.5 p-2.5 rounded-xl bg-[#090B10] border border-sky-500/25">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-sky-300 font-semibold">
+                      YouTube or Video MP4 URL
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onUpdateBlock({
+                          ...inlineEditBlock,
+                          videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+                        })
+                      }
+                      className="text-[10px] text-sky-400 hover:underline cursor-pointer"
+                    >
+                      Try Sample YouTube
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    value={inlineEditBlock.videoUrl || ''}
+                    onChange={(e) =>
+                      onUpdateBlock({ ...inlineEditBlock, videoUrl: e.target.value })
+                    }
+                    placeholder="https://www.youtube.com/watch?v=... or https://youtu.be/..."
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/10 text-[11px] text-slate-100 outline-none focus:border-sky-400"
                   />
                 </div>
               )}

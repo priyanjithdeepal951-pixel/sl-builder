@@ -7,6 +7,7 @@ import {
 } from './pageStylePresets';
 import { getEffectiveNavLinks } from './navLinkHelpers';
 import { parseOptionsList } from './studioRuntime';
+import { getVectorIconDef, getVectorIconSvgHtml, parseVideoUrl } from './mediaHelpers';
 
 function escapeHtml(text: string): string {
   return text
@@ -884,26 +885,35 @@ export function generateHtmlExport(
         case 'ui-icon':
           return `  <div id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4 ${alignClass}${customCls}">
     <div style="${surfaceFxCss}" class="inline-flex flex-col items-center p-5 ${radiusClass} border border-white/10 bg-white/5 gap-2">
-      <span class="px-3 py-1.5 rounded-lg bg-sky-500/20 text-sky-400 font-mono text-xs uppercase">${escapeHtml(
-        b.iconName || 'sparkles'
+      <span style="color: ${primaryColor};" class="w-12 h-12 rounded-xl bg-sky-500/15 border border-sky-400/30 flex items-center justify-center">${getVectorIconSvgHtml(
+        b.iconName,
+        24
       )}</span>
       <span style="${textFxCss}" class="text-sm font-bold">${content}</span>
       ${subtitle ? `<span style="color:${subColor};" class="text-xs">${subtitle}</span>` : ''}
     </div>
   </div>`;
 
-        case 'ui-video':
+        case 'ui-video': {
+          const parsedVid = parseVideoUrl(b.videoUrl);
+          const videoInner =
+            parsedVid.kind === 'youtube' || parsedVid.kind === 'vimeo'
+              ? `<div class="w-full aspect-video rounded-xl overflow-hidden bg-black border border-white/10"><iframe src="${escapeHtml(
+                  parsedVid.embedUrl
+                )}" title="${content}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen class="w-full h-full border-0"></iframe></div>`
+              : parsedVid.kind === 'direct'
+              ? `<video controls playsinline src="${escapeHtml(
+                  parsedVid.embedUrl
+                )}" class="w-full rounded-xl bg-black"></video>`
+              : `<div class="h-44 rounded-xl bg-black/60 flex items-center justify-center text-sky-400 text-sm">Paste a YouTube or MP4 video URL</div>`;
           return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-3">
-      ${
-        b.videoUrl
-          ? `<video controls playsinline src="${escapeHtml(b.videoUrl)}" class="w-full rounded-xl bg-black"></video>`
-          : `<div class="h-44 rounded-xl bg-black/60 flex items-center justify-center text-sky-400 text-sm">Video Showcase</div>`
-      }
+      ${videoInner}
       <div style="${textFxCss}" class="text-base font-bold">${content}</div>
       ${subtitle ? `<p style="color:${subColor};" class="text-xs">${subtitle}</p>` : ''}
     </div>
   </section>`;
+        }
 
         case 'ui-avatar':
           return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3${customCls}">
@@ -1200,86 +1210,90 @@ export function generateHtmlExport(
 
         case 'backend-storage': {
           const cfg = b.logicConfig || {};
+          const sKey = cfg.storageKey || 'sl_user_data';
+          const sVal = cfg.varValue || 'Saved from SL Builder!';
           return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(6, 78, 59, 0.3)'
-          };" class="p-5 ${radiusClass} border border-emerald-500/30 flex items-center justify-between gap-4">
-      <div>
-        <div class="text-xs font-mono text-emerald-300">LocalStorage [${escapeHtml(
-          cfg.storageKey || 'sl_user_data'
-        )}] · ${escapeHtml((cfg.storageOp || 'save').toUpperCase())}</div>
-        <div class="text-sm font-bold text-white mt-0.5">${escapeHtml(cfg.varValue || content)}</div>
+          };" class="p-5 ${radiusClass} border border-emerald-500/30 space-y-3">
+      <div class="flex items-center justify-between gap-2">
+        <div class="text-xs font-mono text-emerald-300 font-bold">LocalStorage Manager</div>
+        <span id="sl-storage-res-${escapeHtml(b.id)}" class="text-xs font-mono text-emerald-200"></span>
       </div>
-      <button type="button" onclick="slRunStorage(${escapeHtml(
-        JSON.stringify(cfg.storageKey || 'sl_user_data')
-      )}, ${escapeHtml(JSON.stringify(cfg.storageOp || 'save'))}, ${escapeHtml(
-            JSON.stringify(cfg.varValue || 'Saved from SL Builder')
-          )})" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer">Execute</button>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <input id="sl-storage-key-${escapeHtml(b.id)}" type="text" value="${escapeHtml(sKey)}" placeholder="Storage key..." class="px-3 py-2 rounded-lg bg-[#05070B] border border-emerald-500/25 text-xs font-mono text-emerald-200 outline-none" />
+        <input id="sl-storage-val-${escapeHtml(b.id)}" type="text" value="${escapeHtml(sVal)}" placeholder="Value to store..." class="px-3 py-2 rounded-lg bg-[#05070B] border border-emerald-500/25 text-xs text-white outline-none" />
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" onclick="slRunStorage(document.getElementById('sl-storage-key-${escapeHtml(b.id)}').value,'save',document.getElementById('sl-storage-val-${escapeHtml(b.id)}').value,${escapeHtml(JSON.stringify(b.id))})" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer">Save</button>
+        <button type="button" onclick="slRunStorage(document.getElementById('sl-storage-key-${escapeHtml(b.id)}').value,'load','',${escapeHtml(JSON.stringify(b.id))})" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold cursor-pointer">Load</button>
+        <button type="button" onclick="slRunStorage(document.getElementById('sl-storage-key-${escapeHtml(b.id)}').value,'remove','',${escapeHtml(JSON.stringify(b.id))})" class="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 text-rose-300 text-xs font-semibold cursor-pointer">Remove</button>
+      </div>
     </div>
   </section>`;
         }
 
         case 'backend-db': {
           const cfg = b.logicConfig || {};
+          const col = cfg.collectionName || 'users';
+          const defJson = cfg.varValue || '{"name":"Creator","role":"Admin"}';
           return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(6, 78, 59, 0.3)'
-          };" class="p-5 ${radiusClass} border border-emerald-500/30 flex items-center justify-between gap-4">
-      <div>
-        <div class="text-xs font-mono text-emerald-300">Cloud DB Collection [${escapeHtml(
-          cfg.collectionName || 'users'
-        )}]</div>
-        <div id="sl-db-res-${escapeHtml(b.id)}" class="text-xs font-mono text-emerald-100 mt-1">${content}</div>
+          };" class="p-5 ${radiusClass} border border-emerald-500/30 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="text-xs font-mono text-emerald-300 font-bold">Cloud DB Collection [${escapeHtml(col)}]</div>
+        <div class="flex gap-1.5">
+          <button type="button" onclick="slRunDb(${escapeHtml(JSON.stringify(b.id))},${escapeHtml(JSON.stringify(col))},'save',document.getElementById('sl-db-input-${escapeHtml(b.id)}').value)" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer">+ Save</button>
+          <button type="button" onclick="slRunDb(${escapeHtml(JSON.stringify(b.id))},${escapeHtml(JSON.stringify(col))},'get','')" class="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold cursor-pointer">Get</button>
+          <button type="button" onclick="slRunDb(${escapeHtml(JSON.stringify(b.id))},${escapeHtml(JSON.stringify(col))},'delete','')" class="px-3 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 text-rose-300 text-xs font-semibold cursor-pointer">Delete</button>
+        </div>
       </div>
-      <button type="button" onclick="slRunDb(${escapeHtml(JSON.stringify(b.id))}, ${escapeHtml(
-            JSON.stringify(cfg.collectionName || 'users')
-          )}, ${escapeHtml(JSON.stringify(cfg.dbOp || 'save'))}, ${escapeHtml(
-            JSON.stringify(cfg.varValue || '{"name":"Creator"}')
-          )})" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer">${escapeHtml(
-            (cfg.dbOp || 'save').toUpperCase()
-          )}</button>
+      <input id="sl-db-input-${escapeHtml(b.id)}" type="text" value="${escapeHtml(defJson)}" class="w-full px-3 py-2 rounded-lg bg-[#05070B] border border-emerald-500/25 text-xs font-mono text-emerald-100 outline-none" />
+      <div id="sl-db-res-${escapeHtml(b.id)}" class="space-y-1 text-xs font-mono text-emerald-100">Ready — click + Save to insert record.</div>
     </div>
   </section>`;
         }
 
         case 'backend-auth': {
           const cfg = b.logicConfig || {};
+          const defEmail = cfg.varValue || 'creator@slbuilder.app';
           return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(6, 78, 59, 0.3)'
-          };" class="p-5 ${radiusClass} border border-emerald-500/30 flex items-center justify-between gap-4">
-      <div>
-        <div class="text-xs font-mono text-emerald-300">AUTH · ${escapeHtml(
-          (cfg.authOp || 'login').toUpperCase()
-        )}</div>
-        <div id="sl-auth-status-${escapeHtml(b.id)}" class="text-sm font-bold text-white mt-0.5">${escapeHtml(
-            cfg.varValue || content
-          )}</div>
+          };" class="p-5 ${radiusClass} border border-emerald-500/30 space-y-3">
+      <div class="flex items-center justify-between gap-2">
+        <div class="text-xs font-mono text-emerald-300 font-bold">AUTHENTICATION FLOW</div>
+        <div id="sl-auth-status-${escapeHtml(b.id)}" class="text-xs font-mono text-white">Signed Out</div>
       </div>
-      <button type="button" onclick="slRunAuth(${escapeHtml(JSON.stringify(b.id))}, ${escapeHtml(
-            JSON.stringify(cfg.authOp || 'login')
-          )}, ${escapeHtml(
-            JSON.stringify(cfg.varValue || 'creator@slbuilder.app')
-          )})" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer">Run Auth</button>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <input id="sl-auth-email-${escapeHtml(b.id)}" type="email" value="${escapeHtml(defEmail)}" placeholder="Email..." class="px-3 py-2 rounded-lg bg-[#05070B] border border-emerald-500/25 text-xs text-white outline-none" />
+        <input id="sl-auth-pass-${escapeHtml(b.id)}" type="password" value="secret123" placeholder="Password..." class="px-3 py-2 rounded-lg bg-[#05070B] border border-emerald-500/25 text-xs text-white outline-none" />
+      </div>
+      <div class="flex flex-wrap gap-2">
+        <button type="button" onclick="slRunAuth(${escapeHtml(JSON.stringify(b.id))},'signup',document.getElementById('sl-auth-email-${escapeHtml(b.id)}').value)" class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer">Sign Up</button>
+        <button type="button" onclick="slRunAuth(${escapeHtml(JSON.stringify(b.id))},'login',document.getElementById('sl-auth-email-${escapeHtml(b.id)}').value)" class="px-3 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold cursor-pointer">Login</button>
+        <button type="button" onclick="slRunAuth(${escapeHtml(JSON.stringify(b.id))},'logout','')" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-slate-200 text-xs font-semibold cursor-pointer">Logout</button>
+      </div>
     </div>
   </section>`;
         }
 
         case 'backend-device': {
-          const cfg = b.logicConfig || {};
           return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(6, 78, 59, 0.3)'
-          };" class="p-5 ${radiusClass} border border-emerald-500/30 flex items-center justify-between gap-4">
-      <div>
-        <div class="text-xs font-mono text-emerald-300 uppercase">Device · ${escapeHtml(
-          cfg.deviceOp || 'gps'
-        )}</div>
-        <div class="text-sm font-bold text-white mt-0.5">${content}</div>
+          };" class="p-5 ${radiusClass} border border-emerald-500/30 space-y-3">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="text-xs font-mono text-emerald-300 font-bold uppercase">Device &amp; Browser APIs</div>
+        <div class="flex flex-wrap gap-1.5">
+          <button type="button" onclick="slRunDevice('gps',${escapeHtml(JSON.stringify(b.id))})" class="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer">GPS Location</button>
+          <button type="button" onclick="slRunDevice('camera',${escapeHtml(JSON.stringify(b.id))})" class="px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold cursor-pointer">Camera</button>
+          <button type="button" onclick="slRunDevice('vibrate',${escapeHtml(JSON.stringify(b.id))})" class="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold cursor-pointer">Vibrate</button>
+        </div>
       </div>
-      <button type="button" onclick="slRunDevice(${escapeHtml(
-        JSON.stringify(cfg.deviceOp || 'gps')
-      )})" class="px-4 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer">Access</button>
+      <video id="sl-dev-cam-${escapeHtml(b.id)}" autoplay muted playsinline class="hidden w-full max-h-48 rounded-lg bg-black object-cover"></video>
+      <div id="sl-dev-res-${escapeHtml(b.id)}" class="hidden p-2 rounded bg-[#05070B] border border-emerald-500/20 text-xs font-mono text-emerald-300"></div>
     </div>
   </section>`;
         }
@@ -1541,11 +1555,22 @@ ${renderedBlocks}
       slShowToast('Result: ' + res);
     }
 
-    function slRunStorage(key, op, val) {
+    function slRunStorage(key, op, val, blockId) {
+      var resEl = blockId ? document.getElementById('sl-storage-res-' + blockId) : null;
       try {
-        if (op === 'load') { slShowToast(key + ' = ' + (localStorage.getItem(key) || '(empty)')); }
-        else if (op === 'remove') { localStorage.removeItem(key); slShowToast('Removed ' + key); }
-        else { localStorage.setItem(key, val); slShowToast('Saved ' + key + '!'); }
+        if (op === 'load') {
+          var got = localStorage.getItem(key);
+          if (resEl) resEl.textContent = 'Loaded: ' + (got || '(empty)');
+          slShowToast(key + ' = ' + (got || '(empty)'));
+        } else if (op === 'remove') {
+          localStorage.removeItem(key);
+          if (resEl) resEl.textContent = 'Removed [' + key + ']';
+          slShowToast('Removed ' + key);
+        } else {
+          localStorage.setItem(key, val);
+          if (resEl) resEl.textContent = 'Saved [' + key + ']';
+          slShowToast('Saved ' + key + '!');
+        }
       } catch (e) { slShowToast('LocalStorage unavailable'); }
     }
 
@@ -1567,7 +1592,14 @@ ${renderedBlocks}
         slShowToast('Saved to [' + col + '] (' + rows.length + ' total)');
       }
       var el = document.getElementById('sl-db-res-' + blockId);
-      if (el) el.textContent = col + ': ' + rows.length + ' records';
+      if (el) {
+        if (!rows.length) { el.textContent = col + ': 0 records'; }
+        else {
+          el.innerHTML = rows.slice(-4).map(function(d) {
+            return '<div style="background:rgba(0,0,0,0.45);padding:4px 8px;border-radius:6px;border:1px solid rgba(16,185,129,0.2);">' + d.id + ': ' + JSON.stringify(d.data).replace(/</g, '&lt;') + '</div>';
+          }).join('');
+        }
+      }
     }
 
     function slRunAuth(blockId, op, email) {
@@ -1588,17 +1620,43 @@ ${renderedBlocks}
       }
     }
 
-    function slRunDevice(op) {
+    function slRunDevice(op, blockId) {
+      var resEl = blockId ? document.getElementById('sl-dev-res-' + blockId) : null;
+      var camEl = blockId ? document.getElementById('sl-dev-cam-' + blockId) : null;
       if (op === 'vibrate') {
         if (navigator.vibrate) navigator.vibrate([120, 60, 120]);
+        if (resEl) { resEl.textContent = 'Vibrate triggered [120, 60, 120]ms'; resEl.classList.remove('hidden'); }
         slShowToast('Device vibration triggered!');
       } else if (op === 'camera') {
-        slShowToast(navigator.mediaDevices ? 'Camera API supported!' : 'Camera unavailable');
+        if (camEl && camEl.srcObject) {
+          camEl.srcObject.getTracks().forEach(function(t) { t.stop(); });
+          camEl.srcObject = null;
+          camEl.classList.add('hidden');
+          if (resEl) { resEl.textContent = 'Camera stopped'; resEl.classList.remove('hidden'); }
+          return;
+        }
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          navigator.mediaDevices.getUserMedia({ video: true }).then(function(stream) {
+            if (camEl) { camEl.srcObject = stream; camEl.classList.remove('hidden'); }
+            if (resEl) { resEl.textContent = 'Live Camera Active'; resEl.classList.remove('hidden'); }
+            slShowToast('Live camera started!');
+          }).catch(function() {
+            if (resEl) { resEl.textContent = 'Camera permission denied or no webcam'; resEl.classList.remove('hidden'); }
+            slShowToast('Camera permission denied');
+          });
+        } else { slShowToast('Camera API unavailable'); }
       } else {
         if (navigator.geolocation) {
           navigator.geolocation.getCurrentPosition(
-            function(pos) { slShowToast('GPS: ' + pos.coords.latitude.toFixed(4) + ', ' + pos.coords.longitude.toFixed(4)); },
-            function() { slShowToast('GPS fallback: 6.9271, 79.8612'); }
+            function(pos) {
+              var c = pos.coords.latitude.toFixed(4) + ', ' + pos.coords.longitude.toFixed(4);
+              if (resEl) { resEl.textContent = 'GPS: ' + c; resEl.classList.remove('hidden'); }
+              slShowToast('GPS: ' + c);
+            },
+            function() {
+              if (resEl) { resEl.textContent = 'GPS fallback: 6.9271, 79.8612'; resEl.classList.remove('hidden'); }
+              slShowToast('GPS fallback: 6.9271, 79.8612');
+            }
           );
         } else { slShowToast('GPS unsupported'); }
       }
@@ -1965,6 +2023,11 @@ ${renderedBlocks}
             } } });`
         )
         .join('\n      ')}
+      ${
+        !onKeyHats.some((h) => (h.triggerKey || 'Enter') === 'Enter')
+          ? `document.querySelectorAll('input[data-sl-input-id]').forEach(function(inp){ inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); var subBtn = document.querySelector('.sl-action-btn[data-action="submit-form"]'); if (subBtn) { slRunActionSpec(subBtn.dataset, false); } else { slRunActionSpec({ action: 'submit-form', payload: 'Form submitted successfully!' }, false); } } }); });`
+          : ''
+      }
     });
   </script>
 </body>
@@ -2130,6 +2193,49 @@ export function generateReactTsxExport(
           </figcaption>
         </figure>
       </section>`;
+        case 'ui-icon': {
+          const def = getVectorIconDef(b.iconName);
+          return `      <div id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 text-center w-full">
+        <div className="inline-flex flex-col items-center p-5 rounded-xl bg-white/5 border border-white/10 gap-2"${styleAttr}>
+          <div className="w-12 h-12 rounded-xl bg-sky-500/15 border border-sky-400/30 flex items-center justify-center text-sky-400" dangerouslySetInnerHTML={{ __html: ${JSON.stringify(
+            `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${def.svgInner}</svg>`
+          )} }} />
+          <span className="text-sm font-bold">{${safeTitle}}</span>
+          {${safeSub} && <span className="text-xs opacity-75">{${safeSub}}</span>}
+        </div>
+      </div>`;
+        }
+        case 'ui-video': {
+          const parsedVid = parseVideoUrl(b.videoUrl);
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3"${styleAttr}>
+          ${
+            parsedVid.kind === 'youtube' || parsedVid.kind === 'vimeo'
+              ? `<div className="w-full aspect-video rounded-xl overflow-hidden bg-black border border-white/10"><iframe src=${JSON.stringify(
+                  parsedVid.embedUrl
+                )} title={${safeTitle}} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen className="w-full h-full border-0" /></div>`
+              : parsedVid.kind === 'direct'
+              ? `<video controls playsInline src=${JSON.stringify(
+                  parsedVid.embedUrl
+                )} className="w-full rounded-xl bg-black" />`
+              : `<div className="h-44 rounded-xl bg-black/50 flex items-center justify-center text-sky-400 text-sm">Video URL not configured</div>`
+          }
+          <div className="text-base font-bold">{${safeTitle}}</div>
+          {${safeSub} && <p className="text-xs opacity-75">{${safeSub}}</p>}
+        </div>
+      </section>`;
+        }
+        case 'ui-file-upload':
+          return `      <section id=${JSON.stringify(elId)} className="max-w-3xl mx-auto px-6 py-3 w-full">
+        <div className="p-6 rounded-xl border border-dashed border-white/25 bg-white/5 text-center space-y-2">
+          {${safeSub} && <div className="text-xs font-semibold opacity-75">{${safeSub}}</div>}
+          <label className="block cursor-pointer space-y-1">
+            <div className="text-sm font-semibold">{${safeTitle}}</div>
+            <input type="file" onChange={(e) => { const f = e.target.files?.[0]; if (f) setInputs((p) => ({ ...p, [${JSON.stringify(b.id)}]: f.name })); }} className="hidden" />
+          </label>
+          {inputs[${JSON.stringify(b.id)}] && <div className="text-xs font-mono text-emerald-300">Selected: {inputs[${JSON.stringify(b.id)}]}</div>}
+        </div>
+      </section>`;
         case 'ui-avatar':
           return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-3 w-full">
         <div className="p-4 rounded-xl bg-white/5 border border-white/10 flex items-center gap-4"${styleAttr}>
@@ -2220,9 +2326,9 @@ export function generateReactTsxExport(
               : action === 'change-text' && b.targetId
               ? `setTextOverrides((p) => ({ ...p, [${JSON.stringify(b.targetId)}]: ${JSON.stringify(b.actionPayload || 'Updated Text!')} }))`
               : action === 'clear-form'
-              ? `setInputs({}); showToast('Form cleared')`
+              ? `setInputs({}); setReceipt(null); showToast('Form cleared')`
               : action === 'submit-form'
-              ? `showToast(${JSON.stringify(b.actionPayload || 'Form submitted!')})`
+              ? `handleSubmitForm(${JSON.stringify(b.actionPayload || 'Form inputs entered & saved!')})`
               : action === 'alert'
               ? `showToast(${JSON.stringify(b.actionPayload || `Clicked ${b.name}`)})`
               : `setCounter((c) => c + 1)`;
@@ -2234,6 +2340,63 @@ export function generateReactTsxExport(
         </div>
       )}`;
         }
+        case 'backend-storage': {
+          const cfg = b.logicConfig || {};
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="p-5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 space-y-2.5">
+          <div className="text-xs font-mono text-emerald-300 font-bold">LocalStorage [${escapeHtml(cfg.storageKey || 'sl_user_data')}]</div>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => { localStorage.setItem(${JSON.stringify(cfg.storageKey || 'sl_user_data')}, ${JSON.stringify(cfg.varValue || 'Saved!')}); showToast('Saved to LocalStorage!'); }} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold cursor-pointer">Save</button>
+            <button type="button" onClick={() => { showToast(localStorage.getItem(${JSON.stringify(cfg.storageKey || 'sl_user_data')}) || '(empty)'); }} className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs font-semibold cursor-pointer">Load</button>
+            <button type="button" onClick={() => { localStorage.removeItem(${JSON.stringify(cfg.storageKey || 'sl_user_data')}); showToast('Removed'); }} className="px-3 py-1.5 rounded-lg bg-rose-500/20 text-rose-300 text-xs font-semibold cursor-pointer">Remove</button>
+          </div>
+        </div>
+      </section>`;
+        }
+        case 'backend-db': {
+          const col = b.logicConfig?.collectionName || 'users';
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="p-5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-mono text-emerald-300 font-bold">Cloud DB [${escapeHtml(col)}] ({(dbRows[${JSON.stringify(col)}] || []).length} docs)</span>
+            <div className="flex gap-1.5">
+              <button type="button" onClick={() => { const next = [...(dbRows[${JSON.stringify(col)}] || []), { id: 'doc_' + Date.now().toString(36), data: ${JSON.stringify(b.logicConfig?.varValue || '{"name":"Creator"}')} }]; setDbRows((p) => ({ ...p, [${JSON.stringify(col)}]: next })); showToast('Saved doc!'); }} className="px-3 py-1 rounded bg-emerald-600 text-white text-xs font-bold cursor-pointer">+ Save</button>
+              <button type="button" onClick={() => { const next = (dbRows[${JSON.stringify(col)}] || []).slice(0, -1); setDbRows((p) => ({ ...p, [${JSON.stringify(col)}]: next })); showToast('Deleted latest'); }} className="px-3 py-1 rounded bg-rose-500/20 text-rose-300 text-xs font-semibold cursor-pointer">Delete</button>
+            </div>
+          </div>
+          {(dbRows[${JSON.stringify(col)}] || []).map((r) => <div key={r.id} className="text-xs font-mono text-emerald-200 bg-black/40 p-2 rounded">{r.id}: {r.data}</div>)}
+        </div>
+      </section>`;
+        }
+        case 'backend-auth':
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="p-5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 space-y-2.5">
+          <div className="flex items-center justify-between text-xs font-mono"><span className="text-emerald-300 font-bold">AUTH SESSION</span><span>{authEmail ? \`Signed in: \${authEmail}\` : 'Signed Out'}</span></div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => { setAuthEmail(${JSON.stringify(b.logicConfig?.varValue || 'creator@slbuilder.app')}); showToast('Signed in!'); }} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold cursor-pointer">Login</button>
+            <button type="button" onClick={() => { setAuthEmail(null); showToast('Logged out'); }} className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs font-semibold cursor-pointer">Logout</button>
+          </div>
+        </div>
+      </section>`;
+        case 'backend-device':
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="p-5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-xs font-mono text-emerald-300 font-bold">DEVICE &amp; SENSOR APIS</span>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => navigator.geolocation?.getCurrentPosition((pos) => showToast(\`GPS: \${pos.coords.latitude.toFixed(4)}, \${pos.coords.longitude.toFixed(4)}\`), () => showToast('GPS fallback: 6.9271, 79.8612'))} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold cursor-pointer">GPS</button>
+            <button type="button" onClick={() => { navigator.vibrate?.([120, 60, 120]); showToast('Vibrated!'); }} className="px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs font-semibold cursor-pointer">Vibrate</button>
+          </div>
+        </div>
+      </section>`;
+        case 'backend-flask':
+        case 'backend-fetch':
+        case 'backend-blockly':
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="p-5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 flex items-center justify-between gap-3">
+          <div className="font-mono text-xs"><span className="text-emerald-300 font-bold mr-2">${escapeHtml(b.httpMethod || 'GET')}</span><span>${escapeHtml(b.apiEndpoint || '/api/v1/metrics')}</span></div>
+          <button type="button" onClick={() => { fetch(${JSON.stringify(b.apiEndpoint || '/api/v1/metrics')}, { method: ${JSON.stringify(b.httpMethod || 'GET')} }).then((r) => showToast(\`HTTP \${r.status}\`)).catch(() => showToast('API endpoint simulated OK')); }} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold cursor-pointer">Send</button>
+        </div>
+      </section>`;
         case 'ui-accordion':
           return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-3 w-full">
         <div className="rounded-xl bg-white/5 border border-white/10 overflow-hidden">
@@ -2269,16 +2432,25 @@ export function GeneratedApp() {
   const [counter, setCounter] = useState<number>(${defaultCounter});
   const [toast, setToast] = useState<string | null>(null);
   const [inputs, setInputs] = useState<Record<string, string>>({});
+  const [receipt, setReceipt] = useState<{ msg: string; entries: Array<[string, string]> } | null>(null);
   const [openAccordions, setOpenAccordions] = useState<Record<string, boolean>>({});
   const [openModals, setOpenModals] = useState<Record<string, boolean>>({});
   const [hiddenIds, setHiddenIds] = useState<Record<string, boolean>>({});
   const [textOverrides, setTextOverrides] = useState<Record<string, string>>({});
   const [tabIdx, setTabIdx] = useState<Record<string, number>>({});
   const [sidebarIdx, setSidebarIdx] = useState<Record<string, number>>({});
+  const [dbRows, setDbRows] = useState<Record<string, Array<{ id: string; data: string }>>>({});
+  const [authEmail, setAuthEmail] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast((cur) => (cur === msg ? null : cur)), 3200);
+  };
+
+  const handleSubmitForm = (msg: string) => {
+    const entries = Object.entries(inputs).filter(([, v]) => Boolean(v));
+    setReceipt({ msg, entries });
+    showToast(entries.length ? \`Submitted \${entries.length} fields!\` : msg);
   };
 
   return (
@@ -2287,6 +2459,14 @@ export function GeneratedApp() {
       style={{ background: ${JSON.stringify(pageBg)}, color: ${JSON.stringify(pageTextColor)} }}
     >
 ${jsxBody}
+      {receipt && (
+        <div className="max-w-3xl mx-auto my-4 p-4 rounded-xl bg-emerald-950/70 border border-emerald-500/40 text-xs space-y-2 w-full">
+          <div className="font-bold text-emerald-300">{receipt.msg}</div>
+          {receipt.entries.map(([k, v]) => (
+            <div key={k} className="font-mono text-white bg-black/30 px-2 py-1 rounded">{k}: {v}</div>
+          ))}
+        </div>
+      )}
       {toast && (
         <div className="fixed bottom-5 right-5 z-50 px-4 py-3 rounded-xl bg-slate-900 text-white border border-indigo-500/40 text-xs font-semibold shadow-xl">
           {toast}

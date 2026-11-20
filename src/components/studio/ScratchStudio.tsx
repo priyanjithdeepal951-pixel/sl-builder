@@ -67,7 +67,8 @@ import {
   createCanvasBlockFromTemplate,
   getCategoryMetaForBlockType,
 } from '../../data/webStudioBlocks';
-import { PreviewConfirmDialog, WebPreviewRenderer } from './WebPreviewRenderer';
+import { PreviewConfirmDialog, WebPreviewRenderer, renderVectorIcon } from './WebPreviewRenderer';
+import { ICON_LIBRARY } from '../../utils/mediaHelpers';
 import {
   generateHtmlExport,
   generateCssExport,
@@ -1080,11 +1081,30 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       }
 
       if (action === 'call-api') {
-        const msg = `${actor.httpMethod || 'GET'} ${
-          actor.apiEndpoint || '/api/v1/metrics'
-        } -> 200 OK`;
-        onToast(msg, 'success');
-        appendConsoleLog('success', msg);
+        const endpoint = (actor.apiEndpoint || '/api/v1/metrics').trim();
+        const method = actor.httpMethod || 'GET';
+        if (/^https?:\/\//i.test(endpoint)) {
+          fetch(endpoint, {
+            method,
+            ...(method !== 'GET' && method !== 'DELETE' && actor.requestBody
+              ? { headers: { 'Content-Type': 'application/json' }, body: actor.requestBody }
+              : {}),
+          })
+            .then((r) => {
+              const msg = `${method} ${endpoint} -> HTTP ${r.status}`;
+              onToast(msg, r.ok ? 'success' : 'info');
+              appendConsoleLog(r.ok ? 'success' : 'warn', msg);
+            })
+            .catch(() => {
+              const msg = `${method} ${endpoint} -> 200 OK (sandbox fallback)`;
+              onToast(msg, 'info');
+              appendConsoleLog('warn', msg);
+            });
+        } else {
+          const msg = `${method} ${endpoint} -> 200 OK`;
+          onToast(msg, 'success');
+          appendConsoleLog('success', msg);
+        }
         return;
       }
 
@@ -1278,16 +1298,33 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     if (sourceBlock.type === 'backend-db') {
       const col = (cfg?.collectionName || 'users').trim() || 'users';
       const op = cfg?.dbOp || 'save';
+      const storeKey = `sl_db_${col}`;
       setRuntimeState((prev) => {
-        const docs = [...(prev.dbCollections[col] || [])];
+        let docs = [...(prev.dbCollections[col] || [])];
+        if (docs.length === 0) {
+          try {
+            const persisted = window.localStorage.getItem(storeKey);
+            if (persisted) {
+              const parsed = JSON.parse(persisted);
+              if (Array.isArray(parsed)) docs = parsed;
+            }
+          } catch {
+            // ignore storage errors
+          }
+        }
         if (op === 'get') {
           onToast(`Fetched ${docs.length} records from [${col}]`, 'info');
           appendConsoleLog('log', `DB GET [${col}] => ${docs.length} docs`);
-          return prev;
+          return { ...prev, dbCollections: { ...prev.dbCollections, [col]: docs } };
         }
         if (op === 'delete') {
           docs.pop();
-          onToast(`Deleted latest record from [${col}]`, 'info');
+          try {
+            window.localStorage.setItem(storeKey, JSON.stringify(docs));
+          } catch {
+            // ignore
+          }
+          onToast(`Deleted latest record from [${col}] (${docs.length} left)`, 'info');
           appendConsoleLog('warn', `DB DELETE from [${col}]`);
           return { ...prev, dbCollections: { ...prev.dbCollections, [col]: docs } };
         }
@@ -1303,6 +1340,11 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
           createdAt: new Date().toLocaleTimeString(),
         };
         docs.push(doc);
+        try {
+          window.localStorage.setItem(storeKey, JSON.stringify(docs));
+        } catch {
+          // ignore
+        }
         onToast(`Saved doc ${doc.id} to [${col}]!`, 'success');
         appendConsoleLog('success', `DB SAVE [${col}/${doc.id}]`);
         return { ...prev, dbCollections: { ...prev.dbCollections, [col]: docs } };
@@ -1368,6 +1410,15 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
           onToast('GPS Demo Location: 6.9271, 79.8612 (Colombo)', 'info');
         }
       }
+      return;
+    }
+
+    if (
+      sourceBlock.type === 'backend-fetch' ||
+      sourceBlock.type === 'backend-flask' ||
+      sourceBlock.type === 'backend-blockly'
+    ) {
+      runAction('call-api', sourceBlock);
       return;
     }
 
@@ -2524,6 +2575,51 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                             Clear
                                           </button>
                                         )}
+                                      </div>
+                                    )}
+
+                                    {blk.type === 'ui-video' && (
+                                      <div
+                                        className="flex items-center gap-1.5 pt-0.5"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        <input
+                                          type="text"
+                                          value={blk.videoUrl || ''}
+                                          placeholder="YouTube URL (youtube.com/watch?v=... / youtu.be/...) or MP4 URL"
+                                          onChange={(e) =>
+                                            handleUpdateBlock({ ...blk, videoUrl: e.target.value })
+                                          }
+                                          className="flex-1 bg-[#0A0D13] border border-sky-500/25 focus:border-[#4D97FF] rounded-lg px-2.5 py-1 text-[11px] text-sky-200 placeholder-slate-500 outline-none"
+                                        />
+                                      </div>
+                                    )}
+
+                                    {blk.type === 'ui-icon' && (
+                                      <div
+                                        className="flex items-center gap-1 overflow-x-auto pb-1 pt-0.5"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {ICON_LIBRARY.slice(0, 12).map((ic) => {
+                                          const active = (blk.iconName || 'sparkles') === ic.id;
+                                          return (
+                                            <button
+                                              key={ic.id}
+                                              type="button"
+                                              onClick={() =>
+                                                handleUpdateBlock({ ...blk, iconName: ic.id })
+                                              }
+                                              title={ic.label}
+                                              className={`p-1.5 rounded-lg border shrink-0 cursor-pointer ${
+                                                active
+                                                  ? 'bg-sky-500/25 border-sky-400 text-sky-200'
+                                                  : 'bg-[#0A0D13] border-white/10 text-slate-400 hover:text-white'
+                                              }`}
+                                            >
+                                              {renderVectorIcon(ic.id, 'w-3.5 h-3.5')}
+                                            </button>
+                                          );
+                                        })}
                                       </div>
                                     )}
 
@@ -5991,49 +6087,64 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                       )}
 
                       {selectedBlock.type === 'ui-video' && (
-                        <div className="space-y-1">
-                          <span className="font-semibold text-slate-400 block">Video MP4 URL</span>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-slate-400">YouTube / Video URL</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+                                })
+                              }
+                              className="text-[10px] text-sky-400 hover:underline cursor-pointer"
+                            >
+                              Sample YouTube
+                            </button>
+                          </div>
                           <input
                             type="text"
                             value={selectedBlock.videoUrl || ''}
                             onChange={(e) =>
                               handleUpdateBlock({ ...selectedBlock, videoUrl: e.target.value })
                             }
-                            placeholder="https://.../video.mp4"
+                            placeholder="https://youtube.com/watch?v=... or https://youtu.be/..."
                             className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
                           />
                         </div>
                       )}
 
                       {selectedBlock.type === 'ui-icon' && (
-                        <div className="space-y-1">
-                          <span className="font-semibold text-slate-400 block">Vector Icon</span>
-                          <select
-                            value={selectedBlock.iconName || 'sparkles'}
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, iconName: e.target.value })
-                            }
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                          >
-                            {[
-                              'sparkles',
-                              'zap',
-                              'shield',
-                              'rocket',
-                              'heart',
-                              'star',
-                              'globe',
-                              'code',
-                              'database',
-                              'bell',
-                              'user',
-                              'check',
-                            ].map((ic) => (
-                              <option key={ic} value={ic}>
-                                Icon: {ic}
-                              </option>
-                            ))}
-                          </select>
+                        <div className="space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-slate-400">Real Vector Icon</span>
+                            <span className="text-[10px] font-mono text-sky-400">
+                              {selectedBlock.iconName || 'sparkles'}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-6 gap-1 max-h-32 overflow-y-auto p-1 rounded-lg bg-[#0B0E15] border border-white/10">
+                            {ICON_LIBRARY.map((ic) => {
+                              const active = (selectedBlock.iconName || 'sparkles') === ic.id;
+                              return (
+                                <button
+                                  key={ic.id}
+                                  type="button"
+                                  onClick={() =>
+                                    handleUpdateBlock({ ...selectedBlock, iconName: ic.id })
+                                  }
+                                  title={ic.label}
+                                  className={`p-1.5 rounded border flex items-center justify-center cursor-pointer transition-colors ${
+                                    active
+                                      ? 'bg-sky-500/25 border-sky-400 text-sky-200'
+                                      : 'bg-[#141923] border-white/10 text-slate-300 hover:text-white'
+                                  }`}
+                                >
+                                  {renderVectorIcon(ic.id, 'w-3.5 h-3.5')}
+                                </button>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
 
