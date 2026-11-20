@@ -3,31 +3,62 @@ import type { StudioWorkspaceState } from './studio';
 export type BlockCategory = 'ui' | 'logic' | 'backend' | 'layout' | 'media';
 
 export type BlockType =
-  // UI
+  // Layout & Containers
+  | 'ui-navbar'
+  | 'ui-sidebar'
+  | 'ui-tabbar'
+  | 'ui-section'
+  | 'ui-row'
+  | 'ui-column'
+  | 'ui-grid'
+  | 'ui-card'
+  | 'ui-modal'
+  | 'ui-link'
+  | 'ui-footer'
+  // Typography & KPI
   | 'ui-heading'
   | 'ui-paragraph'
-  | 'ui-button'
   | 'ui-badge'
-  | 'ui-card'
+  | 'ui-stat'
+  // Interactive UI & Forms
+  | 'ui-button'
   | 'ui-input'
   | 'ui-textarea'
-  | 'ui-navbar'
-  | 'ui-footer'
+  | 'ui-select'
+  | 'ui-checkbox'
+  | 'ui-file-upload'
   | 'ui-pricing'
-  | 'ui-stat'
   | 'ui-testimonial'
   | 'ui-accordion'
-  // Media
+  // Media & Basic Elements
   | 'ui-image'
+  | 'ui-icon'
+  | 'ui-video'
   | 'ui-avatar'
-  // Logic
+  // Events & Triggers (Hat Blocks)
+  | 'logic-onload'
   | 'logic-click'
+  | 'logic-oninput'
+  | 'logic-onsubmit'
+  | 'logic-onkey'
+  // Logic, Control, Data & Utilities
   | 'logic-counter'
   | 'logic-toggle'
   | 'logic-timer'
-  // Backend
+  | 'logic-if'
+  | 'logic-loop'
+  | 'logic-variable'
+  | 'logic-list'
+  | 'logic-object'
+  | 'logic-math-text'
+  | 'logic-feedback'
+  // Backend, Storage, Auth & Device
+  | 'backend-storage'
+  | 'backend-db'
+  | 'backend-auth'
   | 'backend-fetch'
   | 'backend-flask'
+  | 'backend-device'
   | 'backend-blockly';
 
 export interface BlockStyle {
@@ -48,8 +79,13 @@ export interface BlockStyle {
   fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
   textAlign?: 'left' | 'center' | 'right';
   padding?: string;
+  margin?: string;
+  width?: string;
+  height?: string;
   borderRadius?: string;
   shadow?: string;
+  customClass?: string;
+  isHidden?: boolean;
 }
 
 export type NavbarLinkAction =
@@ -68,6 +104,104 @@ export interface NavbarLinkItem {
   message?: string;
 }
 
+export type BlockActionType =
+  | 'change-text'
+  | 'increment-counter'
+  | 'toggle-visibility'
+  | 'show-element'
+  | 'hide-element'
+  | 'set-style'
+  | 'add-class'
+  | 'remove-class'
+  | 'toggle-disabled'
+  | 'call-api'
+  | 'alert'
+  | 'show-confirm'
+  | 'copy-clipboard'
+  | 'console-log'
+  | 'navigate-page'
+  | 'go-back'
+  | 'scroll-to-block'
+  | 'open-url'
+  | 'open-modal'
+  | 'close-modal'
+  | 'submit-form'
+  | 'clear-form'
+  | 'validate-input'
+  | 'get-input-value'
+  | 'set-input-value'
+  | 'set-variable'
+  | 'toggle-boolean'
+  | 'list-add'
+  | 'list-remove'
+  | 'save-storage'
+  | 'load-storage'
+  | 'remove-storage'
+  | 'db-save'
+  | 'db-get'
+  | 'db-delete'
+  | 'auth-signup'
+  | 'auth-login'
+  | 'auth-logout'
+  | 'device-vibrate'
+  | 'device-gps'
+  | 'device-camera';
+
+export interface BlockLogicConfig {
+  // Conditionals & Comparisons
+  leftOperand?: string;
+  operator?: '==' | '!=' | '>' | '<' | '>=' | '<=' | 'contains';
+  rightOperand?: string;
+  combinator?: 'NONE' | 'AND' | 'OR' | 'NOT';
+  secondLeft?: string;
+  secondOp?: '==' | '!=' | '>' | '<' | '>=' | '<=';
+  secondRight?: string;
+  thenMessage?: string;
+  elseMessage?: string;
+  // Loops & Timers
+  loopMode?: 'repeat' | 'foreach' | 'while';
+  repeatCount?: number;
+  intervalMs?: number;
+  // Variables, Lists & Objects
+  varName?: string;
+  varValue?: string;
+  varOp?: 'set' | 'change' | 'toggle';
+  listName?: string;
+  listOp?: 'create' | 'add' | 'remove' | 'get' | 'length';
+  listIndex?: number;
+  objectKey?: string;
+  objectOp?: 'get-prop' | 'parse-json' | 'stringify';
+  // Math & Text
+  mathTextOp?:
+    | 'add'
+    | 'sub'
+    | 'mul'
+    | 'div'
+    | 'random'
+    | 'round'
+    | 'join'
+    | 'length'
+    | 'contains'
+    | 'upper'
+    | 'lower'
+    | 'format-date';
+  argA?: string;
+  argB?: string;
+  // DOM & Feedback
+  toastType?: 'success' | 'info' | 'warning' | 'error';
+  styleProp?: string;
+  styleValue?: string;
+  cssClass?: string;
+  validationRule?: 'not-empty' | 'email' | 'min-length';
+  // Storage, Cloud DB, Auth & Device
+  storageKey?: string;
+  storageOp?: 'save' | 'load' | 'remove';
+  collectionName?: string;
+  dbOp?: 'save' | 'get' | 'update' | 'delete';
+  authOp?: 'signup' | 'login' | 'logout' | 'current-user';
+  deviceOp?: 'vibrate' | 'camera' | 'gps';
+}
+
 export interface CanvasBlock {
   id: string;
   type: BlockType;
@@ -79,29 +213,32 @@ export interface CanvasBlock {
   // Logic & navigation wiring
   targetId?: string;
   targetPageId?: string;
-  action?:
-    | 'change-text'
-    | 'increment-counter'
-    | 'toggle-visibility'
-    | 'call-api'
-    | 'alert'
-    | 'navigate-page'
-    | 'scroll-to-block'
-    | 'open-url'
-    | 'submit-form';
+  action?: BlockActionType;
   actionPayload?: string;
   apiEndpoint?: string;
+  httpMethod?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  requestHeaders?: string;
+  requestBody?: string;
   navLinks?: NavbarLinkItem[];
-  // Custom metadata
+  // Custom metadata & interactive controls
   imageUrl?: string;
+  videoUrl?: string;
+  iconName?: string;
   badgeText?: string;
   buttonVariant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost';
+  inputType?: 'text' | 'email' | 'password' | 'number' | 'date';
+  controlVariant?: 'checkbox' | 'radio' | 'switch';
+  options?: string[];
+  gridColumns?: 2 | 3;
+  triggerKey?: 'Enter' | 'Space' | 'Escape';
+  isDisabled?: boolean;
   counterValue?: number;
   statValue?: string;
   statLabel?: string;
   authorRole?: string;
   authorAvatar?: string;
   isExpanded?: boolean;
+  logicConfig?: BlockLogicConfig;
 }
 
 export interface CollaboratorMember {

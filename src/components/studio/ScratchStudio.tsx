@@ -40,8 +40,14 @@ import {
   Wand2,
   MousePointerClick,
   Link2,
+  Search,
+  Terminal,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import {
+  BlockActionType,
+  BlockLogicConfig,
   CanvasBlock,
   NavbarLinkAction,
   NavbarLinkItem,
@@ -59,7 +65,7 @@ import {
   createCanvasBlockFromTemplate,
   getCategoryMetaForBlockType,
 } from '../../data/webStudioBlocks';
-import { WebPreviewRenderer } from './WebPreviewRenderer';
+import { PreviewConfirmDialog, WebPreviewRenderer } from './WebPreviewRenderer';
 import {
   generateHtmlExport,
   generateCssExport,
@@ -79,6 +85,13 @@ import {
   getTemplatesForBlockType,
 } from '../../data/blockStyleTemplates';
 import { getEffectiveNavLinks } from '../../utils/navLinkHelpers';
+import {
+  INITIAL_RUNTIME_STATE,
+  StudioRuntimeState,
+  evaluateLogicCondition,
+  evaluateMathTextOperation,
+  validateInputValue,
+} from '../../utils/studioRuntime';
 import { useTheme } from '../../context/ThemeContext';
 
 interface ScratchStudioProps {
@@ -210,8 +223,33 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [inspectorMode, setInspectorMode] = useState<'templates' | 'properties'>('templates');
   const [templateFilter, setTemplateFilter] = useState<'recommended' | TemplateCategory>('recommended');
+  const [paletteSearch, setPaletteSearch] = useState('');
+  const [runtimeState, setRuntimeState] = useState<StudioRuntimeState>(() => INITIAL_RUNTIME_STATE);
+  const [formInputs, setFormInputs] = useState<Record<string, string>>({});
+  const [pageHistory, setPageHistory] = useState<string[]>([]);
+  const [runningTimers, setRunningTimers] = useState<Record<string, boolean>>({});
+  const [confirmDialog, setConfirmDialog] = useState<PreviewConfirmDialog | null>(null);
+  const pendingConfirmActionRef = useRef<(() => void) | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const appendConsoleLog = useCallback(
+    (level: 'log' | 'success' | 'warn' | 'error', message: string) => {
+      setRuntimeState((prev) => ({
+        ...prev,
+        consoleLogs: [
+          {
+            id: `log_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+            time: new Date().toLocaleTimeString(),
+            level,
+            message,
+          },
+          ...prev.consoleLogs.slice(0, 29),
+        ],
+      }));
+    },
+    []
+  );
 
   // Reset local studio state when switching project
   useEffect(() => {
@@ -221,6 +259,11 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     setProjectName(project.name || 'SL WebStudio Project');
     setSelectedBlockId(initial[0]?.blocks[0]?.id || null);
     setUndoStack([]);
+    setFormInputs({});
+    setPageHistory([]);
+    setRunningTimers({});
+    setConfirmDialog(null);
+    setRuntimeState(INITIAL_RUNTIME_STATE);
   }, [project.id]);
 
   // Debounced persistence to App / Firestore
@@ -278,7 +321,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   const selectedBlock = blocks.find((b) => b.id === selectedBlockId) || blocks[0] || null;
 
   // =================== PAGE ACTIONS ===================
-  const handleSelectPage = (pageId: string) => {
+  const handleSelectPage = (pageId: string, recordHistory = true) => {
+    if (recordHistory && pageId !== activePageId) {
+      setPageHistory((prev) => [...prev.slice(-9), activePageId]);
+    }
     setActivePageId(pageId);
     const target = pages.find((p) => p.id === pageId);
     setSelectedBlockId(target?.blocks[0]?.id || null);
@@ -351,15 +397,18 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   };
 
   const handlePaletteDragStart = (e: React.DragEvent, tpl: WebStudioBlockTemplate) => {
+    e.dataTransfer.setData('application/x-slbuilder-tpl-id', tpl.id);
     e.dataTransfer.setData('application/x-slbuilder-type', tpl.type);
     e.dataTransfer.effectAllowed = 'copy';
   };
 
   const handleCanvasDrop = (e: React.DragEvent) => {
     e.preventDefault();
+    const tplId = e.dataTransfer.getData('application/x-slbuilder-tpl-id');
     const blockType = e.dataTransfer.getData('application/x-slbuilder-type');
-    if (!blockType) return;
-    const tpl = WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.type === blockType);
+    const tpl =
+      (tplId ? WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === tplId) : undefined) ||
+      (blockType ? WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.type === blockType) : undefined);
     if (tpl) handleAddTemplateBlock(tpl);
   };
 
@@ -401,24 +450,319 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     setSelectedBlockId(copy.id);
   };
 
-  // Reactive Logic, Navigation & Form Action Executor in Preview Stage
+  const handleFormInputChange = (blockId: string, value: string, fireInputEvent = true) => {
+    setFormInputs((prev) => ({ ...prev, [blockId]: value }));
+    if (!fireInputEvent) return;
+    const listeners = blocks.filter(
+      (b) => b.type === 'logic-oninput' && (!b.targetId || b.targetId === blockId)
+    );
+    listeners.forEach((hat) => {
+      const varName = hat.logicConfig?.varName;
+      if (varName) {
+        setRuntimeState((rs) => ({
+          ...rs,
+          variables: { ...rs.variables, [varName]: value },
+        }));
+      }
+      if (hat.action === 'validate-input') {
+        const res = validateInputValue(value, hat.logicConfig?.validationRule || 'not-empty');
+        appendConsoleLog(res.valid ? 'success' : 'warn', `${hat.name}: ${res.reason}`);
+      }
+    });
+  };
+
+  // Keyboard listener for logic-onkey hat blocks inside studio stage
+  useEffect(() => {
+    const keyHats = blocks.filter((b) => b.type === 'logic-onkey');
+    if (keyHats.length === 0) return;
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
+      const normalized = e.key === ' ' ? 'Space' : e.key;
+      keyHats.forEach((hat) => {
+        if ((hat.triggerKey || 'Enter') === normalized) {
+          e.preventDefault();
+          onToast(hat.actionPayload || `Key [${normalized}] triggered "${hat.name}"`, 'info');
+          appendConsoleLog('log', `Key "${normalized}" fired -> ${hat.name}`);
+        }
+      });
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [blocks, onToast, appendConsoleLog]);
+
+  // Reactive Logic, Navigation, Data, Storage, Cloud DB, Auth & Device Executor
   const handleTriggerAction = (
     sourceBlock: CanvasBlock,
-    formValues?: Record<string, string>
+    passedFormValues?: Record<string, string>
   ) => {
+    const currentInputs = passedFormValues ?? formInputs;
+    const cfg = sourceBlock.logicConfig;
+
+    // 1. Direct Logic / Data / Backend Block Execution (when clicked directly or targeted)
+    if (sourceBlock.type === 'logic-if') {
+      const ok = evaluateLogicCondition(cfg, runtimeState.variables, currentInputs);
+      const msg = ok
+        ? cfg?.thenMessage || 'Condition is TRUE!'
+        : cfg?.elseMessage || 'Condition is FALSE.';
+      onToast(msg, ok ? 'success' : 'info');
+      appendConsoleLog(ok ? 'success' : 'warn', `IF [${cfg?.leftOperand || 'score'} ${cfg?.operator || '>='} ${cfg?.rightOperand || '10'}] => ${ok ? 'TRUE' : 'FALSE'}`);
+      return;
+    }
+
+    if (sourceBlock.type === 'logic-loop') {
+      const mode = cfg?.loopMode || 'repeat';
+      if (mode === 'foreach') {
+        const list = runtimeState.lists[cfg?.listName || 'tasks'] || [];
+        list.forEach((item, idx) => appendConsoleLog('log', `ForEach[${idx}]: ${item}`));
+        onToast(`Iterated ${list.length} items in list "${cfg?.listName || 'tasks'}"`, 'success');
+      } else {
+        const count = Math.min(50, Math.max(1, cfg?.repeatCount ?? 5));
+        setRuntimeState((prev) => ({
+          ...prev,
+          variables: {
+            ...prev.variables,
+            score: Number(prev.variables.score || 0) + count,
+          },
+        }));
+        appendConsoleLog('success', `Loop (${mode}) ran ${count} iterations (+${count} score)`);
+        onToast(`Loop executed ${count} times!`, 'success');
+      }
+      return;
+    }
+
+    if (sourceBlock.type === 'logic-variable') {
+      const vName = (cfg?.varName || 'score').trim() || 'score';
+      const op = cfg?.varOp || 'set';
+      const rawVal = cfg?.varValue ?? '10';
+      setRuntimeState((prev) => {
+        const cur = prev.variables[vName];
+        let nextVal: string | number | boolean = rawVal;
+        if (op === 'toggle') {
+          nextVal = !Boolean(cur);
+        } else if (op === 'change') {
+          nextVal = (Number(cur) || 0) + (Number(rawVal) || 1);
+        } else {
+          if (rawVal === 'true') nextVal = true;
+          else if (rawVal === 'false') nextVal = false;
+          else if (rawVal.trim() !== '' && !Number.isNaN(Number(rawVal))) nextVal = Number(rawVal);
+        }
+        appendConsoleLog('success', `Var ${vName} = ${JSON.stringify(nextVal)}`);
+        onToast(`Variable ${vName} = ${JSON.stringify(nextVal)}`, 'success');
+        return { ...prev, variables: { ...prev.variables, [vName]: nextVal } };
+      });
+      return;
+    }
+
+    if (sourceBlock.type === 'logic-list') {
+      const lName = (cfg?.listName || 'tasks').trim() || 'tasks';
+      const op = cfg?.listOp || 'add';
+      const itemVal = (cfg?.varValue || 'New Item').trim();
+      setRuntimeState((prev) => {
+        const existing = [...(prev.lists[lName] || [])];
+        if (op === 'create') {
+          const seeded = itemVal ? itemVal.split(',').map((s) => s.trim()).filter(Boolean) : [];
+          appendConsoleLog('log', `Created list [${lName}] (${seeded.length} items)`);
+          onToast(`Created list "${lName}"`, 'success');
+          return { ...prev, lists: { ...prev.lists, [lName]: seeded } };
+        }
+        if (op === 'remove') {
+          const idx = Math.max(0, Math.min(existing.length - 1, cfg?.listIndex ?? existing.length - 1));
+          const removed = existing.splice(idx, 1);
+          onToast(`Removed "${removed[0] || 'item'}" from ${lName}`, 'info');
+          appendConsoleLog('log', `Removed index ${idx} from list [${lName}]`);
+          return { ...prev, lists: { ...prev.lists, [lName]: existing } };
+        }
+        if (op === 'get') {
+          const idx = cfg?.listIndex ?? 0;
+          const got = existing[idx] ?? '(empty)';
+          onToast(`${lName}[${idx}] = "${got}"`, 'info');
+          appendConsoleLog('log', `Get ${lName}[${idx}] => ${got}`);
+          return prev;
+        }
+        if (op === 'length') {
+          onToast(`Length of ${lName} = ${existing.length}`, 'info');
+          appendConsoleLog('log', `Length(${lName}) = ${existing.length}`);
+          return prev;
+        }
+        existing.push(itemVal);
+        onToast(`Added "${itemVal}" to ${lName} (${existing.length})`, 'success');
+        appendConsoleLog('success', `Added "${itemVal}" to list [${lName}]`);
+        return { ...prev, lists: { ...prev.lists, [lName]: existing } };
+      });
+      return;
+    }
+
+    if (sourceBlock.type === 'logic-object') {
+      try {
+        const parsed = JSON.parse(cfg?.varValue || '{"name":"SL Builder"}');
+        const key = (cfg?.objectKey || 'name').trim();
+        const op = cfg?.objectOp || 'get-prop';
+        if (op === 'stringify') {
+          const str = JSON.stringify(parsed);
+          appendConsoleLog('log', `JSON.stringify => ${str}`);
+          onToast(`Stringified JSON (${str.length} chars)`, 'info');
+        } else {
+          const extracted = parsed?.[key];
+          appendConsoleLog('success', `Object["${key}"] => ${JSON.stringify(extracted)}`);
+          onToast(`Property "${key}": ${JSON.stringify(extracted)}`, 'success');
+        }
+      } catch {
+        onToast('Invalid JSON string inside Object block.', 'error');
+        appendConsoleLog('error', 'Failed to parse JSON payload');
+      }
+      return;
+    }
+
+    if (sourceBlock.type === 'logic-math-text') {
+      const result = evaluateMathTextOperation(cfg, runtimeState.variables);
+      setRuntimeState((prev) => ({
+        ...prev,
+        variables: { ...prev.variables, lastResult: result },
+      }));
+      appendConsoleLog('success', `Math/Text (${cfg?.mathTextOp || 'random'}) => ${result}`);
+      onToast(`Computed result: ${result}`, 'success');
+      return;
+    }
+
+    if (sourceBlock.type === 'backend-storage') {
+      const key = cfg?.storageKey || 'sl_user_data';
+      const op = cfg?.storageOp || 'save';
+      try {
+        if (op === 'load') {
+          const loaded = window.localStorage.getItem(key);
+          onToast(`LocalStorage["${key}"] = ${loaded ?? '(empty)'}`, 'info');
+          appendConsoleLog('log', `LocalStorage GET ${key} => ${loaded ?? 'null'}`);
+        } else if (op === 'remove') {
+          window.localStorage.removeItem(key);
+          onToast(`Removed LocalStorage key "${key}"`, 'info');
+          appendConsoleLog('warn', `LocalStorage REMOVE ${key}`);
+        } else {
+          const val = cfg?.varValue || 'Saved from SL Builder';
+          window.localStorage.setItem(key, val);
+          onToast(`Saved "${key}" to LocalStorage!`, 'success');
+          appendConsoleLog('success', `LocalStorage SET ${key} = "${val}"`);
+        }
+      } catch {
+        onToast('LocalStorage unavailable in sandboxed mode.', 'error');
+      }
+      return;
+    }
+
+    if (sourceBlock.type === 'backend-db') {
+      const col = (cfg?.collectionName || 'users').trim() || 'users';
+      const op = cfg?.dbOp || 'save';
+      setRuntimeState((prev) => {
+        const docs = [...(prev.dbCollections[col] || [])];
+        if (op === 'get') {
+          onToast(`Fetched ${docs.length} records from [${col}]`, 'info');
+          appendConsoleLog('log', `DB GET [${col}] => ${docs.length} docs`);
+          return prev;
+        }
+        if (op === 'delete') {
+          docs.pop();
+          onToast(`Deleted latest record from [${col}]`, 'info');
+          appendConsoleLog('warn', `DB DELETE from [${col}]`);
+          return { ...prev, dbCollections: { ...prev.dbCollections, [col]: docs } };
+        }
+        let parsedData: Record<string, unknown> = { note: cfg?.varValue || 'Record' };
+        try {
+          parsedData = JSON.parse(cfg?.varValue || '{"name":"Creator"}');
+        } catch {
+          // keep fallback object
+        }
+        const doc = {
+          id: `doc_${Date.now().toString(36).slice(-4)}`,
+          data: parsedData,
+          createdAt: new Date().toLocaleTimeString(),
+        };
+        docs.push(doc);
+        onToast(`Saved doc ${doc.id} to [${col}]!`, 'success');
+        appendConsoleLog('success', `DB SAVE [${col}/${doc.id}]`);
+        return { ...prev, dbCollections: { ...prev.dbCollections, [col]: docs } };
+      });
+      return;
+    }
+
+    if (sourceBlock.type === 'backend-auth') {
+      const op = cfg?.authOp || 'login';
+      const email = (cfg?.varValue || 'creator@slbuilder.app').trim();
+      if (op === 'logout') {
+        setRuntimeState((prev) => ({
+          ...prev,
+          authUser: null,
+          variables: { ...prev.variables, isLoggedIn: false },
+        }));
+        onToast('Signed out user session.', 'info');
+        appendConsoleLog('warn', 'Auth Logout completed');
+      } else if (op === 'current-user') {
+        const msg = runtimeState.authUser
+          ? `Current User: ${runtimeState.authUser.email}`
+          : 'No user signed in';
+        onToast(msg, 'info');
+        appendConsoleLog('log', msg);
+      } else {
+        setRuntimeState((prev) => ({
+          ...prev,
+          authUser: { email, uid: `uid_${Date.now().toString(36).slice(-5)}` },
+          variables: { ...prev.variables, isLoggedIn: true, userName: email.split('@')[0] },
+        }));
+        onToast(`${op === 'signup' ? 'Registered' : 'Logged in'} as ${email}`, 'success');
+        appendConsoleLog('success', `Auth ${op} => ${email}`);
+      }
+      return;
+    }
+
+    if (sourceBlock.type === 'backend-device') {
+      const op = cfg?.deviceOp || 'gps';
+      if (op === 'vibrate') {
+        if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate([120, 60, 120]);
+        }
+        onToast('Device vibration triggered!', 'success');
+        appendConsoleLog('log', 'Device API: vibrate([120,60,120])');
+      } else if (op === 'camera') {
+        onToast('Camera permission check ready (uses MediaDevices API on export).', 'info');
+        appendConsoleLog('log', 'Device API: camera stream check');
+      } else {
+        if (typeof navigator !== 'undefined' && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (pos) => {
+              const coords = `${pos.coords.latitude.toFixed(4)}, ${pos.coords.longitude.toFixed(4)}`;
+              onToast(`GPS Location: ${coords}`, 'success');
+              appendConsoleLog('success', `GPS => ${coords}`);
+            },
+            () => {
+              onToast('GPS Demo Location: 6.9271, 79.8612 (Colombo)', 'info');
+              appendConsoleLog('warn', 'GPS permission denied -> simulated Colombo coordinates');
+            },
+            { timeout: 3500 }
+          );
+        } else {
+          onToast('GPS Demo Location: 6.9271, 79.8612 (Colombo)', 'info');
+        }
+      }
+      return;
+    }
+
+    // 2. Standard Button / Link / Event Action Wiring
     const hasCounter = blocks.some((b) => b.type === 'logic-counter');
     const inputBlocks = blocks.filter(
-      (b) => b.type === 'ui-input' || b.type === 'ui-textarea'
+      (b) =>
+        b.type === 'ui-input' ||
+        b.type === 'ui-textarea' ||
+        b.type === 'ui-select' ||
+        b.type === 'ui-checkbox' ||
+        b.type === 'ui-file-upload'
     );
     const filledInputs = inputBlocks
       .map((inp) => ({
         label: inp.subtitle || inp.name,
-        val: (formValues?.[inp.id] || '').trim(),
+        val: (currentInputs[inp.id] || '').trim(),
       }))
       .filter((item) => item.val.length > 0);
 
-    // Smart fallback if user hasn't picked an explicit action yet
-    const action =
+    const action: BlockActionType =
       sourceBlock.action ||
       (hasCounter
         ? 'increment-counter'
@@ -433,8 +777,21 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       if (targetPage) {
         handleSelectPage(targetPage.id);
         onToast(`Navigated to "${targetPage.name}"`, 'success');
+        appendConsoleLog('log', `Navigated to /${targetPage.slug}`);
       } else {
         onToast('Add another page or select a Target Page in the JavaScript tab!', 'info');
+      }
+      return;
+    }
+
+    if (action === 'go-back') {
+      const prevId = pageHistory[pageHistory.length - 1];
+      if (prevId && pages.some((p) => p.id === prevId)) {
+        setPageHistory((h) => h.slice(0, -1));
+        handleSelectPage(prevId, false);
+        onToast('Returned to previous page', 'info');
+      } else {
+        onToast('No previous page in history yet.', 'info');
       }
       return;
     }
@@ -445,13 +802,148 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         blocks.find((b) => b.id !== sourceBlock.id);
       if (targetBlock) {
         const el = document.getElementById(`sl-el-${targetBlock.id}`);
-        if (el) {
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        }
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         setSelectedBlockId(targetBlock.id);
         onToast(`Scrolled to "${targetBlock.name}"`, 'success');
       } else {
         onToast('Select a Target Block to scroll to in the JavaScript tab.', 'info');
+      }
+      return;
+    }
+
+    if (action === 'open-modal' || action === 'close-modal') {
+      const modalTarget =
+        blocks.find((b) => b.id === sourceBlock.targetId && b.type === 'ui-modal') ||
+        blocks.find((b) => b.type === 'ui-modal');
+      if (modalTarget) {
+        const open = action === 'open-modal';
+        setRuntimeState((prev) => ({
+          ...prev,
+          openModals: { ...prev.openModals, [modalTarget.id]: open },
+        }));
+        appendConsoleLog('log', `${open ? 'Opened' : 'Closed'} modal "${modalTarget.name}"`);
+      } else {
+        onToast('Add a Modal / Drawer block to wire this action.', 'info');
+      }
+      return;
+    }
+
+    if (action === 'show-element' || action === 'hide-element') {
+      const targetId = sourceBlock.targetId || blocks.find((b) => b.id !== sourceBlock.id)?.id;
+      if (targetId) {
+        const hide = action === 'hide-element';
+        setRuntimeState((prev) => ({
+          ...prev,
+          hiddenBlocks: { ...prev.hiddenBlocks, [targetId]: hide },
+        }));
+        onToast(`${hide ? 'Hid' : 'Shown'} target element`, 'info');
+      }
+      return;
+    }
+
+    if (action === 'change-text') {
+      const targetId = sourceBlock.targetId || blocks.find((b) => b.id !== sourceBlock.id)?.id;
+      if (targetId) {
+        const nextText = sourceBlock.actionPayload || 'Updated Text!';
+        setRuntimeState((prev) => ({
+          ...prev,
+          textOverrides: { ...prev.textOverrides, [targetId]: nextText },
+        }));
+        onToast(`Updated element text -> "${nextText}"`, 'success');
+      }
+      return;
+    }
+
+    if (action === 'set-style') {
+      const targetId = sourceBlock.targetId || blocks.find((b) => b.id !== sourceBlock.id)?.id;
+      if (targetId) {
+        const prop = cfg?.styleProp || 'backgroundColor';
+        const val = cfg?.styleValue || '#312e81';
+        setRuntimeState((prev) => ({
+          ...prev,
+          styleOverrides: {
+            ...prev.styleOverrides,
+            [targetId]: { ...(prev.styleOverrides[targetId] || {}), [prop]: val },
+          },
+        }));
+        onToast(`Applied style ${prop}: ${val}`, 'success');
+      }
+      return;
+    }
+
+    if (action === 'add-class' || action === 'remove-class') {
+      const targetId = sourceBlock.targetId || blocks.find((b) => b.id !== sourceBlock.id)?.id;
+      const cls = (cfg?.cssClass || 'ring-2 ring-emerald-400').trim();
+      if (targetId && cls) {
+        setRuntimeState((prev) => {
+          const existing = prev.extraClasses[targetId] || [];
+          const next =
+            action === 'add-class'
+              ? Array.from(new Set([...existing, cls]))
+              : existing.filter((c) => c !== cls);
+          return { ...prev, extraClasses: { ...prev.extraClasses, [targetId]: next } };
+        });
+        onToast(`${action === 'add-class' ? 'Added' : 'Removed'} class "${cls}"`, 'info');
+      }
+      return;
+    }
+
+    if (action === 'toggle-disabled') {
+      const targetId = sourceBlock.targetId || blocks.find((b) => b.type === 'ui-button')?.id;
+      if (targetId) {
+        setRuntimeState((prev) => ({
+          ...prev,
+          disabledBlocks: {
+            ...prev.disabledBlocks,
+            [targetId]: !prev.disabledBlocks[targetId],
+          },
+        }));
+        onToast('Toggled target button disabled state', 'info');
+      }
+      return;
+    }
+
+    if (action === 'clear-form') {
+      setFormInputs({});
+      onToast('Cleared all form inputs', 'info');
+      appendConsoleLog('log', 'Form inputs cleared');
+      return;
+    }
+
+    if (action === 'validate-input') {
+      const targetInp =
+        blocks.find((b) => b.id === sourceBlock.targetId) ||
+        blocks.find((b) => b.type === 'ui-input' || b.type === 'ui-textarea');
+      const val = targetInp ? currentInputs[targetInp.id] || '' : '';
+      const check = validateInputValue(val, cfg?.validationRule || 'not-empty');
+      onToast(check.reason, check.valid ? 'success' : 'error');
+      appendConsoleLog(check.valid ? 'success' : 'error', `Validation: ${check.reason}`);
+      return;
+    }
+
+    if (action === 'get-input-value') {
+      const targetInp =
+        blocks.find((b) => b.id === sourceBlock.targetId) ||
+        blocks.find((b) => b.type === 'ui-input' || b.type === 'ui-textarea');
+      const val = targetInp ? currentInputs[targetInp.id] || '' : '';
+      const varName = cfg?.varName || 'inputValue';
+      setRuntimeState((prev) => ({
+        ...prev,
+        variables: { ...prev.variables, [varName]: val },
+      }));
+      onToast(`Read ${varName} = "${val}"`, 'info');
+      appendConsoleLog('log', `Get Input => ${varName} = "${val}"`);
+      return;
+    }
+
+    if (action === 'set-input-value') {
+      const targetInp =
+        blocks.find((b) => b.id === sourceBlock.targetId) ||
+        blocks.find((b) => b.type === 'ui-input' || b.type === 'ui-textarea');
+      if (targetInp) {
+        const newVal = sourceBlock.actionPayload || 'Hello from SL Builder';
+        setFormInputs((prev) => ({ ...prev, [targetInp.id]: newVal }));
+        onToast(`Set input value to "${newVal}"`, 'success');
       }
       return;
     }
@@ -463,16 +955,44 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       }
       const summary = filledInputs.map((i) => `${i.label}: ${i.val}`).join(' · ');
       const customMsg = (sourceBlock.actionPayload || '').trim();
-      onToast(
-        customMsg
-          ? summary
-            ? `${customMsg} (${summary})`
-            : customMsg
-          : summary
-          ? `Submitted → ${summary}`
-          : 'Form submitted successfully!',
-        'success'
-      );
+      const msg = customMsg
+        ? summary
+          ? `${customMsg} (${summary})`
+          : customMsg
+        : summary
+        ? `Submitted → ${summary}`
+        : 'Form submitted successfully!';
+      onToast(msg, 'success');
+      appendConsoleLog('success', msg);
+      return;
+    }
+
+    if (action === 'show-confirm') {
+      pendingConfirmActionRef.current = () => {
+        onToast('Confirmed!', 'success');
+        appendConsoleLog('success', `Confirmed dialog: ${sourceBlock.actionPayload || 'OK'}`);
+      };
+      setConfirmDialog({
+        id: sourceBlock.id,
+        title: sourceBlock.name || 'Confirm Action',
+        message: sourceBlock.actionPayload || 'Are you sure you want to proceed?',
+        confirmLabel: 'Confirm',
+      });
+      return;
+    }
+
+    if (action === 'copy-clipboard') {
+      const text = sourceBlock.actionPayload || projectName;
+      navigator.clipboard?.writeText(text);
+      onToast(`Copied "${text}" to clipboard!`, 'success');
+      appendConsoleLog('log', `Clipboard copied: ${text}`);
+      return;
+    }
+
+    if (action === 'console-log') {
+      const msg = sourceBlock.actionPayload || `Event from ${sourceBlock.name}`;
+      appendConsoleLog('log', msg);
+      onToast(`Logged: ${msg}`, 'info');
       return;
     }
 
@@ -485,12 +1005,66 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       if (rawUrl.startsWith('#')) {
         const targetId = rawUrl.slice(1);
         const el =
-          document.getElementById(targetId) ||
-          document.getElementById(`sl-el-${targetId}`);
+          document.getElementById(targetId) || document.getElementById(`sl-el-${targetId}`);
         if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
         onToast(`Jumped to ${rawUrl}`, 'success');
       } else {
-        onToast(`Link ready: ${rawUrl} (opens when exported)`, 'success');
+        onToast(`Link ready: ${rawUrl} (navigates when exported)`, 'success');
+      }
+      return;
+    }
+
+    if (action === 'set-variable') {
+      const varName = cfg?.varName || 'score';
+      const val = cfg?.varValue || sourceBlock.actionPayload || '1';
+      setRuntimeState((prev) => ({
+        ...prev,
+        variables: { ...prev.variables, [varName]: val },
+      }));
+      onToast(`Set ${varName} = ${val}`, 'success');
+      appendConsoleLog('success', `Set ${varName} = ${val}`);
+      return;
+    }
+
+    if (action === 'toggle-boolean') {
+      const varName = cfg?.varName || 'isLoggedIn';
+      setRuntimeState((prev) => {
+        const nextBool = !Boolean(prev.variables[varName]);
+        onToast(`Toggled ${varName} = ${nextBool}`, 'info');
+        return { ...prev, variables: { ...prev.variables, [varName]: nextBool } };
+      });
+      return;
+    }
+
+    if (action === 'list-add') {
+      const lName = cfg?.listName || 'tasks';
+      const item = cfg?.varValue || sourceBlock.actionPayload || 'New Task';
+      setRuntimeState((prev) => ({
+        ...prev,
+        lists: { ...prev.lists, [lName]: [...(prev.lists[lName] || []), item] },
+      }));
+      onToast(`Added "${item}" to ${lName}`, 'success');
+      return;
+    }
+
+    if (action === 'list-remove') {
+      const lName = cfg?.listName || 'tasks';
+      setRuntimeState((prev) => ({
+        ...prev,
+        lists: { ...prev.lists, [lName]: (prev.lists[lName] || []).slice(0, -1) },
+      }));
+      onToast(`Removed last item from ${lName}`, 'info');
+      return;
+    }
+
+    if (action === 'save-storage') {
+      const key = cfg?.storageKey || 'sl_user_data';
+      const val = sourceBlock.actionPayload || cfg?.varValue || 'saved';
+      try {
+        window.localStorage.setItem(key, val);
+        onToast(`Saved "${key}" to LocalStorage!`, 'success');
+      } catch {
+        onToast('LocalStorage write blocked.', 'error');
       }
       return;
     }
@@ -506,10 +1080,15 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
           counterValue: nextVal,
           content: `Clicks Registered: ${nextVal}`,
         });
+        setRuntimeState((prev) => ({
+          ...prev,
+          variables: { ...prev.variables, score: nextVal },
+        }));
         onToast(`Triggered "${targetCounter.name}" → ${nextVal}`, 'success');
+        appendConsoleLog('success', `Counter "${targetCounter.name}" => ${nextVal}`);
       } else {
         onToast(
-          'Button ready! Choose an action (Submit Form, Go to Page, Scroll, or URL) in "When Clicked" below or the JavaScript tab.',
+          'Button ready! Choose an action (Go to Page, Submit Form, Modal, Variable) in the JavaScript tab.',
           'info'
         );
       }
@@ -524,14 +1103,67 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         onToast('Add a Toggle Switch or FAQ Accordion to wire this action.', 'info');
       }
     } else if (action === 'call-api') {
-      onToast(
-        `Simulated 200 OK response from ${sourceBlock.apiEndpoint || '/api/v1/metrics'}`,
-        'success'
-      );
+      const msg = `${sourceBlock.httpMethod || 'GET'} ${
+        sourceBlock.apiEndpoint || '/api/v1/metrics'
+      } -> 200 OK`;
+      onToast(msg, 'success');
+      appendConsoleLog('success', msg);
     } else {
-      onToast(sourceBlock.actionPayload || `Executed "${sourceBlock.name}"`, 'info');
+      const msg = sourceBlock.actionPayload || `Executed "${sourceBlock.name}"`;
+      onToast(msg, 'info');
+      appendConsoleLog('log', msg);
     }
   };
+
+  // Active Countdown Timer Engine for logic-timer blocks
+  const hasActiveTimers = Object.values(runningTimers).some(Boolean);
+  useEffect(() => {
+    if (!hasActiveTimers) return;
+    const interval = window.setInterval(() => {
+      const finishedIds: string[] = [];
+      commitBlocks(
+        (prev) =>
+          prev.map((blk) => {
+            if (blk.type !== 'logic-timer' || !runningTimers[blk.id]) return blk;
+            const current = blk.counterValue ?? 10;
+            if (current <= 1) {
+              finishedIds.push(blk.id);
+              appendConsoleLog('success', `Timer "${blk.name}" completed!`);
+              onToast(`Timer "${blk.name}" finished!`, 'success');
+              return { ...blk, counterValue: 0 };
+            }
+            return { ...blk, counterValue: current - 1 };
+          }),
+        false
+      );
+      if (finishedIds.length > 0) {
+        setRunningTimers((prev) => {
+          const next = { ...prev };
+          finishedIds.forEach((id) => {
+            next[id] = false;
+          });
+          return next;
+        });
+      }
+    }, 1000);
+    return () => window.clearInterval(interval);
+  }, [hasActiveTimers, runningTimers, commitBlocks, appendConsoleLog, onToast]);
+
+  // Execute "When Page Loads" hat blocks when navigating to a page
+  useEffect(() => {
+    const loadHats = blocks.filter((b) => b.type === 'logic-onload');
+    if (loadHats.length === 0) return;
+    loadHats.forEach((hat) => {
+      appendConsoleLog('log', `Page "${activePage?.name || 'Home'}" loaded -> ${hat.name}`);
+      if (hat.logicConfig?.varName) {
+        const val = hat.logicConfig.varValue ?? 'true';
+        setRuntimeState((prev) => ({
+          ...prev,
+          variables: { ...prev.variables, [hat.logicConfig!.varName!]: val },
+        }));
+      }
+    });
+  }, [activePageId]);
 
   const handleTriggerNavLink = (navBlock: CanvasBlock, link: NavbarLinkItem) => {
     if (link.action === 'navigate-page') {
@@ -581,9 +1213,12 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   };
 
   const handleRunSimulation = () => {
+    const onLoadHats = blocks.filter((b) => b.type === 'logic-onload');
+    onLoadHats.forEach((h) => handleTriggerAction(h, formInputs));
+
     const triggerBtn = blocks.find((b) => b.type === 'ui-button');
     if (triggerBtn) {
-      handleTriggerAction(triggerBtn);
+      handleTriggerAction(triggerBtn, formInputs);
     } else {
       const counter = blocks.find((b) => b.type === 'logic-counter');
       if (counter) {
@@ -594,7 +1229,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
           content: `Clicks Registered: ${nextVal}`,
         });
         onToast('Simulated reactive state update!', 'success');
-      } else {
+      } else if (onLoadHats.length === 0) {
         onToast('Preview simulation ready — click interactive blocks on the Stage.', 'info');
       }
     }
@@ -612,7 +1247,11 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         ),
       false
     );
-    onToast('Reset live preview state.', 'info');
+    setFormInputs({});
+    setConfirmDialog(null);
+    setRunningTimers({});
+    setRuntimeState(INITIAL_RUNTIME_STATE);
+    onToast('Reset live preview & runtime state.', 'info');
   };
 
   // =================== IMPORT / EXPORT BLUEPRINT ===================
@@ -1160,35 +1799,91 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                     </span>
                   </div>
 
+                  {/* Quick Block Search Input */}
+                  <div className="relative">
+                    <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={paletteSearch}
+                      onChange={(e) => setPaletteSearch(e.target.value)}
+                      placeholder={lang === 'si' ? 'බ්ලොක් සොයන්න...' : 'Search all blocks...'}
+                      className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-[#090B10] border border-white/10 focus:border-[#4D97FF] text-[11px] text-white placeholder-slate-500 outline-none"
+                    />
+                    {paletteSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setPaletteSearch('')}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    )}
+                  </div>
+
                   <div className="flex flex-col gap-2 pb-6">
-                    {categoryTemplates.map((tpl) => {
-                      const catMeta = WEB_STUDIO_CATEGORIES.find(
-                        (c) => c.id === tpl.studioCategory
-                      )!;
-                      return (
-                        <div
-                          key={tpl.type}
-                          draggable
-                          onDragStart={(e) => handlePaletteDragStart(e, tpl)}
-                          onClick={() => handleAddTemplateBlock(tpl)}
-                          style={{
-                            backgroundColor: catMeta.color,
-                            borderColor: catMeta.borderColor,
-                          }}
-                          className="relative rounded-lg px-3 py-2 border shadow-sm cursor-grab active:cursor-grabbing hover:brightness-105 transition-all select-none"
-                        >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-bold text-white truncate">
-                              {lang === 'si' ? tpl.siName : tpl.name}
-                            </span>
-                            <Plus className="w-3.5 h-3.5 text-white/80 shrink-0" />
-                          </div>
-                          <p className="text-[10px] text-white/85 truncate mt-0.5">
-                            {tpl.defaultContent}
+                    {(() => {
+                      const query = paletteSearch.trim().toLowerCase();
+                      const filtered = query
+                        ? WEB_STUDIO_BLOCK_TEMPLATES.filter(
+                            (t) =>
+                              t.name.toLowerCase().includes(query) ||
+                              t.siName.toLowerCase().includes(query) ||
+                              t.group.toLowerCase().includes(query) ||
+                              t.type.toLowerCase().includes(query)
+                          )
+                        : categoryTemplates;
+
+                      if (filtered.length === 0) {
+                        return (
+                          <p className="text-[11px] text-slate-500 text-center py-6">
+                            No blocks match &ldquo;{paletteSearch}&rdquo;
                           </p>
-                        </div>
-                      );
-                    })}
+                        );
+                      }
+
+                      let lastGroup = '';
+                      return filtered.map((tpl) => {
+                        const catMeta = WEB_STUDIO_CATEGORIES.find(
+                          (c) => c.id === tpl.studioCategory
+                        )!;
+                        const groupLabel = lang === 'si' ? tpl.siGroup : tpl.group;
+                        const showGroupHeader = groupLabel !== lastGroup;
+                        lastGroup = groupLabel;
+                        return (
+                          <React.Fragment key={tpl.id}>
+                            {showGroupHeader && (
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pt-1.5 pb-0.5 block">
+                                {groupLabel}
+                              </span>
+                            )}
+                            <div
+                              draggable
+                              onDragStart={(e) => handlePaletteDragStart(e, tpl)}
+                              onClick={() => handleAddTemplateBlock(tpl)}
+                              style={{
+                                backgroundColor: catMeta.color,
+                                borderColor: catMeta.borderColor,
+                              }}
+                              className={`relative px-3 py-2 border shadow-sm cursor-grab active:cursor-grabbing hover:brightness-105 transition-all select-none ${
+                                tpl.isHatBlock
+                                  ? 'rounded-b-lg rounded-tr-lg rounded-tl-2xl border-t-4 border-t-white/40'
+                                  : 'rounded-lg'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-bold text-white truncate">
+                                  {lang === 'si' ? tpl.siName : tpl.name}
+                                </span>
+                                <Plus className="w-3.5 h-3.5 text-white/80 shrink-0" />
+                              </div>
+                              <p className="text-[10px] text-white/85 truncate mt-0.5">
+                                {tpl.defaultContent}
+                              </p>
+                            </div>
+                          </React.Fragment>
+                        );
+                      });
+                    })()}
                   </div>
                 </aside>
 
@@ -2324,6 +3019,116 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             ))}
                           </div>
                         </div>
+
+                        {/* Width & Height */}
+                        <div className="space-y-1.5">
+                          <label className="text-slate-400 font-semibold">Width / Height</label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <select
+                              value={selectedBlock.style?.width || 'auto'}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: {
+                                    ...selectedBlock.style,
+                                    width: e.target.value === 'auto' ? undefined : e.target.value,
+                                  },
+                                })
+                              }
+                              className="px-2 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-slate-200 outline-none cursor-pointer"
+                            >
+                              <option value="auto">Width: Auto</option>
+                              <option value="100%">Width: 100%</option>
+                              <option value="75%">Width: 75%</option>
+                              <option value="50%">Width: 50%</option>
+                              <option value="320px">Width: 320px</option>
+                            </select>
+                            <select
+                              value={selectedBlock.style?.height || 'auto'}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: {
+                                    ...selectedBlock.style,
+                                    height: e.target.value === 'auto' ? undefined : e.target.value,
+                                  },
+                                })
+                              }
+                              className="px-2 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-slate-200 outline-none cursor-pointer"
+                            >
+                              <option value="auto">Height: Auto</option>
+                              <option value="120px">Min-H: 120px</option>
+                              <option value="200px">Min-H: 200px</option>
+                              <option value="320px">Min-H: 320px</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Margin, Custom Class & Show/Hide Toggle */}
+                        <div className="space-y-1.5">
+                          <label className="text-slate-400 font-semibold">
+                            Margin, CSS Class &amp; Visibility
+                          </label>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <select
+                              value={selectedBlock.style?.margin || ''}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: {
+                                    ...selectedBlock.style,
+                                    margin: e.target.value || undefined,
+                                  },
+                                })
+                              }
+                              className="px-2 py-1 rounded-lg bg-[#090B10] border border-white/15 text-slate-200 outline-none cursor-pointer"
+                            >
+                              <option value="">Margin: 0</option>
+                              <option value="8px 0">Margin: 8px</option>
+                              <option value="16px 0">Margin: 16px</option>
+                              <option value="24px 0">Margin: 24px</option>
+                            </select>
+                            <input
+                              type="text"
+                              value={selectedBlock.style?.customClass || ''}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: { ...selectedBlock.style, customClass: e.target.value },
+                                })
+                              }
+                              placeholder="Custom CSS class..."
+                              className="flex-1 min-w-[100px] px-2 py-1 rounded-lg bg-[#090B10] border border-white/15 text-sky-300 font-mono outline-none"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: {
+                                    ...selectedBlock.style,
+                                    isHidden: !selectedBlock.style?.isHidden,
+                                  },
+                                })
+                              }
+                              className={`px-2.5 py-1 rounded-lg border text-[11px] font-semibold flex items-center gap-1 cursor-pointer ${
+                                selectedBlock.style?.isHidden
+                                  ? 'bg-rose-500/20 border-rose-400/50 text-rose-300'
+                                  : 'bg-[#090B10] border-white/15 text-slate-200 hover:border-sky-400/50'
+                              }`}
+                            >
+                              {selectedBlock.style?.isHidden ? (
+                                <>
+                                  <EyeOff className="w-3 h-3" /> Hidden
+                                </>
+                              ) : (
+                                <>
+                                  <Eye className="w-3 h-3" /> Visible
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        </div>
                           </div>
                         </>
                       ))}
@@ -2378,14 +3183,18 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                       )!;
                       return (
                         <button
-                          key={tpl.type}
+                          key={tpl.id}
                           type="button"
                           onClick={() => handleAddTemplateBlock(tpl)}
                           style={{
                             backgroundColor: catMeta.color,
                             borderColor: catMeta.borderColor,
                           }}
-                          className="text-left rounded-lg px-3 py-2 border shadow-sm hover:brightness-105 transition-all cursor-pointer"
+                          className={`text-left px-3 py-2 border shadow-sm hover:brightness-105 transition-all cursor-pointer ${
+                            tpl.isHatBlock
+                              ? 'rounded-b-lg rounded-tr-lg rounded-tl-2xl border-t-4 border-t-white/40'
+                              : 'rounded-lg'
+                          }`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <span className="text-xs font-bold text-white truncate">
@@ -2411,7 +3220,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         <div className="flex items-center justify-between text-[11px]">
                           <span className="font-bold text-slate-300 flex items-center gap-1.5">
                             <MousePointerClick className="w-3.5 h-3.5 text-amber-300" />
-                            Select Button, Navbar, or Element to Wire
+                            Select Button, Navbar, or Logic Block to Configure
                           </span>
                           <span className="text-[10px] text-slate-500">
                             {blocks.length} elements on page
@@ -2423,7 +3232,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             const isInteractive =
                               b.type === 'ui-navbar' ||
                               b.type === 'ui-button' ||
-                              b.type === 'logic-click' ||
+                              b.type.startsWith('logic-') ||
+                              b.type.startsWith('backend-') ||
                               Boolean(b.action);
                             return (
                               <button
@@ -2442,7 +3252,9 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                   className={`w-1.5 h-1.5 rounded-full ${
                                     b.type === 'ui-navbar'
                                       ? 'bg-sky-400'
-                                      : b.type === 'ui-button' || b.type === 'logic-click'
+                                      : b.type === 'ui-button' || b.type.startsWith('logic-')
+                                      ? 'bg-amber-400'
+                                      : b.type.startsWith('backend-')
                                       ? 'bg-emerald-400'
                                       : 'bg-slate-500'
                                   }`}
@@ -2672,7 +3484,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         <div className="flex items-center justify-between pb-2 border-b border-white/10">
                           <div>
                             <span className="text-[10px] font-mono text-amber-300 uppercase">
-                              JavaScript Event Binding · {selectedBlock.type}
+                              JavaScript Logic &amp; Event Configurator · {selectedBlock.type}
                             </span>
                             <h3 className="text-sm font-bold text-white">{selectedBlock.name}</h3>
                           </div>
@@ -2681,9 +3493,739 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             onClick={() => handleTriggerAction(selectedBlock)}
                             className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 font-bold flex items-center gap-1.5 cursor-pointer"
                           >
-                            <Play className="w-3 h-3 fill-current" /> Test Click
+                            <Play className="w-3 h-3 fill-current" /> Test / Run
                           </button>
                         </div>
+
+                        {/* Specialized Logic / Data / Backend Editors */}
+                        {selectedBlock.type === 'logic-onkey' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-[#090B10] border border-amber-500/20">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-amber-300 font-semibold">
+                                Trigger Key
+                              </label>
+                              <select
+                                value={selectedBlock.triggerKey || 'Enter'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    triggerKey: e.target.value as 'Enter' | 'Space' | 'Escape',
+                                  })
+                                }
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                              >
+                                <option value="Enter">Enter Key</option>
+                                <option value="Space">Space Bar</option>
+                                <option value="Escape">Escape Key</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-amber-300 font-semibold">
+                                Trigger Message
+                              </label>
+                              <input
+                                type="text"
+                                value={selectedBlock.actionPayload || ''}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    actionPayload: e.target.value,
+                                  })
+                                }
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-200 outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedBlock.type === 'logic-if' && (
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#090B10] border border-amber-500/20">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Left (Var or Value)</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.leftOperand ?? 'score'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      leftOperand: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white font-mono outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Operator</label>
+                              <select
+                                value={selectedBlock.logicConfig?.operator ?? '>='}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      operator: e.target.value as BlockLogicConfig['operator'],
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-300 font-mono outline-none"
+                              >
+                                <option value="==">== (Equals)</option>
+                                <option value="!=">!= (Not Equal)</option>
+                                <option value=">">&gt; (Greater)</option>
+                                <option value="<">&lt; (Less)</option>
+                                <option value=">=">&gt;= (Greater/Eq)</option>
+                                <option value="<=">&lt;= (Less/Eq)</option>
+                                <option value="contains">contains</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Right Value</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.rightOperand ?? '10'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      rightOperand: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white font-mono outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Logical Gate</label>
+                              <select
+                                value={selectedBlock.logicConfig?.combinator ?? 'NONE'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      combinator: e.target.value as BlockLogicConfig['combinator'],
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                              >
+                                <option value="NONE">Single Check</option>
+                                <option value="AND">AND (isLoggedIn == true)</option>
+                                <option value="OR">OR (isLoggedIn == true)</option>
+                                <option value="NOT">NOT (Invert)</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-emerald-400">Then Message</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.thenMessage ?? ''}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      thenMessage: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-emerald-300 outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-rose-400">Else Message</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.elseMessage ?? ''}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      elseMessage: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-rose-300 outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedBlock.type === 'logic-loop' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#090B10] border border-amber-500/20">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Loop Mode</label>
+                              <select
+                                value={selectedBlock.logicConfig?.loopMode ?? 'repeat'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      loopMode: e.target.value as BlockLogicConfig['loopMode'],
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                              >
+                                <option value="repeat">Repeat N Times</option>
+                                <option value="foreach">For Each in List</option>
+                                <option value="while">While Condition</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Repeat Count</label>
+                              <input
+                                type="number"
+                                value={selectedBlock.logicConfig?.repeatCount ?? 5}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      repeatCount: Number(e.target.value) || 1,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white font-mono outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">List Name</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.listName ?? 'tasks'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      listName: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-200 font-mono outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedBlock.type === 'logic-variable' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#090B10] border border-amber-500/20">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Variable Name</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.varName ?? 'score'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      varName: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white font-mono outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Operation</label>
+                              <select
+                                value={selectedBlock.logicConfig?.varOp ?? 'set'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      varOp: e.target.value as BlockLogicConfig['varOp'],
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                              >
+                                <option value="set">Set Variable To</option>
+                                <option value="change">Change Variable By</option>
+                                <option value="toggle">Toggle Boolean (!val)</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Value / Delta</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.varValue ?? '10'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      varValue: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-200 font-mono outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedBlock.type === 'logic-list' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#090B10] border border-amber-500/20">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">List Name</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.listName ?? 'tasks'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      listName: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white font-mono outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">List Action</label>
+                              <select
+                                value={selectedBlock.logicConfig?.listOp ?? 'add'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      listOp: e.target.value as BlockLogicConfig['listOp'],
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                              >
+                                <option value="add">Add Item to List</option>
+                                <option value="remove">Remove Item at Index</option>
+                                <option value="get">Get Item at Index</option>
+                                <option value="length">Length of List</option>
+                                <option value="create">Create / Reset List</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">
+                                {selectedBlock.logicConfig?.listOp === 'remove' ||
+                                selectedBlock.logicConfig?.listOp === 'get'
+                                  ? 'Index (0-based)'
+                                  : 'Item Value'}
+                              </label>
+                              {selectedBlock.logicConfig?.listOp === 'remove' ||
+                              selectedBlock.logicConfig?.listOp === 'get' ? (
+                                <input
+                                  type="number"
+                                  value={selectedBlock.logicConfig?.listIndex ?? 0}
+                                  onChange={(e) =>
+                                    handleUpdateBlock({
+                                      ...selectedBlock,
+                                      logicConfig: {
+                                        ...selectedBlock.logicConfig,
+                                        listIndex: Number(e.target.value) || 0,
+                                      },
+                                    })
+                                  }
+                                  className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-200 font-mono outline-none"
+                                />
+                              ) : (
+                                <input
+                                  type="text"
+                                  value={selectedBlock.logicConfig?.varValue ?? 'New Task'}
+                                  onChange={(e) =>
+                                    handleUpdateBlock({
+                                      ...selectedBlock,
+                                      logicConfig: {
+                                        ...selectedBlock.logicConfig,
+                                        varValue: e.target.value,
+                                      },
+                                    })
+                                  }
+                                  className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-200 outline-none"
+                                />
+                              )}
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedBlock.type === 'logic-object' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#090B10] border border-amber-500/20">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">JSON Mode</label>
+                              <select
+                                value={selectedBlock.logicConfig?.objectOp ?? 'get-prop'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      objectOp: e.target.value as BlockLogicConfig['objectOp'],
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                              >
+                                <option value="get-prop">Get Property [key]</option>
+                                <option value="parse-json">Parse JSON</option>
+                                <option value="stringify">Stringify JSON</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Property Key</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.objectKey ?? 'name'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      objectKey: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white font-mono outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">JSON Object</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.varValue ?? '{"name":"SL Builder"}'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      varValue: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-200 font-mono outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedBlock.type === 'logic-math-text' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#090B10] border border-amber-500/20">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Operation</label>
+                              <select
+                                value={selectedBlock.logicConfig?.mathTextOp ?? 'random'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      mathTextOp: e.target.value as BlockLogicConfig['mathTextOp'],
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                              >
+                                <optgroup label="Math">
+                                  <option value="add">Add (A + B)</option>
+                                  <option value="sub">Subtract (A - B)</option>
+                                  <option value="mul">Multiply (A * B)</option>
+                                  <option value="div">Divide (A / B)</option>
+                                  <option value="random">Random [A .. B]</option>
+                                  <option value="round">Round (A)</option>
+                                </optgroup>
+                                <optgroup label="Text & Date">
+                                  <option value="join">Join Text A + B</option>
+                                  <option value="length">Length of Text A</option>
+                                  <option value="contains">Text A Contains B?</option>
+                                  <option value="upper">Convert to UPPERCASE</option>
+                                  <option value="lower">Convert to lowercase</option>
+                                  <option value="format-date">Format Current Date/Time</option>
+                                </optgroup>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Arg A / Text 1</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.argA ?? '1'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      argA: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white font-mono outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Arg B / Text 2</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.argB ?? '100'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      argB: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-200 font-mono outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedBlock.type === 'backend-storage' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#090B10] border border-emerald-500/20">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-emerald-300">Operation</label>
+                              <select
+                                value={selectedBlock.logicConfig?.storageOp ?? 'save'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      storageOp: e.target.value as BlockLogicConfig['storageOp'],
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                              >
+                                <option value="save">Save [key] with Data</option>
+                                <option value="load">Load from [key]</option>
+                                <option value="remove">Remove [key]</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Storage Key</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.storageKey ?? 'sl_user_data'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      storageKey: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-emerald-200 font-mono outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Value</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.varValue ?? ''}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      varValue: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedBlock.type === 'backend-db' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#090B10] border border-emerald-500/20">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-emerald-300">DB Action</label>
+                              <select
+                                value={selectedBlock.logicConfig?.dbOp ?? 'save'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      dbOp: e.target.value as BlockLogicConfig['dbOp'],
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                              >
+                                <option value="save">Save Data to Collection</option>
+                                <option value="get">Get Data from Collection</option>
+                                <option value="delete">Delete Latest Record</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Collection Name</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.collectionName ?? 'users'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      collectionName: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-emerald-200 font-mono outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Document JSON</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.varValue ?? '{"name":"Creator"}'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      varValue: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white font-mono outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedBlock.type === 'backend-auth' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 p-3 rounded-xl bg-[#090B10] border border-emerald-500/20">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-emerald-300">Auth Flow</label>
+                              <select
+                                value={selectedBlock.logicConfig?.authOp ?? 'login'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      authOp: e.target.value as BlockLogicConfig['authOp'],
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                              >
+                                <option value="signup">Sign Up with Email &amp; Password</option>
+                                <option value="login">Login with Email &amp; Password</option>
+                                <option value="logout">Logout User</option>
+                                <option value="current-user">Get Current User</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">Demo Email</label>
+                              <input
+                                type="email"
+                                value={selectedBlock.logicConfig?.varValue ?? 'creator@slbuilder.app'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      varValue: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-emerald-200 outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedBlock.type === 'backend-device' && (
+                          <div className="p-3 rounded-xl bg-[#090B10] border border-emerald-500/20 space-y-1">
+                            <label className="text-[10px] text-emerald-300 font-semibold">
+                              Device / Hardware Capability
+                            </label>
+                            <select
+                              value={selectedBlock.logicConfig?.deviceOp ?? 'gps'}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  logicConfig: {
+                                    ...selectedBlock.logicConfig,
+                                    deviceOp: e.target.value as BlockLogicConfig['deviceOp'],
+                                  },
+                                })
+                              }
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                            >
+                              <option value="gps">Get GPS Location (Geolocation)</option>
+                              <option value="vibrate">Vibrate Device</option>
+                              <option value="camera">Open Camera Check</option>
+                            </select>
+                          </div>
+                        )}
+
+                        {(selectedBlock.type === 'backend-fetch' ||
+                          selectedBlock.type === 'backend-flask') && (
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 rounded-xl bg-[#090B10] border border-emerald-500/20">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-emerald-300">HTTP Method</label>
+                              <select
+                                value={selectedBlock.httpMethod || 'GET'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    httpMethod: e.target.value as 'GET' | 'POST' | 'PUT' | 'DELETE',
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-emerald-300 font-mono outline-none"
+                              >
+                                <option value="GET">GET</option>
+                                <option value="POST">POST</option>
+                                <option value="PUT">PUT</option>
+                                <option value="DELETE">DELETE</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1 sm:col-span-2">
+                              <label className="text-[10px] text-slate-400">API URL / Path</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.apiEndpoint || '/api/v1/metrics'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    apiEndpoint: e.target.value,
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-emerald-200 font-mono outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1 sm:col-span-3">
+                              <label className="text-[10px] text-slate-400">Request JSON Body</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.requestBody || '{"plan":"pro"}'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    requestBody: e.target.value,
+                                  })
+                                }
+                                className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-slate-200 font-mono outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div className="space-y-1.5">
@@ -2701,14 +4243,46 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                               className="w-full px-3 py-2 rounded-lg bg-[#090B10] border border-white/15 text-white outline-none focus:border-amber-400"
                             >
                               <option value="">Auto / Default</option>
-                              <option value="navigate-page">Go to Page (Navigate)</option>
-                              <option value="scroll-to-block">Scroll to Section / Block</option>
-                              <option value="submit-form">Submit Form Inputs</option>
-                              <option value="open-url">Open URL / Email Link</option>
-                              <option value="increment-counter">Increment Counter (+1)</option>
-                              <option value="toggle-visibility">Toggle State / Accordion</option>
-                              <option value="call-api">Fetch API Endpoint</option>
-                              <option value="alert">Show Notification Toast</option>
+                              <optgroup label="Navigation & Modals">
+                                <option value="navigate-page">Go to Page (Navigate)</option>
+                                <option value="go-back">Go Back to Previous Page</option>
+                                <option value="scroll-to-block">Scroll to Section / Block</option>
+                                <option value="open-url">Open URL / Email Link</option>
+                                <option value="open-modal">Open Modal / Popup</option>
+                                <option value="close-modal">Close Modal / Popup</option>
+                              </optgroup>
+                              <optgroup label="User Input & Forms">
+                                <option value="submit-form">Submit Form Inputs</option>
+                                <option value="clear-form">Clear All Form Inputs</option>
+                                <option value="validate-input">Validate Input Field</option>
+                                <option value="get-input-value">Get Input Value into Variable</option>
+                                <option value="set-input-value">Set Input Field Value</option>
+                              </optgroup>
+                              <optgroup label="DOM & Styling Manipulation">
+                                <option value="change-text">Set Text of Target Element</option>
+                                <option value="show-element">Show Target Element</option>
+                                <option value="hide-element">Hide Target Element</option>
+                                <option value="toggle-visibility">Toggle Accordion / Switch</option>
+                                <option value="set-style">Set Style Property (CSS)</option>
+                                <option value="add-class">Add CSS Class</option>
+                                <option value="remove-class">Remove CSS Class</option>
+                                <option value="toggle-disabled">Enable / Disable Button</option>
+                              </optgroup>
+                              <optgroup label="Variables, Lists & Counters">
+                                <option value="increment-counter">Increment Counter (+1)</option>
+                                <option value="set-variable">Set Variable Value</option>
+                                <option value="toggle-boolean">Toggle Boolean State</option>
+                                <option value="list-add">Add Item to List</option>
+                                <option value="list-remove">Remove Last List Item</option>
+                              </optgroup>
+                              <optgroup label="Feedback, Storage & API">
+                                <option value="alert">Show Notification Toast</option>
+                                <option value="show-confirm">Show Confirm Dialog</option>
+                                <option value="copy-clipboard">Copy Text to Clipboard</option>
+                                <option value="console-log">Write to Runtime Console</option>
+                                <option value="save-storage">Save to LocalStorage</option>
+                                <option value="call-api">Fetch API Endpoint</option>
+                              </optgroup>
                             </select>
                           </div>
 
@@ -2716,12 +4290,17 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             <label className="text-slate-400 font-semibold">
                               {selectedBlock.action === 'navigate-page'
                                 ? 'Target Page'
-                                : selectedBlock.action === 'submit-form'
-                                ? 'Confirmation Message (Optional)'
+                                : selectedBlock.action === 'submit-form' ||
+                                  selectedBlock.action === 'show-confirm'
+                                ? 'Message Text'
                                 : selectedBlock.action === 'open-url'
                                 ? 'Destination URL'
-                                : selectedBlock.action === 'alert'
-                                ? 'Toast Message'
+                                : selectedBlock.action === 'alert' ||
+                                  selectedBlock.action === 'copy-clipboard' ||
+                                  selectedBlock.action === 'console-log' ||
+                                  selectedBlock.action === 'change-text' ||
+                                  selectedBlock.action === 'set-input-value'
+                                ? 'Payload / Value'
                                 : selectedBlock.type.startsWith('backend-') ||
                                   selectedBlock.action === 'call-api'
                                 ? 'API Endpoint'
@@ -2747,7 +4326,12 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                               </select>
                             ) : selectedBlock.action === 'submit-form' ||
                               selectedBlock.action === 'open-url' ||
-                              selectedBlock.action === 'alert' ? (
+                              selectedBlock.action === 'alert' ||
+                              selectedBlock.action === 'show-confirm' ||
+                              selectedBlock.action === 'copy-clipboard' ||
+                              selectedBlock.action === 'console-log' ||
+                              selectedBlock.action === 'change-text' ||
+                              selectedBlock.action === 'set-input-value' ? (
                               <input
                                 type="text"
                                 value={selectedBlock.actionPayload || ''}
@@ -2757,13 +4341,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                     actionPayload: e.target.value,
                                   })
                                 }
-                                placeholder={
-                                  selectedBlock.action === 'open-url'
-                                    ? 'https://example.com or mailto:hi@site.com'
-                                    : selectedBlock.action === 'submit-form'
-                                    ? 'Thanks! We received your submission.'
-                                    : 'Action completed!'
-                                }
+                                placeholder="Enter text, URL, or message..."
                                 className="w-full px-3 py-2 rounded-lg bg-[#090B10] border border-white/15 text-amber-200 outline-none focus:border-amber-400"
                               />
                             ) : selectedBlock.type.startsWith('backend-') ||
@@ -2802,8 +4380,163 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             )}
                           </div>
                         </div>
+
+                        {selectedBlock.action === 'set-style' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-2 border-t border-white/10">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">CSS Property</label>
+                              <select
+                                value={selectedBlock.logicConfig?.styleProp || 'backgroundColor'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      styleProp: e.target.value,
+                                    },
+                                  })
+                                }
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-white outline-none"
+                              >
+                                <option value="backgroundColor">backgroundColor</option>
+                                <option value="color">color (Text Color)</option>
+                                <option value="borderColor">borderColor</option>
+                                <option value="opacity">opacity</option>
+                                <option value="borderRadius">borderRadius</option>
+                              </select>
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-slate-400">CSS Value</label>
+                              <input
+                                type="text"
+                                value={selectedBlock.logicConfig?.styleValue ?? '#312e81'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      styleValue: e.target.value,
+                                    },
+                                  })
+                                }
+                                placeholder="#312e81 or 0.5"
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-amber-200 font-mono outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {(selectedBlock.action === 'add-class' ||
+                          selectedBlock.action === 'remove-class') && (
+                          <div className="space-y-1 pt-2 border-t border-white/10">
+                            <label className="text-[10px] text-slate-400">CSS Class Name</label>
+                            <input
+                              type="text"
+                              value={selectedBlock.logicConfig?.cssClass ?? 'ring-2 ring-emerald-400'}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  logicConfig: {
+                                    ...selectedBlock.logicConfig,
+                                    cssClass: e.target.value,
+                                  },
+                                })
+                              }
+                              placeholder="e.g. highlight-card"
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-sky-200 font-mono outline-none"
+                            />
+                          </div>
+                        )}
+
+                        {selectedBlock.action === 'validate-input' && (
+                          <div className="space-y-1 pt-2 border-t border-white/10">
+                            <label className="text-[10px] text-slate-400">Validation Rule</label>
+                            <select
+                              value={selectedBlock.logicConfig?.validationRule || 'not-empty'}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  logicConfig: {
+                                    ...selectedBlock.logicConfig,
+                                    validationRule: e.target.value as BlockLogicConfig['validationRule'],
+                                  },
+                                })
+                              }
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-white outline-none"
+                            >
+                              <option value="not-empty">Required (Not Empty)</option>
+                              <option value="email">Valid Email Format</option>
+                              <option value="min-length">Min Length (6+ chars)</option>
+                            </select>
+                          </div>
+                        )}
                       </div>
                     )}
+
+                    {/* Live Runtime State & Console Inspector */}
+                    <div className="bg-[#11151E] p-4 rounded-2xl border border-white/10 space-y-3 text-xs">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-emerald-300 flex items-center gap-1.5">
+                          <Terminal className="w-3.5 h-3.5" />
+                          Live Runtime Variables, Lists &amp; Console
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRuntimeState((prev) => ({ ...prev, consoleLogs: [] }))
+                          }
+                          className="text-[10px] text-slate-400 hover:text-white cursor-pointer"
+                        >
+                          Clear Console
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-[11px] font-mono">
+                        <div className="p-2.5 rounded-xl bg-[#090B10] border border-white/10 space-y-1">
+                          <div className="text-[10px] text-amber-300 font-bold uppercase">
+                            Variables
+                          </div>
+                          {Object.entries(runtimeState.variables).map(([k, v]) => (
+                            <div key={k} className="flex justify-between text-slate-300">
+                              <span>{k}:</span>
+                              <span className="text-sky-300">{JSON.stringify(v)}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="p-2.5 rounded-xl bg-[#090B10] border border-white/10 space-y-1">
+                          <div className="text-[10px] text-emerald-300 font-bold uppercase">
+                            Lists &amp; Auth
+                          </div>
+                          {Object.entries(runtimeState.lists).map(([k, arr]) => (
+                            <div key={k} className="text-slate-300 truncate">
+                              {k} [{arr.length}]: {arr.join(', ')}
+                            </div>
+                          ))}
+                          <div className="text-slate-400">
+                            Auth: {runtimeState.authUser ? runtimeState.authUser.email : 'Signed out'}
+                          </div>
+                        </div>
+                      </div>
+                      {runtimeState.consoleLogs.length > 0 && (
+                        <div className="max-h-28 overflow-y-auto p-2.5 rounded-xl bg-[#05070B] border border-white/10 space-y-1 font-mono text-[10px]">
+                          {runtimeState.consoleLogs.map((log) => (
+                            <div
+                              key={log.id}
+                              className={
+                                log.level === 'error'
+                                  ? 'text-rose-400'
+                                  : log.level === 'warn'
+                                  ? 'text-amber-300'
+                                  : log.level === 'success'
+                                  ? 'text-emerald-300'
+                                  : 'text-slate-300'
+                              }
+                            >
+                              [{log.time}] {log.message}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
                     {/* Generated script.js / TSX / Flask Output */}
                     <div className="space-y-2.5">
@@ -2959,6 +4692,24 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                   pages={pages}
                   onSelectPage={handleSelectPage}
                   pageStyle={activePage?.pageStyle}
+                  runtimeState={runtimeState}
+                  formInputs={formInputs}
+                  onFormInputChange={handleFormInputChange}
+                  confirmDialog={confirmDialog}
+                  onResolveConfirm={(accepted) => {
+                    const pending = pendingConfirmActionRef.current;
+                    pendingConfirmActionRef.current = null;
+                    setConfirmDialog(null);
+                    if (accepted && pending) {
+                      pending();
+                    } else if (!accepted) {
+                      onToast('Action cancelled.', 'info');
+                    }
+                  }}
+                  runningTimers={runningTimers}
+                  onToggleTimer={(blk) =>
+                    setRunningTimers((prev) => ({ ...prev, [blk.id]: !prev[blk.id] }))
+                  }
                 />
               </div>
             </div>
@@ -3373,6 +5124,94 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             placeholder="https://..."
                             className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
                           />
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-video' && (
+                        <div className="space-y-1">
+                          <span className="font-semibold text-slate-400 block">Video MP4 URL</span>
+                          <input
+                            type="text"
+                            value={selectedBlock.videoUrl || ''}
+                            onChange={(e) =>
+                              handleUpdateBlock({ ...selectedBlock, videoUrl: e.target.value })
+                            }
+                            placeholder="https://.../video.mp4"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
+                          />
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-icon' && (
+                        <div className="space-y-1">
+                          <span className="font-semibold text-slate-400 block">Vector Icon</span>
+                          <select
+                            value={selectedBlock.iconName || 'sparkles'}
+                            onChange={(e) =>
+                              handleUpdateBlock({ ...selectedBlock, iconName: e.target.value })
+                            }
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                          >
+                            {[
+                              'sparkles',
+                              'zap',
+                              'shield',
+                              'rocket',
+                              'heart',
+                              'star',
+                              'globe',
+                              'code',
+                              'database',
+                              'bell',
+                              'user',
+                              'check',
+                            ].map((ic) => (
+                              <option key={ic} value={ic}>
+                                Icon: {ic}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-input' && (
+                        <div className="space-y-1">
+                          <span className="font-semibold text-slate-400 block">Input Field Type</span>
+                          <select
+                            value={selectedBlock.inputType || 'text'}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                inputType: e.target.value as CanvasBlock['inputType'],
+                              })
+                            }
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                          >
+                            <option value="text">Text</option>
+                            <option value="email">Email</option>
+                            <option value="password">Password</option>
+                            <option value="number">Number</option>
+                            <option value="date">Date</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-grid' && (
+                        <div className="space-y-1">
+                          <span className="font-semibold text-slate-400 block">Grid Columns</span>
+                          <select
+                            value={selectedBlock.gridColumns ?? 2}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                gridColumns: Number(e.target.value) === 3 ? 3 : 2,
+                              })
+                            }
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                          >
+                            <option value={2}>2 Columns</option>
+                            <option value={3}>3 Columns</option>
+                          </select>
                         </div>
                       )}
 

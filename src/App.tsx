@@ -56,21 +56,29 @@ function AppContent() {
 
   const { themeConfig, setTheme } = useTheme();
 
+  const isCloudAuthenticated = Boolean(
+    !isAuthChecking &&
+      currentUser &&
+      auth.currentUser &&
+      currentUser.id === auth.currentUser.uid &&
+      currentUser.id !== 'demo_user'
+  );
+
   // Test Firestore Connection on Boot
   useEffect(() => {
     testConnection().catch((err) => console.warn('Firestore initial ping:', err));
   }, []);
 
-  // Subscribe to Global CMS / Platform Settings in Firestore
+  // Load Global CMS / Platform Settings (REST on boot, live onSnapshot when authenticated)
   useEffect(() => {
     const unsubscribe = subscribeToSiteSettings((settings) => {
       setSiteSettings(settings);
       if (!localStorage.getItem('sl_builder_theme') && settings.defaultTheme) {
         setTheme(settings.defaultTheme);
       }
-    });
+    }, isCloudAuthenticated);
     return () => unsubscribe();
-  }, []);
+  }, [isCloudAuthenticated]);
 
   // Listen to Firebase Auth state & verify Admin RBAC
   useEffect(() => {
@@ -93,14 +101,6 @@ function AppContent() {
     });
     return () => unsubscribe();
   }, []);
-
-  const isCloudAuthenticated = Boolean(
-    !isAuthChecking &&
-      currentUser &&
-      auth.currentUser &&
-      currentUser.id === auth.currentUser.uid &&
-      currentUser.id !== 'demo_user'
-  );
 
   // Listen to own user document in Firestore for role updates & suspension enforcement
   useEffect(() => {

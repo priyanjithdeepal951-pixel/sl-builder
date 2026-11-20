@@ -14,6 +14,7 @@ import {
 import {
   getFirestore,
   initializeFirestore,
+  setLogLevel,
   doc,
   getDoc,
   getDocFromServer,
@@ -46,16 +47,20 @@ import {
   SUPER_ADMIN_EMAIL,
 } from '../data/siteSettingsDefaults';
 
+// Suppress internal Watch-stream 10s OnlineStateTracker console.error noise;
+// all actual operation/permission failures are surfaced via handleFirestoreError.
+setLogLevel('silent');
+
 // Initialize Firebase App
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firestore with long-polling enabled for reliable connectivity across proxies/iframes
+// Initialize Firestore with auto-detect long-polling for optimal proxy/network resilience
 function createFirestoreInstance(): Firestore {
   try {
     return initializeFirestore(
       app,
       {
-        experimentalForceLongPolling: true,
+        experimentalAutoDetectLongPolling: true,
         ignoreUndefinedProperties: true,
       },
       firebaseConfig.firestoreDatabaseId
@@ -532,15 +537,87 @@ export function subscribeToUserSelf(
   );
 }
 
+function decodeFirestoreRestValue(val: unknown): unknown {
+  if (!val || typeof val !== 'object') return undefined;
+  const v = val as Record<string, unknown>;
+  if ('stringValue' in v) return v.stringValue;
+  if ('booleanValue' in v) return v.booleanValue;
+  if ('integerValue' in v) return Number(v.integerValue);
+  if ('doubleValue' in v) return Number(v.doubleValue);
+  if ('nullValue' in v) return null;
+  if ('timestampValue' in v) return v.timestampValue;
+  if ('arrayValue' in v) {
+    const arr = (v.arrayValue as { values?: unknown[] })?.values;
+    return Array.isArray(arr) ? arr.map(decodeFirestoreRestValue) : [];
+  }
+  if ('mapValue' in v) {
+    const fields = (v.mapValue as { fields?: Record<string, unknown> })?.fields || {};
+    const out: Record<string, unknown> = {};
+    Object.entries(fields).forEach(([k, child]) => {
+      out[k] = decodeFirestoreRestValue(child);
+    });
+    return out;
+  }
+  return undefined;
+}
+
+async function fetchSiteSettingsViaRest(): Promise<SiteSettingsConfig> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return DEFAULT_SITE_SETTINGS;
+  }
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+  try {
+    const url = `https://firestore.googleapis.com/v1/projects/${encodeURIComponent(
+      firebaseConfig.projectId
+    )}/databases/${encodeURIComponent(
+      firebaseConfig.firestoreDatabaseId
+    )}/documents/appConfig/siteSettings?key=${encodeURIComponent(firebaseConfig.apiKey)}`;
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      return DEFAULT_SITE_SETTINGS;
+    }
+    const json = (await res.json()) as { fields?: Record<string, unknown> };
+    if (!json.fields) {
+      return DEFAULT_SITE_SETTINGS;
+    }
+    const decoded: Record<string, unknown> = {};
+    Object.entries(json.fields).forEach(([k, val]) => {
+      decoded[k] = decodeFirestoreRestValue(val);
+    });
+    const data = decoded as Partial<SiteSettingsConfig>;
+    return {
+      ...DEFAULT_SITE_SETTINGS,
+      ...data,
+      templates:
+        Array.isArray(data.templates) && data.templates.length > 0
+          ? data.templates
+          : DEFAULT_SITE_SETTINGS.templates,
+    };
+  } catch {
+    return DEFAULT_SITE_SETTINGS;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 export function subscribeToSiteSettings(
-  onSettings: (settings: SiteSettingsConfig) => void
+  onSettings: (settings: SiteSettingsConfig) => void,
+  attachLiveListener = false
 ): () => void {
   const path = 'appConfig/siteSettings';
   let unsubscribeSnapshot: (() => void) | null = null;
   let cancelled = false;
 
-  const attachListener = () => {
-    if (cancelled || unsubscribeSnapshot) return;
+  // Always hydrate immediately via fast REST read without opening an unauthenticated Watch stream
+  fetchSiteSettingsViaRest().then((restSettings) => {
+    if (!cancelled) {
+      onSettings(restSettings);
+    }
+  });
+
+  // Only attach real-time onSnapshot listener once user is authenticated and online
+  if (attachLiveListener && auth.currentUser && (typeof navigator === 'undefined' || navigator.onLine)) {
     unsubscribeSnapshot = onSnapshot(
       doc(db, 'appConfig', 'siteSettings'),
       (snapshot) => {
@@ -560,26 +637,10 @@ export function subscribeToSiteSettings(
       },
       (error) => {
         console.warn(`Site settings subscription notice (${path}):`, error.message);
-        onSettings(DEFAULT_SITE_SETTINGS);
       }
     );
-  };
-
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    onSettings(DEFAULT_SITE_SETTINGS);
-    const handleOnline = () => {
-      attachListener();
-      window.removeEventListener('online', handleOnline);
-    };
-    window.addEventListener('online', handleOnline);
-    return () => {
-      cancelled = true;
-      window.removeEventListener('online', handleOnline);
-      unsubscribeSnapshot?.();
-    };
   }
 
-  attachListener();
   return () => {
     cancelled = true;
     unsubscribeSnapshot?.();

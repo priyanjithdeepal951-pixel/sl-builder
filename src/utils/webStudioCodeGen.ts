@@ -6,6 +6,7 @@ import {
   resolvePageBackgroundCss,
 } from './pageStylePresets';
 import { getEffectiveNavLinks } from './navLinkHelpers';
+import { parseOptionsList } from './studioRuntime';
 
 function escapeHtml(text: string): string {
   return text
@@ -114,6 +115,23 @@ function getCssBgColor(bgColor?: string, customBgHex?: string): string | undefin
     default:
       return undefined;
   }
+}
+
+function getInlineLayoutCss(b: CanvasBlock): string {
+  const parts: string[] = [];
+  if (b.style?.width && b.style.width !== 'auto') {
+    parts.push(`width:${b.style.width};margin-left:auto;margin-right:auto;`);
+  }
+  if (b.style?.height && b.style.height !== 'auto') {
+    parts.push(`min-height:${b.style.height};`);
+  }
+  if (b.style?.margin) {
+    parts.push(`margin:${b.style.margin};`);
+  }
+  if (b.style?.isHidden) {
+    parts.push('display:none;');
+  }
+  return parts.join('');
 }
 
 function buildLiveAnimationCssAndHtml(pageStyle?: PageStyleSettings): {
@@ -282,7 +300,6 @@ function buildLiveAnimationCssAndHtml(pageStyle?: PageStyleSettings): {
     };
   }
 
-  // snow
   const css = `${baseLayerCss}
     @keyframes slSnowFall {
       0% { transform: translate3d(0, -15px, 0); opacity: 0; }
@@ -331,13 +348,22 @@ export function generateHtmlExport(
     .map((b) => {
       const content = escapeHtml(b.content || b.name);
       const subtitle = b.subtitle ? escapeHtml(b.subtitle) : '';
-      const align = b.style?.textAlign || (b.type === 'ui-heading' || b.type === 'ui-button' ? 'center' : 'left');
+      const align =
+        b.style?.textAlign ||
+        (b.type === 'ui-heading' || b.type === 'ui-button' ? 'center' : 'left');
       const alignClass =
         align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
-      const primaryColor = getCssColor(b.style?.textColor, b.style?.customTextHex, defaultPrimaryColor);
+      const primaryColor = getCssColor(
+        b.style?.textColor,
+        b.style?.customTextHex,
+        defaultPrimaryColor
+      );
       const subColor = b.style?.subtitleColorHex || defaultMutedColor;
       const fontFam = getCssFontFamily(b.style?.fontFamily);
-      const fontWt = getCssFontWeight(b.style?.fontWeight, b.type === 'ui-paragraph' ? '400' : '700');
+      const fontWt = getCssFontWeight(
+        b.style?.fontWeight,
+        b.type === 'ui-paragraph' ? '400' : '700'
+      );
       const bgVal = b.style?.bgGradient || getCssBgColor(b.style?.bgColor, b.style?.customBgHex);
       const surfaceFxCss = `${bgVal ? `background: ${bgVal};` : ''}${
         b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''
@@ -350,7 +376,10 @@ export function generateHtmlExport(
         b.style?.textStroke ? ` -webkit-text-stroke: ${b.style.textStroke};` : ''
       }`;
       const radiusClass = b.style?.borderRadius || 'rounded-xl';
+      const customCls = b.style?.customClass ? ` ${escapeHtml(b.style.customClass)}` : '';
+      const layoutStyle = getInlineLayoutCss(b);
       const elId = `sl-el-${escapeHtml(b.id)}`;
+      const parsedOptions = parseOptionsList(b.content, b.options);
 
       switch (b.type) {
         case 'ui-navbar': {
@@ -374,22 +403,20 @@ export function generateHtmlExport(
                   ? `<a href="${escapeHtml(rawUrl)}" class="sl-nav-link text-sm opacity-80 hover:opacity-100 transition-opacity no-underline">${label}</a>`
                   : `<a href="${escapeHtml(rawUrl)}" target="_blank" rel="noopener noreferrer" class="text-sm opacity-80 hover:opacity-100 transition-opacity no-underline">${label}</a>`;
               }
-              const msg = escapeHtml(
-                link.message || `Clicked "${link.label}"`
-              );
+              const msg = escapeHtml(link.message || `Clicked "${link.label}"`);
               return `<button type="button" data-nav-msg="${msg}" class="sl-nav-link text-sm opacity-80 hover:opacity-100 transition-opacity bg-transparent border-0 p-0 cursor-pointer text-inherit font-inherit">${label}</button>`;
             })
             .join('\n        ');
-          return `  <header id="${elId}" style="font-family: ${fontFam}; background: ${
+          return `  <header id="${elId}" style="${layoutStyle}font-family: ${fontFam}; background: ${
             bgVal || (isLightPage ? 'rgba(255, 255, 255, 0.86)' : 'rgba(13, 17, 26, 0.86)')
           };" class="w-full sticky top-0 z-50 border-b ${
             isLightPage ? 'border-slate-200' : 'border-white/10'
-          } backdrop-blur-md">
+          } backdrop-blur-md${customCls}">
     <div class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-6">
       <a href="index.html" class="flex items-center gap-2.5 no-underline">
         <span style="background: ${resolvedAccent};" class="px-2 h-7 rounded-lg text-white text-xs font-bold flex items-center justify-center">${escapeHtml(
-          b.badgeText || 'SL'
-        )}</span>
+            b.badgeText || 'SL'
+          )}</span>
         <span style="color: ${primaryColor}; font-weight: ${fontWt};" class="${getHtmlTextSizeClass(
             b.style?.fontSize,
             'text-lg'
@@ -402,8 +429,119 @@ export function generateHtmlExport(
   </header>`;
         }
 
+        case 'ui-sidebar': {
+          const itemsHtml = (parsedOptions.length ? parsedOptions : ['Dashboard', 'Projects', 'Settings'])
+            .map(
+              (item) =>
+                `<a href="#" class="block px-3 py-2 rounded-lg hover:bg-white/10 text-sm text-slate-200 no-underline">${escapeHtml(
+                  item
+                )}</a>`
+            )
+            .join('\n        ');
+          return `  <aside id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-2">
+      <div style="color:${primaryColor};" class="text-sm font-bold border-b border-white/10 pb-2">${content}</div>
+      <nav class="space-y-1">
+        ${itemsHtml}
+      </nav>
+    </div>
+  </aside>`;
+        }
+
+        case 'ui-tabbar': {
+          const tabs = parsedOptions.length ? parsedOptions : ['Overview', 'Specs', 'Reviews'];
+          const tabsHtml = tabs
+            .map(
+              (t, idx) =>
+                `<button type="button" data-sl-tab="${escapeHtml(t)}" class="sl-tab-btn px-4 py-2 rounded-lg text-xs font-semibold ${
+                  idx === (b.counterValue ?? 0)
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-slate-400 hover:text-white'
+                }">${escapeHtml(t)}</button>`
+            )
+            .join('');
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 space-y-3">
+      <div class="flex flex-wrap gap-1 bg-[#090B10] p-1 rounded-xl border border-white/10">${tabsHtml}</div>
+      <p class="sl-tab-panel text-sm text-slate-300">${subtitle || 'Active tab panel content.'}</p>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-link': {
+          const pg = pages?.find((p) => p.id === b.targetPageId);
+          const href =
+            b.action === 'navigate-page' && pg
+              ? `${escapeHtml(pg.slug)}.html`
+              : escapeHtml(b.actionPayload || '#');
+          return `  <div id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3 ${alignClass}${customCls}">
+    <a href="${href}" style="${textFxCss} font-family:${fontFam};" class="text-sm font-semibold hover:underline">${content}</a>
+  </div>`;
+        }
+
+        case 'ui-section':
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-6${customCls}">
+    <div style="${surfaceFxCss}" class="p-7 ${radiusClass} border border-white/10 bg-white/5 ${alignClass} space-y-2">
+      <h2 style="${textFxCss}" class="text-2xl font-bold">${content}</h2>
+      ${subtitle ? `<p style="color:${subColor};" class="text-sm">${subtitle}</p>` : ''}
+    </div>
+  </section>`;
+
+        case 'ui-row': {
+          const cols = (parsedOptions.length ? parsedOptions : ['Col A', 'Col B', 'Col C'])
+            .map(
+              (c) =>
+                `<div class="flex-1 min-w-[140px] p-4 rounded-xl bg-[#090B10] border border-white/10 text-sm font-semibold text-white text-center">${escapeHtml(
+                  c
+                )}</div>`
+            )
+            .join('');
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div class="flex flex-wrap gap-3">${cols}</div>
+  </section>`;
+        }
+
+        case 'ui-column': {
+          const rows = (parsedOptions.length ? parsedOptions : ['Item 1', 'Item 2', 'Item 3'])
+            .map(
+              (c) =>
+                `<div class="w-full p-4 rounded-xl bg-[#090B10] border border-white/10 text-sm text-slate-200">${escapeHtml(
+                  c
+                )}</div>`
+            )
+            .join('');
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div class="flex flex-col gap-3">${rows}</div>
+  </section>`;
+        }
+
+        case 'ui-grid': {
+          const cells = (parsedOptions.length ? parsedOptions : ['Cell 1', 'Cell 2', 'Cell 3', 'Cell 4'])
+            .map(
+              (c) =>
+                `<div class="p-4 rounded-xl bg-[#090B10] border border-white/10 text-sm font-semibold text-white">${escapeHtml(
+                  c
+                )}</div>`
+            )
+            .join('');
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div class="grid grid-cols-1 ${b.gridColumns === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4">${cells}</div>
+  </section>`;
+        }
+
+        case 'ui-modal':
+          return `  <div id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div id="${escapeHtml(b.id)}-modal" class="hidden fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
+      <div class="bg-[#111827] border border-white/15 rounded-2xl max-w-md w-full p-6 space-y-3">
+        <h3 class="text-lg font-bold text-white">${content}</h3>
+        <p class="text-sm text-slate-300">${subtitle}</p>
+        <button type="button" onclick="document.getElementById('${escapeHtml(b.id)}-modal').classList.add('hidden')" class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold">Close</button>
+      </div>
+    </div>
+  </div>`;
+
         case 'ui-heading':
-          return `  <section id="${elId}" style="font-family: ${fontFam};" class="w-full py-16 sm:py-20 px-6">
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="w-full py-16 sm:py-20 px-6${customCls}">
     <div style="${
             bgVal && bgVal !== 'rgba(255, 255, 255, 0.04)' ? `${surfaceFxCss}` : ''
           }" class="max-w-4xl mx-auto space-y-4 ${alignClass} ${
@@ -427,7 +565,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-paragraph':
-          return `  <section id="${elId}" style="font-family: ${fontFam};" class="w-full py-4 px-6">
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="w-full py-4 px-6${customCls}">
     <div style="${surfaceFxCss}" class="max-w-4xl mx-auto ${alignClass} space-y-2 ${
             bgVal && bgVal !== 'transparent' ? `p-6 ${radiusClass} border border-white/10` : ''
           }">
@@ -448,7 +586,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-badge':
-          return `  <div id="${elId}" style="font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 pt-8 pb-2 ${alignClass}">
+          return `  <div id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 pt-8 pb-2 ${alignClass}${customCls}">
     <span style="${
       b.style?.textGradient
         ? textFxCss
@@ -464,12 +602,10 @@ export function generateHtmlExport(
   </div>`;
 
         case 'ui-stat':
-          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
-          };${b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''}${
-            b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''
-          }" class="p-6 ${radiusClass} border border-white/10 ${alignClass}">
+          };" class="p-6 ${radiusClass} border border-white/10 ${alignClass}">
       <div style="color: ${subColor};" class="text-xs font-mono uppercase tracking-wider">${escapeHtml(
             b.statLabel ?? b.subtitle ?? b.name
           )}</div>
@@ -484,12 +620,10 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-card':
-          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
-          };${b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''}${
-            b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''
-          }" class="p-6 ${radiusClass} border border-white/10 space-y-2 ${alignClass}">
+          };" class="p-6 ${radiusClass} border border-white/10 space-y-2 ${alignClass}">
       <h3 style="${textFxCss} font-weight: ${fontWt};" class="${getHtmlTextSizeClass(
             b.style?.fontSize,
             'text-xl'
@@ -499,12 +633,10 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-pricing':
-          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'linear-gradient(135deg, rgba(30,27,75,0.55), rgba(15,23,42,0.9))'
-          };${b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''}${
-            b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''
-          }" class="p-7 ${radiusClass} border border-indigo-500/30 space-y-3 ${alignClass}">
+          };" class="p-7 ${radiusClass} border border-indigo-500/30 space-y-3 ${alignClass}">
       <div class="flex items-center justify-between gap-4">
         <h3 style="${textFxCss} font-weight: ${fontWt};" class="${getHtmlTextSizeClass(
             b.style?.fontSize,
@@ -519,12 +651,10 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-testimonial':
-          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <blockquote style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
-          };${b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''}${
-            b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''
-          }" class="p-6 ${radiusClass} border border-white/10 space-y-4 ${alignClass}">
+          };" class="p-6 ${radiusClass} border border-white/10 space-y-4 ${alignClass}">
       <p style="${
         b.style?.textGradient
           ? textFxCss
@@ -543,7 +673,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-accordion':
-          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-3">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3${customCls}">
     <details id="${escapeHtml(b.id)}-details" style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
           };" class="${radiusClass} border border-white/10 group">
@@ -564,7 +694,7 @@ export function generateHtmlExport(
 
         case 'ui-input':
         case 'ui-textarea':
-          return `  <section id="${elId}" class="max-w-3xl mx-auto px-6 py-3">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-3xl mx-auto px-6 py-3${customCls}">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
           };" class="p-5 ${radiusClass} border border-white/10 space-y-2 ${alignClass}">
@@ -574,15 +704,52 @@ export function generateHtmlExport(
           ? `<textarea rows="3" data-sl-input-id="${escapeHtml(b.id)}" data-sl-input-label="${escapeHtml(
               b.subtitle || b.name
             )}" placeholder="${content}" class="w-full rounded-lg bg-[#0B0F17] border border-white/15 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500"></textarea>`
-          : `<input type="text" data-sl-input-id="${escapeHtml(b.id)}" data-sl-input-label="${escapeHtml(
+          : `<input type="${escapeHtml(b.inputType || 'text')}" data-sl-input-id="${escapeHtml(
+              b.id
+            )}" data-sl-input-label="${escapeHtml(
               b.subtitle || b.name
             )}" placeholder="${content}" class="w-full rounded-lg bg-[#0B0F17] border border-white/15 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 outline-none focus:border-indigo-500" />`
       }
     </div>
   </section>`;
 
+        case 'ui-select': {
+          const optsHtml = (parsedOptions.length ? parsedOptions : ['Option 1', 'Option 2'])
+            .map((o) => `<option value="${escapeHtml(o)}">${escapeHtml(o)}</option>`)
+            .join('');
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-3xl mx-auto px-6 py-3${customCls}">
+    <div class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-2">
+      ${subtitle ? `<label class="block text-xs font-semibold text-slate-300">${subtitle}</label>` : ''}
+      <select data-sl-input-id="${escapeHtml(b.id)}" data-sl-input-label="${escapeHtml(
+            b.subtitle || b.name
+          )}" class="w-full rounded-lg bg-[#0B0F17] border border-white/15 px-3.5 py-2.5 text-sm text-white outline-none">
+        ${optsHtml}
+      </select>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-checkbox':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-3xl mx-auto px-6 py-3${customCls}">
+    <label class="p-4 ${radiusClass} border border-white/10 bg-white/5 flex items-center gap-3 cursor-pointer">
+      <input type="${b.controlVariant === 'radio' ? 'radio' : 'checkbox'}" data-sl-input-id="${escapeHtml(
+            b.id
+          )}" ${b.isExpanded ? 'checked' : ''} class="w-4 h-4 accent-indigo-500" />
+      <span class="text-sm text-slate-200">${content}</span>
+    </label>
+  </section>`;
+
+        case 'ui-file-upload':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-3xl mx-auto px-6 py-3${customCls}">
+    <label class="block p-6 ${radiusClass} border border-dashed border-white/25 bg-white/5 text-center cursor-pointer space-y-2">
+      <div class="text-sm font-semibold text-white">${content}</div>
+      ${subtitle ? `<div class="text-xs text-slate-400">${subtitle}</div>` : ''}
+      <input type="file" data-sl-input-id="${escapeHtml(b.id)}" class="hidden" />
+    </label>
+  </section>`;
+
         case 'ui-image':
-          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-6">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-6${customCls}">
     <figure style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(17, 24, 39, 0.7)'
           };" class="overflow-hidden ${radiusClass} border border-white/10 p-6 ${alignClass} space-y-3">
@@ -601,8 +768,30 @@ export function generateHtmlExport(
     </figure>
   </section>`;
 
+        case 'ui-icon':
+          return `  <div id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4 ${alignClass}${customCls}">
+    <div class="inline-flex flex-col items-center p-5 ${radiusClass} border border-white/10 bg-white/5 gap-2">
+      <span class="px-3 py-1.5 rounded-lg bg-sky-500/20 text-sky-400 font-mono text-xs uppercase">${escapeHtml(
+        b.iconName || 'sparkles'
+      )}</span>
+      <span class="text-sm font-bold text-white">${content}</span>
+    </div>
+  </div>`;
+
+        case 'ui-video':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-3">
+      ${
+        b.videoUrl
+          ? `<video controls playsinline src="${escapeHtml(b.videoUrl)}" class="w-full rounded-xl bg-black"></video>`
+          : `<div class="h-44 rounded-xl bg-black/60 flex items-center justify-center text-sky-400 text-sm">Video Showcase</div>`
+      }
+      <div class="text-base font-bold text-white">${content}</div>
+    </div>
+  </section>`;
+
         case 'ui-avatar':
-          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-3">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3${customCls}">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
           };" class="p-5 ${radiusClass} border border-white/10 flex items-center gap-4">
@@ -620,7 +809,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'logic-counter':
-          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div id="${b.id}" style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(30, 27, 75, 0.4)'
           };" class="p-6 ${radiusClass} border border-indigo-500/30 flex items-center justify-between gap-4">
@@ -635,7 +824,7 @@ export function generateHtmlExport(
   </section>`;
 
         case 'logic-toggle':
-          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-3">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3${customCls}">
     <label style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(69, 26, 3, 0.25)'
           };" class="p-5 ${radiusClass} border border-amber-500/25 flex items-center justify-between gap-4 cursor-pointer">
@@ -647,10 +836,14 @@ export function generateHtmlExport(
     </label>
   </section>`;
 
-        case 'logic-click': {
+        case 'logic-click':
+        case 'logic-onload':
+        case 'logic-oninput':
+        case 'logic-onsubmit':
+        case 'logic-onkey': {
           const targetPage = pages?.find((p) => p.id === b.targetPageId);
           const targetHref = targetPage ? `${escapeHtml(targetPage.slug)}.html` : '';
-          return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-3">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3${customCls}">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(69, 26, 3, 0.25)'
           };" class="p-5 ${radiusClass} border border-amber-500/25 flex items-center justify-between gap-4">
@@ -674,18 +867,16 @@ export function generateHtmlExport(
         case 'ui-button': {
           const targetPage = pages?.find((p) => p.id === b.targetPageId);
           const targetHref = targetPage ? `${escapeHtml(targetPage.slug)}.html` : '';
-          return `  <div id="${elId}" class="max-w-5xl mx-auto px-6 py-4 ${alignClass}">
-    <button type="button" data-block-id="${escapeHtml(b.id)}" data-target="${escapeHtml(
-            b.targetId || ''
-          )}" data-target-page="${targetHref}" data-action="${escapeHtml(
+          return `  <div id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4 ${alignClass}${customCls}">
+    <button type="button" ${b.isDisabled ? 'disabled' : ''} data-block-id="${escapeHtml(
+            b.id
+          )}" data-target="${escapeHtml(b.targetId || '')}" data-target-page="${targetHref}" data-action="${escapeHtml(
             b.action || ''
           )}" data-payload="${escapeHtml(b.actionPayload || '')}" data-endpoint="${escapeHtml(
             b.apiEndpoint || ''
-          )}" style="font-family: ${fontFam}; background: ${
+          )}" data-method="${escapeHtml(b.httpMethod || 'GET')}" style="font-family: ${fontFam}; background: ${
             bgVal || resolvedAccent
-          }; font-weight: ${fontWt};${
-            b.style?.borderColor ? ` border: 1px solid ${b.style.borderColor};` : ''
-          }${b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''}" class="sl-action-btn px-7 py-3 ${radiusClass} text-sm shadow-lg hover:opacity-95 transition-opacity cursor-pointer">
+          }; font-weight: ${fontWt};" class="sl-action-btn px-7 py-3 ${radiusClass} text-sm shadow-lg hover:opacity-95 transition-opacity cursor-pointer disabled:opacity-45">
       <span style="${textFxCss}">${content}</span>
     </button>
   </div>`;
@@ -693,8 +884,12 @@ export function generateHtmlExport(
 
         case 'backend-flask':
         case 'backend-fetch':
+        case 'backend-storage':
+        case 'backend-db':
+        case 'backend-auth':
+        case 'backend-device':
         case 'backend-blockly':
-          return `  <section class="max-w-5xl mx-auto px-6 py-4">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(6, 78, 59, 0.3)'
           };" class="p-5 ${radiusClass} border border-emerald-500/30 space-y-1">
@@ -708,11 +903,11 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-footer':
-          return `  <footer style="font-family: ${fontFam}; background: ${
+          return `  <footer id="${elId}" style="${layoutStyle}font-family: ${fontFam}; background: ${
             bgVal || (isLightPage ? 'rgba(255, 255, 255, 0.85)' : '#0b0e16')
           };" class="w-full mt-auto border-t ${
             isLightPage ? 'border-slate-200' : 'border-white/10'
-          }">
+          }${customCls}">
     <div class="max-w-6xl mx-auto px-6 py-8 flex flex-wrap items-center justify-between gap-4 text-sm">
       <span style="color: ${getCssColor(
         b.style?.textColor,
@@ -724,7 +919,7 @@ export function generateHtmlExport(
   </footer>`;
 
         default:
-          return `  <section class="max-w-5xl mx-auto px-6 py-4">
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="font-family: ${fontFam};" class="${alignClass} space-y-1">
       <div style="color: ${primaryColor}; font-weight: ${fontWt};" class="text-base">${content}</div>
       ${subtitle ? `<p style="color: ${subColor};" class="text-sm">${subtitle}</p>` : ''}
@@ -772,10 +967,7 @@ ${renderedBlocks}
         var msg = link.getAttribute('data-nav-msg');
         if (scrollTarget) {
           var el = document.getElementById(scrollTarget);
-          if (el) {
-            e.preventDefault();
-            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
+          if (el) { e.preventDefault(); el.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
         } else if (msg) {
           e.preventDefault();
           slShowToast(msg);
@@ -790,14 +982,43 @@ ${renderedBlocks}
         var targetPage = btn.dataset.targetPage || '';
         var payload = btn.dataset.payload || '';
         var endpoint = btn.dataset.endpoint || '/api/v1/metrics';
+        var method = btn.dataset.method || 'GET';
 
-        if (action === 'navigate-page' && targetPage) {
-          window.location.href = targetPage;
-          return;
-        }
+        if (action === 'navigate-page' && targetPage) { window.location.href = targetPage; return; }
+        if (action === 'go-back') { window.history.back(); return; }
         if (action === 'scroll-to-block' && targetId) {
           var section = document.getElementById('sl-el-' + targetId);
           if (section) section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          return;
+        }
+        if (action === 'open-modal' && targetId) {
+          var m = document.getElementById(targetId + '-modal');
+          if (m) m.classList.remove('hidden');
+          return;
+        }
+        if (action === 'close-modal' && targetId) {
+          var m2 = document.getElementById(targetId + '-modal');
+          if (m2) m2.classList.add('hidden');
+          return;
+        }
+        if (action === 'show-element' && targetId) {
+          var elShow = document.getElementById('sl-el-' + targetId);
+          if (elShow) elShow.style.display = '';
+          return;
+        }
+        if (action === 'hide-element' && targetId) {
+          var elHide = document.getElementById('sl-el-' + targetId);
+          if (elHide) elHide.style.display = 'none';
+          return;
+        }
+        if (action === 'copy-clipboard') {
+          navigator.clipboard && navigator.clipboard.writeText(payload || document.title);
+          slShowToast('Copied to clipboard!');
+          return;
+        }
+        if (action === 'clear-form') {
+          document.querySelectorAll('[data-sl-input-id]').forEach(function(inp) { inp.value = ''; });
+          slShowToast('Form cleared');
           return;
         }
         if (action === 'submit-form') {
@@ -815,11 +1036,7 @@ ${renderedBlocks}
             var anchor = document.querySelector(payload);
             if (anchor) anchor.scrollIntoView({ behavior: 'smooth', block: 'center' });
           } else {
-            var a = document.createElement('a');
-            a.href = payload;
-            a.target = '_blank';
-            a.rel = 'noopener noreferrer';
-            a.click();
+            window.location.href = payload;
           }
           return;
         }
@@ -829,18 +1046,20 @@ ${renderedBlocks}
           var chk = targetId ? document.getElementById(targetId + '-toggle') : document.querySelector('input[type="checkbox"]');
           if (chk) { chk.checked = !chk.checked; return; }
         }
+        if (action === 'save-storage') {
+          localStorage.setItem('sl_user_data', payload || 'saved');
+          slShowToast('Saved to LocalStorage');
+          return;
+        }
         if (action === 'call-api') {
-          fetch(endpoint).then(function(r) { return r.json(); }).then(function(d) {
+          fetch(endpoint, { method: method }).then(function(r) { return r.json(); }).then(function(d) {
             slShowToast('API 200 OK: ' + JSON.stringify(d));
           }).catch(function() {
-            slShowToast('Called endpoint: ' + endpoint);
+            slShowToast('Called ' + method + ' ' + endpoint);
           });
           return;
         }
-        if (action === 'alert') {
-          slShowToast(payload || 'Action executed!');
-          return;
-        }
+        if (action === 'alert') { slShowToast(payload || 'Action executed!'); return; }
         var counterEl = targetId ? document.getElementById(targetId + '-val') : document.querySelector('[id$="-val"]');
         if (counterEl) {
           counterEl.textContent = String(Number(counterEl.textContent || 0) + 1);
@@ -891,6 +1110,14 @@ export function generateReactTsxExport(
         case 'ui-paragraph':
           return `      <section className="max-w-4xl mx-auto px-6 py-4">
         <p className="text-base text-slate-300 leading-relaxed">{${safeTitle}}</p>
+      </section>`;
+        case 'ui-grid':
+          return `      <section className="max-w-5xl mx-auto px-6 py-4 grid grid-cols-1 ${
+            b.gridColumns === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'
+          } gap-4">
+        {${JSON.stringify(parseOptionsList(b.content, b.options))}.map((item, i) => (
+          <div key={i} className="p-4 rounded-xl bg-white/5 border border-white/10 font-semibold text-white">{item}</div>
+        ))}
       </section>`;
         case 'logic-counter':
           return `      <section className="max-w-5xl mx-auto px-6 py-4">
@@ -969,22 +1196,35 @@ ${jsxBody}
 
 export function generateFlaskExport(projectName: string, blocks: CanvasBlock[]): string {
   const apiBlocks = blocks.filter(
-    (b) => b.type === 'backend-flask' || b.type === 'backend-fetch'
+    (b) => b.type === 'backend-flask' || b.type === 'backend-fetch' || b.type === 'backend-db'
   );
 
   const routes =
     apiBlocks.length > 0
       ? apiBlocks
           .map((b, idx) => {
+            if (b.type === 'backend-db') {
+              const col = b.logicConfig?.collectionName || 'users';
+              return `@app.route("/api/v1/${col}", methods=["GET", "POST", "DELETE"])
+def collection_${idx + 1}():
+    payload = request.get_json(silent=True) or {}
+    return jsonify({
+        "collection": ${JSON.stringify(col)},
+        "method": request.method,
+        "received": payload,
+        "status": "ok"
+    })`;
+            }
             const path = b.apiEndpoint || `/api/v1/resource_${idx + 1}`;
+            const method = b.httpMethod || 'GET';
             const fnName = `handler_${idx + 1}`;
-            return `@app.route("${path}", methods=["GET", "POST"])
+            return `@app.route("${path}", methods=[${JSON.stringify(method)}, "OPTIONS"])
 def ${fnName}():
     return jsonify({
         "service": ${JSON.stringify(b.name)},
+        "method": request.method,
         "endpoint": ${JSON.stringify(path)},
-        "status": "ok",
-        "uptime": "99.98%"
+        "status": "ok"
     })`;
           })
           .join('\n\n')
@@ -1018,8 +1258,12 @@ export function generateCssExport(
 
   const blockRules = blocks
     .map((b, idx) => {
-      const selector = `.sl-block-${idx + 1}-${b.type}`;
-      const align = b.style?.textAlign || (b.type === 'ui-heading' || b.type === 'ui-button' ? 'center' : 'left');
+      const selector = `.sl-block-${idx + 1}-${b.type}${
+        b.style?.customClass ? `.${b.style.customClass.trim().replace(/\s+/g, '.')}` : ''
+      }`;
+      const align =
+        b.style?.textAlign ||
+        (b.type === 'ui-heading' || b.type === 'ui-button' ? 'center' : 'left');
       const radius =
         b.style?.borderRadius === 'rounded-full'
           ? '9999px'
@@ -1072,7 +1316,11 @@ ${selector} {
   color: ${color};
   background: ${bg};
   border-radius: ${radius};
-  padding: ${pad};
+  padding: ${pad};${b.style?.width ? `\n  width: ${b.style.width};` : ''}${
+        b.style?.height ? `\n  min-height: ${b.style.height};` : ''
+      }${b.style?.margin ? `\n  margin: ${b.style.margin};` : ''}${
+        b.style?.isHidden ? '\n  display: none;' : ''
+      }
 }`;
     })
     .join('\n\n');
@@ -1148,25 +1396,43 @@ document.querySelectorAll('#sl-el-${b.id} .sl-nav-link').forEach((linkEl) => {
         return `// Reactive Counter State: ${b.name}
 let counter_${b.id.replace(/[^a-zA-Z0-9_]/g, '_')} = ${b.counterValue ?? 0};`;
       }
+      if (b.type === 'logic-onkey') {
+        return `// Keyboard Shortcut Hat: ${b.name}
+document.addEventListener('keydown', (e) => {
+  if (e.key === ${JSON.stringify(b.triggerKey || 'Enter')}) {
+    slShowToast(${JSON.stringify(b.actionPayload || 'Shortcut triggered!')});
+  }
+});`;
+      }
+      if (b.type === 'backend-storage') {
+        const key = b.logicConfig?.storageKey || 'sl_user_data';
+        return `// LocalStorage Action: ${b.name}
+localStorage.setItem(${JSON.stringify(key)}, ${JSON.stringify(b.logicConfig?.varValue || '')});`;
+      }
       if (b.type === 'backend-flask' || b.type === 'backend-fetch') {
         const endpoint = b.apiEndpoint || '/api/v1/metrics';
-        return `// API Handler: ${b.name}
+        const method = b.httpMethod || 'GET';
+        return `// HTTP Request (${method}): ${b.name}
 async function call_${b.id.replace(/[^a-zA-Z0-9_]/g, '_')}() {
-  const res = await fetch(${JSON.stringify(endpoint)}, { method: 'GET' });
-  const data = await res.json();
-  console.log('Response from ${endpoint}:', data);
-  return data;
+  const res = await fetch(${JSON.stringify(endpoint)}, {
+    method: ${JSON.stringify(method)},
+    headers: ${b.requestHeaders || '{"Content-Type":"application/json"}'},
+    ${method !== 'GET' ? `body: ${JSON.stringify(b.requestBody || '{}')},` : ''}
+  });
+  return res.json();
 }`;
       }
-      if (b.type === 'ui-button' || b.type === 'logic-click') {
+      if (b.type === 'ui-button' || b.type.startsWith('logic-')) {
         const targetId = b.targetId || blocks.find((t) => t.type === 'logic-counter')?.id || '';
         const action = b.action || 'increment-counter';
-        let bodyCode = '';
+        let bodyCode = `slShowToast(${JSON.stringify(b.actionPayload || `Executed ${b.name}`)});`;
         if (action === 'navigate-page') {
           const pg = pages?.find((p) => p.id === b.targetPageId);
           bodyCode = pg
             ? `window.location.href = ${JSON.stringify(`${pg.slug}.html`)};`
             : `slShowToast('Select a target page in the JavaScript tab.');`;
+        } else if (action === 'go-back') {
+          bodyCode = `window.history.back();`;
         } else if (action === 'scroll-to-block' && b.targetId) {
           bodyCode = `document.getElementById(${JSON.stringify(`sl-el-${b.targetId}`)})?.scrollIntoView({ behavior: 'smooth', block: 'center' });`;
         } else if (action === 'submit-form') {
@@ -1174,21 +1440,20 @@ async function call_${b.id.replace(/[^a-zA-Z0-9_]/g, '_')}() {
     .map((el) => (el.getAttribute('data-sl-input-label') || 'Field') + ': ' + (el.value || '').trim())
     .filter((v) => !v.endsWith(': '));
   slShowToast(${JSON.stringify(b.actionPayload || '')} || (fields.length ? 'Submitted -> ' + fields.join(' | ') : 'Form submitted!'));`;
+        } else if (action === 'clear-form') {
+          bodyCode = `document.querySelectorAll('[data-sl-input-id]').forEach((el) => { el.value = ''; });`;
+        } else if (action === 'copy-clipboard') {
+          bodyCode = `navigator.clipboard?.writeText(${JSON.stringify(b.actionPayload || projectName)}); slShowToast('Copied!');`;
+        } else if (action === 'show-element' && b.targetId) {
+          bodyCode = `const t = document.getElementById(${JSON.stringify(`sl-el-${b.targetId}`)}); if (t) t.style.display = '';`;
+        } else if (action === 'hide-element' && b.targetId) {
+          bodyCode = `const t = document.getElementById(${JSON.stringify(`sl-el-${b.targetId}`)}); if (t) t.style.display = 'none';`;
         } else if (action === 'open-url') {
-          const url = b.actionPayload || 'https://example.com';
-          bodyCode = `window.open(${JSON.stringify(url)}, '_blank', 'noopener,noreferrer');`;
-        } else if (action === 'toggle-visibility') {
-          bodyCode = `const details = document.getElementById(${JSON.stringify(`${b.targetId || ''}-details`)});
-  if (details) details.open = !details.open;`;
+          bodyCode = `window.location.href = ${JSON.stringify(b.actionPayload || 'https://example.com')};`;
         } else if (action === 'call-api') {
           bodyCode = `fetch(${JSON.stringify(b.apiEndpoint || '/api/v1/metrics')}).then((r) => r.json()).then((d) => slShowToast('API 200 OK: ' + JSON.stringify(d)));`;
-        } else if (action === 'alert') {
-          bodyCode = `slShowToast(${JSON.stringify(b.actionPayload || `Clicked ${b.name}`)});`;
-        } else if (targetId) {
-          bodyCode = `const el = document.getElementById('${targetId}-val');
-  if (el) el.textContent = String(Number(el.textContent || 0) + 1);`;
-        } else {
-          bodyCode = `slShowToast(${JSON.stringify(b.actionPayload || `Clicked ${b.name}`)});`;
+        } else if (action === 'increment-counter' && targetId) {
+          bodyCode = `const el = document.getElementById('${targetId}-val'); if (el) el.textContent = String(Number(el.textContent || 0) + 1);`;
         }
 
         return `// Event Listener (${action}): ${b.name}
