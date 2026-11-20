@@ -8,6 +8,12 @@ export interface StudioConsoleEntry {
   message: string;
 }
 
+export interface FormSubmissionSnapshot {
+  timestamp: string;
+  message: string;
+  fields: Array<{ label: string; value: string }>;
+}
+
 export interface StudioRuntimeState {
   variables: Record<string, string | number | boolean>;
   lists: Record<string, string[]>;
@@ -21,6 +27,7 @@ export interface StudioRuntimeState {
   styleOverrides: Record<string, React.CSSProperties>;
   textOverrides: Record<string, string>;
   consoleLogs: StudioConsoleEntry[];
+  lastSubmission?: FormSubmissionSnapshot | null;
 }
 
 export const INITIAL_RUNTIME_STATE: StudioRuntimeState = {
@@ -52,12 +59,14 @@ export const INITIAL_RUNTIME_STATE: StudioRuntimeState = {
   styleOverrides: {},
   textOverrides: {},
   consoleLogs: [],
+  lastSubmission: null,
 };
 
 export function resolveOperandValue(
   raw: string | undefined,
   variables: Record<string, string | number | boolean>,
-  formInputs: Record<string, string>
+  formInputs: Record<string, string>,
+  blocks?: Array<{ id: string; type: string; name: string; subtitle?: string; counterValue?: number }>
 ): string {
   const token = (raw ?? '').trim();
   if (!token) return '';
@@ -66,6 +75,24 @@ export function resolveOperandValue(
   }
   if (Object.prototype.hasOwnProperty.call(formInputs, token)) {
     return String(formInputs[token]);
+  }
+  if (blocks && blocks.length > 0) {
+    const lower = token.toLowerCase();
+    if (lower === 'counter' || lower === 'clicks') {
+      const counterBlk = blocks.find((b) => b.type === 'logic-counter');
+      if (counterBlk) return String(counterBlk.counterValue ?? 0);
+    }
+    const matchedInput = blocks.find(
+      (b) =>
+        (b.type.startsWith('ui-input') ||
+          b.type === 'ui-textarea' ||
+          b.type === 'ui-select' ||
+          b.type === 'ui-checkbox') &&
+        (b.name.toLowerCase() === lower || (b.subtitle || '').toLowerCase() === lower)
+    );
+    if (matchedInput && Object.prototype.hasOwnProperty.call(formInputs, matchedInput.id)) {
+      return String(formInputs[matchedInput.id]);
+    }
   }
   return token;
 }
@@ -105,10 +132,11 @@ function comparePair(
 export function evaluateLogicCondition(
   cfg: BlockLogicConfig | undefined,
   variables: Record<string, string | number | boolean>,
-  formInputs: Record<string, string>
+  formInputs: Record<string, string>,
+  blocks?: Array<{ id: string; type: string; name: string; subtitle?: string; counterValue?: number }>
 ): boolean {
-  const left = resolveOperandValue(cfg?.leftOperand || 'score', variables, formInputs);
-  const right = resolveOperandValue(cfg?.rightOperand || '10', variables, formInputs);
+  const left = resolveOperandValue(cfg?.leftOperand || 'score', variables, formInputs, blocks);
+  const right = resolveOperandValue(cfg?.rightOperand || '10', variables, formInputs, blocks);
   const firstResult = comparePair(left, cfg?.operator || '>=', right);
 
   const combinator = cfg?.combinator || 'NONE';
@@ -116,8 +144,8 @@ export function evaluateLogicCondition(
     return !firstResult;
   }
   if (combinator === 'AND' || combinator === 'OR') {
-    const left2 = resolveOperandValue(cfg?.secondLeft || 'isLoggedIn', variables, formInputs);
-    const right2 = resolveOperandValue(cfg?.secondRight || 'true', variables, formInputs);
+    const left2 = resolveOperandValue(cfg?.secondLeft || 'isLoggedIn', variables, formInputs, blocks);
+    const right2 = resolveOperandValue(cfg?.secondRight || 'true', variables, formInputs, blocks);
     const secondResult = comparePair(left2, cfg?.secondOp || '==', right2);
     return combinator === 'AND' ? firstResult && secondResult : firstResult || secondResult;
   }
@@ -194,12 +222,20 @@ export function validateInputValue(
   return { valid: ok, reason: ok ? 'Field is valid' : 'This field cannot be empty' };
 }
 
-export function parseOptionsList(rawContent?: string, explicit?: string[]): string[] {
+export function parseOptionsList(
+  rawContent?: string,
+  explicit?: string[],
+  fallback?: string[]
+): string[] {
   if (Array.isArray(explicit) && explicit.length > 0) {
     return explicit;
   }
-  return (rawContent || '')
+  const parsed = (rawContent || '')
     .split(/[,|·]+/)
     .map((s) => s.trim())
     .filter(Boolean);
+  if (parsed.length > 0) {
+    return parsed;
+  }
+  return fallback || [];
 }

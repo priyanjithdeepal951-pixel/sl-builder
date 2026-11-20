@@ -44,6 +44,8 @@ import {
   Terminal,
   Eye,
   EyeOff,
+  GripVertical,
+  Image as ImageIcon,
 } from 'lucide-react';
 import {
   BlockActionType,
@@ -90,8 +92,10 @@ import {
   StudioRuntimeState,
   evaluateLogicCondition,
   evaluateMathTextOperation,
+  parseOptionsList,
   validateInputValue,
 } from '../../utils/studioRuntime';
+import { readAndCompressImageFile } from '../../utils/imageUpload';
 import { useTheme } from '../../context/ThemeContext';
 
 interface ScratchStudioProps {
@@ -230,6 +234,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   const [runningTimers, setRunningTimers] = useState<Record<string, boolean>>({});
   const [confirmDialog, setConfirmDialog] = useState<PreviewConfirmDialog | null>(null);
   const pendingConfirmActionRef = useRef<(() => void) | null>(null);
+  const [canvasDropIndex, setCanvasDropIndex] = useState<number | null>(null);
+  const [draggingCanvasBlockId, setDraggingCanvasBlockId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -388,12 +394,37 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     onToast(`Removed page "${target?.name || 'Page'}"`, 'info');
   };
 
-  // =================== BLOCK ACTIONS ===================
-  const handleAddTemplateBlock = (tpl: WebStudioBlockTemplate) => {
+  // =================== BLOCK ACTIONS & EXACT-POSITION DRAG & DROP ===================
+  const handleInsertTemplateAt = (tpl: WebStudioBlockTemplate, targetIndex?: number) => {
     const created = createCanvasBlockFromTemplate(tpl);
-    commitBlocks((prev) => [...prev, created]);
+    commitBlocks((prev) => {
+      if (targetIndex === undefined || targetIndex < 0 || targetIndex >= prev.length) {
+        return [...prev, created];
+      }
+      const next = [...prev];
+      next.splice(targetIndex, 0, created);
+      return next;
+    });
     setSelectedBlockId(created.id);
-    onToast(`Added ${tpl.name} to canvas`, 'success');
+    onToast(`Added ${tpl.name}`, 'success');
+  };
+
+  const handleAddTemplateBlock = (tpl: WebStudioBlockTemplate) => {
+    handleInsertTemplateAt(tpl);
+  };
+
+  const handleMoveBlockToIndex = (draggedId: string, targetIndex: number) => {
+    commitBlocks((prev) => {
+      const fromIdx = prev.findIndex((b) => b.id === draggedId);
+      if (fromIdx < 0) return prev;
+      let insertAt = Math.max(0, Math.min(prev.length, targetIndex));
+      if (fromIdx < insertAt) insertAt -= 1;
+      if (insertAt === fromIdx) return prev;
+      const copy = [...prev];
+      const [item] = copy.splice(fromIdx, 1);
+      copy.splice(insertAt, 0, item);
+      return copy;
+    });
   };
 
   const handlePaletteDragStart = (e: React.DragEvent, tpl: WebStudioBlockTemplate) => {
@@ -402,14 +433,116 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     e.dataTransfer.effectAllowed = 'copy';
   };
 
-  const handleCanvasDrop = (e: React.DragEvent) => {
+  const handleCanvasBlockDragStart = (e: React.DragEvent, blockId: string) => {
+    setDraggingCanvasBlockId(blockId);
+    e.dataTransfer.setData('application/x-slbuilder-move-id', blockId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDropAtIndex = async (e: React.DragEvent, targetIndex: number) => {
     e.preventDefault();
+    e.stopPropagation();
+    setCanvasDropIndex(null);
+    setDraggingCanvasBlockId(null);
+
+    // 1. Dropped real photo file from computer
+    const droppedFiles = e.dataTransfer.files;
+    if (droppedFiles && droppedFiles.length > 0) {
+      const imgFile = Array.from(droppedFiles).find((f) => f.type.startsWith('image/'));
+      if (imgFile) {
+        try {
+          const dataUrl = await readAndCompressImageFile(imgFile);
+          const imgTpl =
+            WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === 'tpl-image') ||
+            WEB_STUDIO_BLOCK_TEMPLATES[0];
+          const created = createCanvasBlockFromTemplate(imgTpl);
+          created.imageUrl = dataUrl;
+          created.content = imgFile.name.replace(/\.[^.]+$/, '') || 'Uploaded Photo';
+          commitBlocks((prev) => {
+            const idx = Math.max(0, Math.min(prev.length, targetIndex));
+            const next = [...prev];
+            next.splice(idx, 0, created);
+            return next;
+          });
+          setSelectedBlockId(created.id);
+          onToast(`Added photo "${imgFile.name}"`, 'success');
+        } catch (err) {
+          onToast(err instanceof Error ? err.message : 'Failed to load image', 'error');
+        }
+        return;
+      }
+    }
+
+    // 2. Reordering existing block
+    const moveId = e.dataTransfer.getData('application/x-slbuilder-move-id');
+    if (moveId) {
+      handleMoveBlockToIndex(moveId, targetIndex);
+      return;
+    }
+
+    // 3. New block from left palette
     const tplId = e.dataTransfer.getData('application/x-slbuilder-tpl-id');
     const blockType = e.dataTransfer.getData('application/x-slbuilder-type');
     const tpl =
       (tplId ? WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === tplId) : undefined) ||
       (blockType ? WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.type === blockType) : undefined);
-    if (tpl) handleAddTemplateBlock(tpl);
+    if (tpl) {
+      handleInsertTemplateAt(tpl, targetIndex);
+    }
+  };
+
+  const handleDropPayloadAtIndex = (
+    payload: {
+      tplId?: string;
+      blockType?: string;
+      moveBlockId?: string;
+      imageDataUrl?: string;
+      fileName?: string;
+    },
+    targetIndex: number
+  ) => {
+    setCanvasDropIndex(null);
+    setDraggingCanvasBlockId(null);
+
+    if (payload.imageDataUrl) {
+      const imgTpl =
+        WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === 'tpl-image') ||
+        WEB_STUDIO_BLOCK_TEMPLATES[0];
+      const created = createCanvasBlockFromTemplate(imgTpl);
+      created.imageUrl = payload.imageDataUrl;
+      created.content =
+        (payload.fileName || 'Uploaded Photo').replace(/\.[^.]+$/, '') || 'Uploaded Photo';
+      commitBlocks((prev) => {
+        const idx = Math.max(0, Math.min(prev.length, targetIndex));
+        const next = [...prev];
+        next.splice(idx, 0, created);
+        return next;
+      });
+      setSelectedBlockId(created.id);
+      onToast(`Added photo "${payload.fileName || 'image'}"`, 'success');
+      return;
+    }
+
+    if (payload.moveBlockId) {
+      handleMoveBlockToIndex(payload.moveBlockId, targetIndex);
+      return;
+    }
+
+    const tpl =
+      (payload.tplId
+        ? WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === payload.tplId)
+        : undefined) ||
+      (payload.blockType
+        ? WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.type === payload.blockType)
+        : undefined);
+    if (tpl) {
+      handleInsertTemplateAt(tpl, targetIndex);
+    }
+  };
+
+  const handleCanvasDrop = (e: React.DragEvent) => {
+    const fallbackIdx = canvasDropIndex !== null ? canvasDropIndex : blocks.length;
+    void handleDropAtIndex(e, fallbackIdx);
   };
 
   const handleUpdateBlock = (updated: CanvasBlock) => {
@@ -451,11 +584,14 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   };
 
   const handleFormInputChange = (blockId: string, value: string, fireInputEvent = true) => {
-    setFormInputs((prev) => ({ ...prev, [blockId]: value }));
+    const updatedInputs = { ...formInputs, [blockId]: value };
+    setFormInputs(updatedInputs);
     if (!fireInputEvent) return;
-    const listeners = blocks.filter(
-      (b) => b.type === 'logic-oninput' && (!b.targetId || b.targetId === blockId)
-    );
+    const listeners = blocks.filter((b) => {
+      if (b.type !== 'logic-oninput') return false;
+      const sourceMatch = b.logicConfig?.triggerSourceId || b.targetId;
+      return !sourceMatch || sourceMatch === blockId;
+    });
     listeners.forEach((hat) => {
       const varName = hat.logicConfig?.varName;
       if (varName) {
@@ -467,46 +603,512 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       if (hat.action === 'validate-input') {
         const res = validateInputValue(value, hat.logicConfig?.validationRule || 'not-empty');
         appendConsoleLog(res.valid ? 'success' : 'warn', `${hat.name}: ${res.reason}`);
+      } else if (hat.action) {
+        const resolvedPayload = (hat.actionPayload || '').includes('{{value}}')
+          ? (hat.actionPayload || '').replace(/\{\{value\}\}/g, value)
+          : hat.action === 'change-text' && !hat.actionPayload
+          ? value || ' '
+          : hat.actionPayload;
+        handleTriggerAction(
+          { ...hat, actionPayload: resolvedPayload },
+          updatedInputs,
+          1
+        );
       }
     });
   };
 
-  // Keyboard listener for logic-onkey hat blocks inside studio stage
-  useEffect(() => {
-    const keyHats = blocks.filter((b) => b.type === 'logic-onkey');
-    if (keyHats.length === 0) return;
-    const handler = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
-      const normalized = e.key === ' ' ? 'Space' : e.key;
-      keyHats.forEach((hat) => {
-        if ((hat.triggerKey || 'Enter') === normalized) {
-          e.preventDefault();
-          onToast(hat.actionPayload || `Key [${normalized}] triggered "${hat.name}"`, 'info');
-          appendConsoleLog('log', `Key "${normalized}" fired -> ${hat.name}`);
+  // Helper to read any form input block's effective value (including dropdown/radio/checkbox defaults)
+  const collectFormFields = (currentInputs: Record<string, string>) => {
+    const inputBlocks = blocks.filter(
+      (b) =>
+        b.type === 'ui-input' ||
+        b.type === 'ui-textarea' ||
+        b.type === 'ui-select' ||
+        b.type === 'ui-checkbox' ||
+        b.type === 'ui-file-upload'
+    );
+    const fields: Array<{ id: string; label: string; value: string; hasUserEntry: boolean }> = [];
+    inputBlocks.forEach((inp) => {
+      const label = (inp.subtitle || inp.name || 'Field').trim();
+      const rawTyped = currentInputs[inp.id];
+      if (inp.type === 'ui-select') {
+        const opts = parseOptionsList(inp.content, inp.options, ['Option 1', 'Option 2']);
+        const val = (rawTyped !== undefined ? rawTyped : opts[0] || '').trim();
+        if (val) fields.push({ id: inp.id, label, value: val, hasUserEntry: true });
+      } else if (inp.type === 'ui-checkbox') {
+        if (inp.controlVariant === 'radio') {
+          const choices = parseOptionsList(inp.content, inp.options, ['Choice A', 'Choice B']);
+          const val = (rawTyped !== undefined ? rawTyped : choices[0] || '').trim();
+          if (val) fields.push({ id: inp.id, label, value: val, hasUserEntry: true });
+        } else {
+          const checked = rawTyped !== undefined ? rawTyped === 'true' : Boolean(inp.isExpanded);
+          fields.push({
+            id: inp.id,
+            label,
+            value: checked ? 'Yes' : 'No',
+            hasUserEntry: checked || rawTyped !== undefined,
+          });
         }
-      });
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [blocks, onToast, appendConsoleLog]);
+      } else {
+        const val = (rawTyped || '').trim();
+        if (val) {
+          const displayVal = inp.inputType === 'password' ? '••••••' : val;
+          fields.push({ id: inp.id, label, value: displayVal, hasUserEntry: true });
+        }
+      }
+    });
+    return { inputBlocks, fields };
+  };
 
-  // Reactive Logic, Navigation, Data, Storage, Cloud DB, Auth & Device Executor
+  // Reactive Logic, Navigation, Data, Storage, Cloud DB, Auth, Events & DOM Executor
   const handleTriggerAction = (
     sourceBlock: CanvasBlock,
-    passedFormValues?: Record<string, string>
+    passedFormValues?: Record<string, string>,
+    recursionDepth = 0
   ) => {
+    if (recursionDepth > 2) return;
     const currentInputs = passedFormValues ?? formInputs;
     const cfg = sourceBlock.logicConfig;
 
-    // 1. Direct Logic / Data / Backend Block Execution (when clicked directly or targeted)
+    const runAction = (action: BlockActionType, actor: CanvasBlock) => {
+      const aCfg = actor.logicConfig;
+
+      if (action === 'navigate-page') {
+        const targetPage =
+          pages.find((p) => p.id === actor.targetPageId) ||
+          pages.find((p) => p.id !== activePage?.id);
+        if (targetPage) {
+          handleSelectPage(targetPage.id);
+          onToast(`Navigated to "${targetPage.name}"`, 'success');
+          appendConsoleLog('log', `Navigated to /${targetPage.slug}`);
+        } else {
+          onToast('Add another page or select a Target Page in the JavaScript tab!', 'info');
+        }
+        return;
+      }
+
+      if (action === 'go-back') {
+        const prevId = pageHistory[pageHistory.length - 1];
+        if (prevId && pages.some((p) => p.id === prevId)) {
+          setPageHistory((h) => h.slice(0, -1));
+          handleSelectPage(prevId, false);
+          onToast('Returned to previous page', 'info');
+        } else {
+          onToast('No previous page in history yet.', 'info');
+        }
+        return;
+      }
+
+      if (action === 'scroll-to-block') {
+        const targetBlock =
+          blocks.find((b) => b.id === actor.targetId) ||
+          blocks.find((b) => b.id !== actor.id);
+        if (targetBlock) {
+          const el = document.getElementById(`sl-el-${targetBlock.id}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setSelectedBlockId(targetBlock.id);
+          onToast(`Scrolled to "${targetBlock.name}"`, 'success');
+        } else {
+          onToast('Select a Target Block to scroll to in the JavaScript tab.', 'info');
+        }
+        return;
+      }
+
+      if (action === 'open-modal' || action === 'close-modal') {
+        const modalTarget =
+          blocks.find((b) => b.id === actor.targetId && b.type === 'ui-modal') ||
+          blocks.find((b) => b.type === 'ui-modal');
+        if (modalTarget) {
+          const open = action === 'open-modal';
+          setRuntimeState((prev) => ({
+            ...prev,
+            openModals: { ...prev.openModals, [modalTarget.id]: open },
+          }));
+          appendConsoleLog('log', `${open ? 'Opened' : 'Closed'} modal "${modalTarget.name}"`);
+        } else {
+          onToast('Add a Modal / Drawer block to wire this action.', 'info');
+        }
+        return;
+      }
+
+      if (action === 'show-element' || action === 'hide-element') {
+        const targetId = actor.targetId || blocks.find((b) => b.id !== actor.id)?.id;
+        if (targetId) {
+          const hide = action === 'hide-element';
+          setRuntimeState((prev) => ({
+            ...prev,
+            hiddenBlocks: { ...prev.hiddenBlocks, [targetId]: hide },
+          }));
+          onToast(`${hide ? 'Hid' : 'Shown'} target element`, 'info');
+        }
+        return;
+      }
+
+      if (action === 'change-text') {
+        const targetId = actor.targetId || blocks.find((b) => b.id !== actor.id)?.id;
+        if (targetId) {
+          const nextText = actor.actionPayload || 'Updated Text!';
+          setRuntimeState((prev) => ({
+            ...prev,
+            textOverrides: { ...prev.textOverrides, [targetId]: nextText },
+          }));
+          onToast(`Updated element text -> "${nextText}"`, 'success');
+        }
+        return;
+      }
+
+      if (action === 'set-style') {
+        const targetId = actor.targetId || blocks.find((b) => b.id !== actor.id)?.id;
+        if (targetId) {
+          const prop = aCfg?.styleProp || 'backgroundColor';
+          const val = aCfg?.styleValue || '#312e81';
+          setRuntimeState((prev) => ({
+            ...prev,
+            styleOverrides: {
+              ...prev.styleOverrides,
+              [targetId]: { ...(prev.styleOverrides[targetId] || {}), [prop]: val },
+            },
+          }));
+          onToast(`Applied style ${prop}: ${val}`, 'success');
+        }
+        return;
+      }
+
+      if (action === 'add-class' || action === 'remove-class') {
+        const targetId = actor.targetId || blocks.find((b) => b.id !== actor.id)?.id;
+        const cls = (aCfg?.cssClass || 'ring-2 ring-emerald-400').trim();
+        if (targetId && cls) {
+          setRuntimeState((prev) => {
+            const existing = prev.extraClasses[targetId] || [];
+            const next =
+              action === 'add-class'
+                ? Array.from(new Set([...existing, cls]))
+                : existing.filter((c) => c !== cls);
+            return { ...prev, extraClasses: { ...prev.extraClasses, [targetId]: next } };
+          });
+          onToast(`${action === 'add-class' ? 'Added' : 'Removed'} class "${cls}"`, 'info');
+        }
+        return;
+      }
+
+      if (action === 'toggle-disabled') {
+        const targetId = actor.targetId || blocks.find((b) => b.type === 'ui-button')?.id;
+        if (targetId) {
+          setRuntimeState((prev) => ({
+            ...prev,
+            disabledBlocks: {
+              ...prev.disabledBlocks,
+              [targetId]: !prev.disabledBlocks[targetId],
+            },
+          }));
+          onToast('Toggled target button disabled state', 'info');
+        }
+        return;
+      }
+
+      if (action === 'clear-form') {
+        setFormInputs({});
+        setRuntimeState((prev) => ({ ...prev, lastSubmission: null }));
+        onToast('Cleared all form inputs', 'info');
+        appendConsoleLog('log', 'Form inputs cleared');
+        return;
+      }
+
+      if (action === 'validate-input') {
+        const targetInp =
+          blocks.find((b) => b.id === actor.targetId) ||
+          blocks.find(
+            (b) =>
+              b.type === 'ui-input' ||
+              b.type === 'ui-textarea' ||
+              b.type === 'ui-select' ||
+              b.type === 'ui-checkbox'
+          );
+        const val = targetInp ? currentInputs[targetInp.id] || '' : '';
+        const check = validateInputValue(val, aCfg?.validationRule || 'not-empty');
+        onToast(check.reason, check.valid ? 'success' : 'error');
+        appendConsoleLog(check.valid ? 'success' : 'error', `Validation: ${check.reason}`);
+        return;
+      }
+
+      if (action === 'get-input-value') {
+        const targetInp =
+          blocks.find((b) => b.id === actor.targetId) ||
+          blocks.find(
+            (b) =>
+              b.type === 'ui-input' ||
+              b.type === 'ui-textarea' ||
+              b.type === 'ui-select' ||
+              b.type === 'ui-checkbox'
+          );
+        const val = targetInp ? currentInputs[targetInp.id] || '' : '';
+        const varName = aCfg?.varName || 'inputValue';
+        setRuntimeState((prev) => ({
+          ...prev,
+          variables: { ...prev.variables, [varName]: val },
+        }));
+        onToast(`Read ${varName} = "${val}"`, 'info');
+        appendConsoleLog('log', `Get Input => ${varName} = "${val}"`);
+        return;
+      }
+
+      if (action === 'set-input-value') {
+        const targetInp =
+          blocks.find((b) => b.id === actor.targetId) ||
+          blocks.find(
+            (b) =>
+              b.type === 'ui-input' ||
+              b.type === 'ui-textarea' ||
+              b.type === 'ui-select'
+          );
+        if (targetInp) {
+          const newVal = actor.actionPayload || 'Hello from SL Builder';
+          setFormInputs((prev) => ({ ...prev, [targetInp.id]: newVal }));
+          onToast(`Set input value to "${newVal}"`, 'success');
+        }
+        return;
+      }
+
+      if (action === 'submit-form') {
+        const { inputBlocks, fields } = collectFormFields(currentInputs);
+        const anyMeaningful = fields.some((f) => f.hasUserEntry);
+        if (inputBlocks.length > 0 && fields.length === 0) {
+          onToast('Fill in at least one form input above, then click Submit!', 'info');
+          return;
+        }
+        const summary = fields.map((i) => `${i.label}: ${i.value}`).join(' · ');
+        const customMsg = (actor.actionPayload || '').trim();
+        const msg = customMsg || (anyMeaningful ? 'Form submitted successfully!' : 'Submitted form values!');
+        const snapshot = {
+          timestamp: new Date().toLocaleTimeString(),
+          message: msg,
+          fields: fields.map((f) => ({ label: f.label, value: f.value })),
+        };
+        const recordData: Record<string, unknown> = {};
+        fields.forEach((f) => {
+          recordData[f.label] = f.value;
+        });
+        setRuntimeState((prev) => ({
+          ...prev,
+          lastSubmission: snapshot,
+          variables: {
+            ...prev.variables,
+            lastSubmissionCount: fields.length,
+            ...(fields[0] ? { lastInput: fields[0].value } : {}),
+          },
+          dbCollections: {
+            ...prev.dbCollections,
+            submissions: [
+              ...(prev.dbCollections.submissions || []),
+              {
+                id: `sub_${Date.now().toString(36).slice(-4)}`,
+                data: recordData,
+                createdAt: snapshot.timestamp,
+              },
+            ],
+          },
+        }));
+        onToast(summary ? `${msg} (${summary})` : msg, 'success');
+        appendConsoleLog('success', summary ? `Form Submitted → ${summary}` : msg);
+
+        // Execute any "When Form is Submitted" Hat blocks
+        if (actor.type !== 'logic-onsubmit') {
+          blocks
+            .filter((b) => b.type === 'logic-onsubmit')
+            .forEach((hat) => {
+              if (hat.action && hat.action !== 'submit-form') {
+                handleTriggerAction(hat, currentInputs, recursionDepth + 1);
+              } else {
+                appendConsoleLog(
+                  'success',
+                  `OnSubmit Hat "${hat.name}": ${hat.actionPayload || 'Form handled!'}`
+                );
+              }
+            });
+        }
+        return;
+      }
+
+      if (action === 'show-confirm') {
+        pendingConfirmActionRef.current = () => {
+          onToast('Confirmed!', 'success');
+          appendConsoleLog('success', `Confirmed dialog: ${actor.actionPayload || 'OK'}`);
+        };
+        setConfirmDialog({
+          id: actor.id,
+          title: actor.name || 'Confirm Action',
+          message: actor.actionPayload || 'Are you sure you want to proceed?',
+          confirmLabel: 'Confirm',
+        });
+        return;
+      }
+
+      if (action === 'copy-clipboard') {
+        const text = actor.actionPayload || projectName;
+        navigator.clipboard?.writeText(text);
+        onToast(`Copied "${text}" to clipboard!`, 'success');
+        appendConsoleLog('log', `Clipboard copied: ${text}`);
+        return;
+      }
+
+      if (action === 'console-log') {
+        const msg = actor.actionPayload || `Event from ${actor.name}`;
+        appendConsoleLog('log', msg);
+        onToast(`Logged: ${msg}`, 'info');
+        return;
+      }
+
+      if (action === 'open-url') {
+        const rawUrl = (actor.actionPayload || '').trim();
+        if (!rawUrl) {
+          onToast('Enter a URL (e.g. https://... or mailto:...) in the JavaScript tab.', 'info');
+          return;
+        }
+        if (rawUrl.startsWith('#')) {
+          const targetId = rawUrl.slice(1);
+          const el =
+            document.getElementById(targetId) || document.getElementById(`sl-el-${targetId}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          onToast(`Jumped to ${rawUrl}`, 'success');
+        } else {
+          onToast(`Link ready: ${rawUrl} (navigates when exported)`, 'success');
+        }
+        return;
+      }
+
+      if (action === 'set-variable') {
+        const varName = aCfg?.varName || 'score';
+        const rawVal = aCfg?.varValue || actor.actionPayload || '1';
+        const parsedVal: string | number | boolean =
+          rawVal === 'true'
+            ? true
+            : rawVal === 'false'
+            ? false
+            : rawVal.trim() !== '' && !Number.isNaN(Number(rawVal))
+            ? Number(rawVal)
+            : rawVal;
+        setRuntimeState((prev) => ({
+          ...prev,
+          variables: { ...prev.variables, [varName]: parsedVal },
+        }));
+        onToast(`Set ${varName} = ${parsedVal}`, 'success');
+        appendConsoleLog('success', `Set ${varName} = ${parsedVal}`);
+        return;
+      }
+
+      if (action === 'toggle-boolean') {
+        const varName = aCfg?.varName || 'isLoggedIn';
+        setRuntimeState((prev) => {
+          const nextBool = !Boolean(prev.variables[varName]);
+          onToast(`Toggled ${varName} = ${nextBool}`, 'info');
+          return { ...prev, variables: { ...prev.variables, [varName]: nextBool } };
+        });
+        return;
+      }
+
+      if (action === 'list-add') {
+        const lName = aCfg?.listName || 'tasks';
+        const item = aCfg?.varValue || actor.actionPayload || 'New Task';
+        setRuntimeState((prev) => ({
+          ...prev,
+          lists: { ...prev.lists, [lName]: [...(prev.lists[lName] || []), item] },
+        }));
+        onToast(`Added "${item}" to ${lName}`, 'success');
+        return;
+      }
+
+      if (action === 'list-remove') {
+        const lName = aCfg?.listName || 'tasks';
+        setRuntimeState((prev) => ({
+          ...prev,
+          lists: { ...prev.lists, [lName]: (prev.lists[lName] || []).slice(0, -1) },
+        }));
+        onToast(`Removed last item from ${lName}`, 'info');
+        return;
+      }
+
+      if (action === 'save-storage') {
+        const key = aCfg?.storageKey || 'sl_user_data';
+        const val = actor.actionPayload || aCfg?.varValue || 'saved';
+        try {
+          window.localStorage.setItem(key, val);
+          onToast(`Saved "${key}" to LocalStorage!`, 'success');
+        } catch {
+          onToast('LocalStorage write blocked.', 'error');
+        }
+        return;
+      }
+
+      if (action === 'increment-counter') {
+        const targetCounter =
+          blocks.find((b) => b.id === actor.targetId && b.type === 'logic-counter') ||
+          blocks.find((b) => b.type === 'logic-counter');
+        if (targetCounter) {
+          const nextVal = (targetCounter.counterValue ?? 0) + 1;
+          handleUpdateBlock({
+            ...targetCounter,
+            counterValue: nextVal,
+            content: `Clicks Registered: ${nextVal}`,
+          });
+          setRuntimeState((prev) => ({
+            ...prev,
+            variables: { ...prev.variables, score: nextVal },
+          }));
+          onToast(`Triggered "${targetCounter.name}" → ${nextVal}`, 'success');
+          appendConsoleLog('success', `Counter "${targetCounter.name}" => ${nextVal}`);
+        } else {
+          onToast(
+            'Counter +1 ready! Add a Click Counter or pick another action in JavaScript tab.',
+            'info'
+          );
+        }
+        return;
+      }
+
+      if (action === 'toggle-visibility') {
+        const toggleTarget =
+          blocks.find((b) => b.id === actor.targetId) ||
+          blocks.find((b) => b.type === 'logic-toggle' || b.type === 'ui-accordion');
+        if (toggleTarget) {
+          handleUpdateBlock({ ...toggleTarget, isExpanded: !toggleTarget.isExpanded });
+          onToast(`Toggled "${toggleTarget.name}" state`, 'info');
+        } else {
+          onToast('Add a Toggle Switch or FAQ Accordion to wire this action.', 'info');
+        }
+        return;
+      }
+
+      if (action === 'call-api') {
+        const msg = `${actor.httpMethod || 'GET'} ${
+          actor.apiEndpoint || '/api/v1/metrics'
+        } -> 200 OK`;
+        onToast(msg, 'success');
+        appendConsoleLog('success', msg);
+        return;
+      }
+
+      const msg = actor.actionPayload || `Executed "${actor.name}"`;
+      onToast(msg, 'info');
+      appendConsoleLog('log', msg);
+    };
+
+    // 1. Direct Logic / Data / Backend Block Execution
     if (sourceBlock.type === 'logic-if') {
-      const ok = evaluateLogicCondition(cfg, runtimeState.variables, currentInputs);
+      const ok = evaluateLogicCondition(cfg, runtimeState.variables, currentInputs, blocks);
       const msg = ok
         ? cfg?.thenMessage || 'Condition is TRUE!'
         : cfg?.elseMessage || 'Condition is FALSE.';
       onToast(msg, ok ? 'success' : 'info');
-      appendConsoleLog(ok ? 'success' : 'warn', `IF [${cfg?.leftOperand || 'score'} ${cfg?.operator || '>='} ${cfg?.rightOperand || '10'}] => ${ok ? 'TRUE' : 'FALSE'}`);
+      appendConsoleLog(
+        ok ? 'success' : 'warn',
+        `IF [${cfg?.leftOperand || 'score'} ${cfg?.operator || '>='} ${
+          cfg?.rightOperand || '10'
+        }] => ${ok ? 'TRUE' : 'FALSE'}`
+      );
+      if (ok && sourceBlock.action) {
+        runAction(sourceBlock.action, sourceBlock);
+      }
       return;
     }
 
@@ -517,7 +1119,19 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         list.forEach((item, idx) => appendConsoleLog('log', `ForEach[${idx}]: ${item}`));
         onToast(`Iterated ${list.length} items in list "${cfg?.listName || 'tasks'}"`, 'success');
       } else {
-        const count = Math.min(50, Math.max(1, cfg?.repeatCount ?? 5));
+        let count = Math.min(50, Math.max(1, cfg?.repeatCount ?? 5));
+        if (mode === 'while') {
+          let i = 0;
+          const simVars = { ...runtimeState.variables };
+          while (
+            i < Math.min(25, count) &&
+            evaluateLogicCondition(cfg, simVars, currentInputs, blocks)
+          ) {
+            i += 1;
+            simVars.score = Number(simVars.score || 0) + 1;
+          }
+          count = i;
+        }
         setRuntimeState((prev) => ({
           ...prev,
           variables: {
@@ -525,8 +1139,20 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
             score: Number(prev.variables.score || 0) + count,
           },
         }));
+        const targetCounter = blocks.find((b) => b.type === 'logic-counter');
+        if (targetCounter && count > 0) {
+          const nextVal = (targetCounter.counterValue ?? 0) + count;
+          handleUpdateBlock({
+            ...targetCounter,
+            counterValue: nextVal,
+            content: `Clicks Registered: ${nextVal}`,
+          });
+        }
         appendConsoleLog('success', `Loop (${mode}) ran ${count} iterations (+${count} score)`);
         onToast(`Loop executed ${count} times!`, 'success');
+      }
+      if (sourceBlock.action) {
+        runAction(sourceBlock.action, sourceBlock);
       }
       return;
     }
@@ -745,375 +1371,99 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       return;
     }
 
-    // 2. Standard Button / Link / Event Action Wiring
-    const hasCounter = blocks.some((b) => b.type === 'logic-counter');
-    const inputBlocks = blocks.filter(
-      (b) =>
-        b.type === 'ui-input' ||
-        b.type === 'ui-textarea' ||
-        b.type === 'ui-select' ||
-        b.type === 'ui-checkbox' ||
-        b.type === 'ui-file-upload'
-    );
-    const filledInputs = inputBlocks
-      .map((inp) => ({
-        label: inp.subtitle || inp.name,
-        val: (currentInputs[inp.id] || '').trim(),
-      }))
-      .filter((item) => item.val.length > 0);
+    // 2. Hat / Event Blocks (run configured action, or fallback to event toast/log)
+    if (
+      sourceBlock.type === 'logic-onload' ||
+      sourceBlock.type === 'logic-click' ||
+      sourceBlock.type === 'logic-oninput' ||
+      sourceBlock.type === 'logic-onsubmit' ||
+      sourceBlock.type === 'logic-onkey' ||
+      sourceBlock.type === 'logic-timer' ||
+      sourceBlock.type === 'logic-feedback'
+    ) {
+      if (sourceBlock.logicConfig?.varName && sourceBlock.type === 'logic-onload') {
+        const val = sourceBlock.logicConfig.varValue ?? 'true';
+        setRuntimeState((prev) => ({
+          ...prev,
+          variables: { ...prev.variables, [sourceBlock.logicConfig!.varName!]: val },
+        }));
+      }
+      if (sourceBlock.action) {
+        runAction(sourceBlock.action, sourceBlock);
+      } else {
+        const msg = sourceBlock.actionPayload || `Event "${sourceBlock.name}" executed!`;
+        onToast(msg, 'info');
+        appendConsoleLog('success', `${sourceBlock.type}: ${msg}`);
+      }
+      return;
+    }
 
-    const action: BlockActionType =
+    // 3. Standard Button / Link Auto-Smart Action Wiring
+    const hasCounter = blocks.some((b) => b.type === 'logic-counter');
+    const { inputBlocks, fields } = collectFormFields(currentInputs);
+    const hasFilled = fields.some((f) => f.hasUserEntry);
+    const resolvedAction: BlockActionType =
       sourceBlock.action ||
-      (hasCounter
+      (hasFilled
+        ? 'submit-form'
+        : hasCounter
         ? 'increment-counter'
-        : filledInputs.length > 0
+        : inputBlocks.length > 0
         ? 'submit-form'
         : 'increment-counter');
 
-    if (action === 'navigate-page') {
-      const targetPage =
-        pages.find((p) => p.id === sourceBlock.targetPageId) ||
-        pages.find((p) => p.id !== activePage?.id);
-      if (targetPage) {
-        handleSelectPage(targetPage.id);
-        onToast(`Navigated to "${targetPage.name}"`, 'success');
-        appendConsoleLog('log', `Navigated to /${targetPage.slug}`);
-      } else {
-        onToast('Add another page or select a Target Page in the JavaScript tab!', 'info');
-      }
-      return;
-    }
+    runAction(resolvedAction, sourceBlock);
 
-    if (action === 'go-back') {
-      const prevId = pageHistory[pageHistory.length - 1];
-      if (prevId && pages.some((p) => p.id === prevId)) {
-        setPageHistory((h) => h.slice(0, -1));
-        handleSelectPage(prevId, false);
-        onToast('Returned to previous page', 'info');
-      } else {
-        onToast('No previous page in history yet.', 'info');
-      }
-      return;
-    }
-
-    if (action === 'scroll-to-block') {
-      const targetBlock =
-        blocks.find((b) => b.id === sourceBlock.targetId) ||
-        blocks.find((b) => b.id !== sourceBlock.id);
-      if (targetBlock) {
-        const el = document.getElementById(`sl-el-${targetBlock.id}`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setSelectedBlockId(targetBlock.id);
-        onToast(`Scrolled to "${targetBlock.name}"`, 'success');
-      } else {
-        onToast('Select a Target Block to scroll to in the JavaScript tab.', 'info');
-      }
-      return;
-    }
-
-    if (action === 'open-modal' || action === 'close-modal') {
-      const modalTarget =
-        blocks.find((b) => b.id === sourceBlock.targetId && b.type === 'ui-modal') ||
-        blocks.find((b) => b.type === 'ui-modal');
-      if (modalTarget) {
-        const open = action === 'open-modal';
-        setRuntimeState((prev) => ({
-          ...prev,
-          openModals: { ...prev.openModals, [modalTarget.id]: open },
-        }));
-        appendConsoleLog('log', `${open ? 'Opened' : 'Closed'} modal "${modalTarget.name}"`);
-      } else {
-        onToast('Add a Modal / Drawer block to wire this action.', 'info');
-      }
-      return;
-    }
-
-    if (action === 'show-element' || action === 'hide-element') {
-      const targetId = sourceBlock.targetId || blocks.find((b) => b.id !== sourceBlock.id)?.id;
-      if (targetId) {
-        const hide = action === 'hide-element';
-        setRuntimeState((prev) => ({
-          ...prev,
-          hiddenBlocks: { ...prev.hiddenBlocks, [targetId]: hide },
-        }));
-        onToast(`${hide ? 'Hid' : 'Shown'} target element`, 'info');
-      }
-      return;
-    }
-
-    if (action === 'change-text') {
-      const targetId = sourceBlock.targetId || blocks.find((b) => b.id !== sourceBlock.id)?.id;
-      if (targetId) {
-        const nextText = sourceBlock.actionPayload || 'Updated Text!';
-        setRuntimeState((prev) => ({
-          ...prev,
-          textOverrides: { ...prev.textOverrides, [targetId]: nextText },
-        }));
-        onToast(`Updated element text -> "${nextText}"`, 'success');
-      }
-      return;
-    }
-
-    if (action === 'set-style') {
-      const targetId = sourceBlock.targetId || blocks.find((b) => b.id !== sourceBlock.id)?.id;
-      if (targetId) {
-        const prop = cfg?.styleProp || 'backgroundColor';
-        const val = cfg?.styleValue || '#312e81';
-        setRuntimeState((prev) => ({
-          ...prev,
-          styleOverrides: {
-            ...prev.styleOverrides,
-            [targetId]: { ...(prev.styleOverrides[targetId] || {}), [prop]: val },
-          },
-        }));
-        onToast(`Applied style ${prop}: ${val}`, 'success');
-      }
-      return;
-    }
-
-    if (action === 'add-class' || action === 'remove-class') {
-      const targetId = sourceBlock.targetId || blocks.find((b) => b.id !== sourceBlock.id)?.id;
-      const cls = (cfg?.cssClass || 'ring-2 ring-emerald-400').trim();
-      if (targetId && cls) {
-        setRuntimeState((prev) => {
-          const existing = prev.extraClasses[targetId] || [];
-          const next =
-            action === 'add-class'
-              ? Array.from(new Set([...existing, cls]))
-              : existing.filter((c) => c !== cls);
-          return { ...prev, extraClasses: { ...prev.extraClasses, [targetId]: next } };
+    // 4. Fire matching "When Button is Clicked" Hat blocks
+    if (sourceBlock.type === 'ui-button') {
+      blocks
+        .filter((b) => {
+          if (b.type !== 'logic-click') return false;
+          const srcMatch = b.logicConfig?.triggerSourceId || b.targetId;
+          return !srcMatch || srcMatch === sourceBlock.id;
+        })
+        .forEach((hat) => {
+          appendConsoleLog(
+            'success',
+            `OnClick Hat "${hat.name}" triggered by "${sourceBlock.name}"`
+          );
+          if (hat.action) {
+            handleTriggerAction(hat, currentInputs, recursionDepth + 1);
+          } else if (hat.actionPayload && !sourceBlock.actionPayload) {
+            onToast(hat.actionPayload, 'info');
+          }
         });
-        onToast(`${action === 'add-class' ? 'Added' : 'Removed'} class "${cls}"`, 'info');
-      }
-      return;
-    }
-
-    if (action === 'toggle-disabled') {
-      const targetId = sourceBlock.targetId || blocks.find((b) => b.type === 'ui-button')?.id;
-      if (targetId) {
-        setRuntimeState((prev) => ({
-          ...prev,
-          disabledBlocks: {
-            ...prev.disabledBlocks,
-            [targetId]: !prev.disabledBlocks[targetId],
-          },
-        }));
-        onToast('Toggled target button disabled state', 'info');
-      }
-      return;
-    }
-
-    if (action === 'clear-form') {
-      setFormInputs({});
-      onToast('Cleared all form inputs', 'info');
-      appendConsoleLog('log', 'Form inputs cleared');
-      return;
-    }
-
-    if (action === 'validate-input') {
-      const targetInp =
-        blocks.find((b) => b.id === sourceBlock.targetId) ||
-        blocks.find((b) => b.type === 'ui-input' || b.type === 'ui-textarea');
-      const val = targetInp ? currentInputs[targetInp.id] || '' : '';
-      const check = validateInputValue(val, cfg?.validationRule || 'not-empty');
-      onToast(check.reason, check.valid ? 'success' : 'error');
-      appendConsoleLog(check.valid ? 'success' : 'error', `Validation: ${check.reason}`);
-      return;
-    }
-
-    if (action === 'get-input-value') {
-      const targetInp =
-        blocks.find((b) => b.id === sourceBlock.targetId) ||
-        blocks.find((b) => b.type === 'ui-input' || b.type === 'ui-textarea');
-      const val = targetInp ? currentInputs[targetInp.id] || '' : '';
-      const varName = cfg?.varName || 'inputValue';
-      setRuntimeState((prev) => ({
-        ...prev,
-        variables: { ...prev.variables, [varName]: val },
-      }));
-      onToast(`Read ${varName} = "${val}"`, 'info');
-      appendConsoleLog('log', `Get Input => ${varName} = "${val}"`);
-      return;
-    }
-
-    if (action === 'set-input-value') {
-      const targetInp =
-        blocks.find((b) => b.id === sourceBlock.targetId) ||
-        blocks.find((b) => b.type === 'ui-input' || b.type === 'ui-textarea');
-      if (targetInp) {
-        const newVal = sourceBlock.actionPayload || 'Hello from SL Builder';
-        setFormInputs((prev) => ({ ...prev, [targetInp.id]: newVal }));
-        onToast(`Set input value to "${newVal}"`, 'success');
-      }
-      return;
-    }
-
-    if (action === 'submit-form') {
-      if (inputBlocks.length > 0 && filledInputs.length === 0) {
-        onToast('Type something into your form inputs above, then click Submit!', 'info');
-        return;
-      }
-      const summary = filledInputs.map((i) => `${i.label}: ${i.val}`).join(' · ');
-      const customMsg = (sourceBlock.actionPayload || '').trim();
-      const msg = customMsg
-        ? summary
-          ? `${customMsg} (${summary})`
-          : customMsg
-        : summary
-        ? `Submitted → ${summary}`
-        : 'Form submitted successfully!';
-      onToast(msg, 'success');
-      appendConsoleLog('success', msg);
-      return;
-    }
-
-    if (action === 'show-confirm') {
-      pendingConfirmActionRef.current = () => {
-        onToast('Confirmed!', 'success');
-        appendConsoleLog('success', `Confirmed dialog: ${sourceBlock.actionPayload || 'OK'}`);
-      };
-      setConfirmDialog({
-        id: sourceBlock.id,
-        title: sourceBlock.name || 'Confirm Action',
-        message: sourceBlock.actionPayload || 'Are you sure you want to proceed?',
-        confirmLabel: 'Confirm',
-      });
-      return;
-    }
-
-    if (action === 'copy-clipboard') {
-      const text = sourceBlock.actionPayload || projectName;
-      navigator.clipboard?.writeText(text);
-      onToast(`Copied "${text}" to clipboard!`, 'success');
-      appendConsoleLog('log', `Clipboard copied: ${text}`);
-      return;
-    }
-
-    if (action === 'console-log') {
-      const msg = sourceBlock.actionPayload || `Event from ${sourceBlock.name}`;
-      appendConsoleLog('log', msg);
-      onToast(`Logged: ${msg}`, 'info');
-      return;
-    }
-
-    if (action === 'open-url') {
-      const rawUrl = (sourceBlock.actionPayload || '').trim();
-      if (!rawUrl) {
-        onToast('Enter a URL (e.g. https://... or mailto:...) in the JavaScript tab.', 'info');
-        return;
-      }
-      if (rawUrl.startsWith('#')) {
-        const targetId = rawUrl.slice(1);
-        const el =
-          document.getElementById(targetId) || document.getElementById(`sl-el-${targetId}`);
-        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        onToast(`Jumped to ${rawUrl}`, 'success');
-      } else {
-        onToast(`Link ready: ${rawUrl} (navigates when exported)`, 'success');
-      }
-      return;
-    }
-
-    if (action === 'set-variable') {
-      const varName = cfg?.varName || 'score';
-      const val = cfg?.varValue || sourceBlock.actionPayload || '1';
-      setRuntimeState((prev) => ({
-        ...prev,
-        variables: { ...prev.variables, [varName]: val },
-      }));
-      onToast(`Set ${varName} = ${val}`, 'success');
-      appendConsoleLog('success', `Set ${varName} = ${val}`);
-      return;
-    }
-
-    if (action === 'toggle-boolean') {
-      const varName = cfg?.varName || 'isLoggedIn';
-      setRuntimeState((prev) => {
-        const nextBool = !Boolean(prev.variables[varName]);
-        onToast(`Toggled ${varName} = ${nextBool}`, 'info');
-        return { ...prev, variables: { ...prev.variables, [varName]: nextBool } };
-      });
-      return;
-    }
-
-    if (action === 'list-add') {
-      const lName = cfg?.listName || 'tasks';
-      const item = cfg?.varValue || sourceBlock.actionPayload || 'New Task';
-      setRuntimeState((prev) => ({
-        ...prev,
-        lists: { ...prev.lists, [lName]: [...(prev.lists[lName] || []), item] },
-      }));
-      onToast(`Added "${item}" to ${lName}`, 'success');
-      return;
-    }
-
-    if (action === 'list-remove') {
-      const lName = cfg?.listName || 'tasks';
-      setRuntimeState((prev) => ({
-        ...prev,
-        lists: { ...prev.lists, [lName]: (prev.lists[lName] || []).slice(0, -1) },
-      }));
-      onToast(`Removed last item from ${lName}`, 'info');
-      return;
-    }
-
-    if (action === 'save-storage') {
-      const key = cfg?.storageKey || 'sl_user_data';
-      const val = sourceBlock.actionPayload || cfg?.varValue || 'saved';
-      try {
-        window.localStorage.setItem(key, val);
-        onToast(`Saved "${key}" to LocalStorage!`, 'success');
-      } catch {
-        onToast('LocalStorage write blocked.', 'error');
-      }
-      return;
-    }
-
-    if (action === 'increment-counter') {
-      const targetCounter =
-        blocks.find((b) => b.id === sourceBlock.targetId && b.type === 'logic-counter') ||
-        blocks.find((b) => b.type === 'logic-counter');
-      if (targetCounter) {
-        const nextVal = (targetCounter.counterValue ?? 0) + 1;
-        handleUpdateBlock({
-          ...targetCounter,
-          counterValue: nextVal,
-          content: `Clicks Registered: ${nextVal}`,
-        });
-        setRuntimeState((prev) => ({
-          ...prev,
-          variables: { ...prev.variables, score: nextVal },
-        }));
-        onToast(`Triggered "${targetCounter.name}" → ${nextVal}`, 'success');
-        appendConsoleLog('success', `Counter "${targetCounter.name}" => ${nextVal}`);
-      } else {
-        onToast(
-          'Button ready! Choose an action (Go to Page, Submit Form, Modal, Variable) in the JavaScript tab.',
-          'info'
-        );
-      }
-    } else if (action === 'toggle-visibility') {
-      const toggleTarget =
-        blocks.find((b) => b.id === sourceBlock.targetId) ||
-        blocks.find((b) => b.type === 'logic-toggle' || b.type === 'ui-accordion');
-      if (toggleTarget) {
-        handleUpdateBlock({ ...toggleTarget, isExpanded: !toggleTarget.isExpanded });
-        onToast(`Toggled "${toggleTarget.name}" state`, 'info');
-      } else {
-        onToast('Add a Toggle Switch or FAQ Accordion to wire this action.', 'info');
-      }
-    } else if (action === 'call-api') {
-      const msg = `${sourceBlock.httpMethod || 'GET'} ${
-        sourceBlock.apiEndpoint || '/api/v1/metrics'
-      } -> 200 OK`;
-      onToast(msg, 'success');
-      appendConsoleLog('success', msg);
-    } else {
-      const msg = sourceBlock.actionPayload || `Executed "${sourceBlock.name}"`;
-      onToast(msg, 'info');
-      appendConsoleLog('log', msg);
     }
   };
+
+  // Keep a ref to latest trigger handler & blocks so keyboard / timer / onload effects execute cleanly
+  const latestActionRef = useRef(handleTriggerAction);
+  latestActionRef.current = handleTriggerAction;
+  const latestBlocksRef = useRef(blocks);
+  latestBlocksRef.current = blocks;
+  const latestInputsRef = useRef(formInputs);
+  latestInputsRef.current = formInputs;
+
+  // Keyboard listener for logic-onkey hat blocks inside studio stage
+  useEffect(() => {
+    const keyHats = blocks.filter((b) => b.type === 'logic-onkey');
+    if (keyHats.length === 0) return;
+    const handler = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+      const normalized = e.key === ' ' ? 'Space' : e.key;
+      if ((tag === 'input' || tag === 'textarea' || tag === 'select') && normalized === 'Space') {
+        return;
+      }
+      keyHats.forEach((hat) => {
+        if ((hat.triggerKey || 'Enter') === normalized) {
+          e.preventDefault();
+          latestActionRef.current(hat, latestInputsRef.current, 1);
+        }
+      });
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [blocks]);
 
   // Active Countdown Timer Engine for logic-timer blocks
   const hasActiveTimers = Object.values(runningTimers).some(Boolean);
@@ -1128,8 +1478,6 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
             const current = blk.counterValue ?? 10;
             if (current <= 1) {
               finishedIds.push(blk.id);
-              appendConsoleLog('success', `Timer "${blk.name}" completed!`);
-              onToast(`Timer "${blk.name}" finished!`, 'success');
               return { ...blk, counterValue: 0 };
             }
             return { ...blk, counterValue: current - 1 };
@@ -1144,6 +1492,17 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
           });
           return next;
         });
+        finishedIds.forEach((id) => {
+          const blk = latestBlocksRef.current.find((b) => b.id === id);
+          if (blk) {
+            appendConsoleLog('success', `Timer "${blk.name}" completed!`);
+            if (blk.action) {
+              latestActionRef.current(blk, latestInputsRef.current, 1);
+            } else {
+              onToast(blk.actionPayload || `Timer "${blk.name}" finished!`, 'success');
+            }
+          }
+        });
       }
     }, 1000);
     return () => window.clearInterval(interval);
@@ -1151,7 +1510,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
   // Execute "When Page Loads" hat blocks when navigating to a page
   useEffect(() => {
-    const loadHats = blocks.filter((b) => b.type === 'logic-onload');
+    const loadHats = latestBlocksRef.current.filter((b) => b.type === 'logic-onload');
     if (loadHats.length === 0) return;
     loadHats.forEach((hat) => {
       appendConsoleLog('log', `Page "${activePage?.name || 'Home'}" loaded -> ${hat.name}`);
@@ -1161,6 +1520,9 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
           ...prev,
           variables: { ...prev.variables, [hat.logicConfig!.varName!]: val },
         }));
+      }
+      if (hat.action && hat.action !== 'navigate-page' && hat.action !== 'go-back') {
+        latestActionRef.current(hat, latestInputsRef.current, 1);
       }
     });
   }, [activePageId]);
@@ -1889,7 +2251,17 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
                 {/* 3c. Center Dotted Visual Blueprint Stack Canvas + HTML Toggle */}
                 <main
-                  onDragOver={(e) => e.preventDefault()}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (canvasDropIndex === null) {
+                      setCanvasDropIndex(blocks.length);
+                    }
+                  }}
+                  onDragLeave={(e) => {
+                    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                      setCanvasDropIndex(null);
+                    }
+                  }}
                   onDrop={handleCanvasDrop}
                   className="flex-1 relative overflow-auto bg-[#0A0D13] flex flex-col"
                   style={{
@@ -1933,186 +2305,374 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
                   {htmlViewMode === 'visual' ? (
                     <div
-                      className="min-h-full p-5 max-w-2xl w-full mx-auto space-y-2.5 origin-top"
+                      className="min-h-full p-5 max-w-2xl w-full mx-auto space-y-2 origin-top"
                       style={{ transform: `scale(${zoomLevel})` }}
                     >
                       {blocks.length === 0 ? (
-                        <div className="h-64 flex flex-col items-center justify-center text-slate-500 border border-dashed border-white/15 rounded-2xl">
+                        <div
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setCanvasDropIndex(0);
+                          }}
+                          onDrop={(e) => void handleDropAtIndex(e, 0)}
+                          className={`h-64 flex flex-col items-center justify-center border border-dashed rounded-2xl transition-colors ${
+                            canvasDropIndex !== null
+                              ? 'border-[#4D97FF] bg-[#4D97FF]/10 text-[#60A5FA]'
+                              : 'border-white/15 text-slate-500'
+                          }`}
+                        >
                           <p className="text-xs font-semibold text-slate-300">
                             {lang === 'si'
-                              ? 'වම් පසින් HTML බ්ලොක් එකක් ක්ලික් කරන්න හෝ අදින්න'
-                              : 'Click or drag any HTML block from the left palette'}
+                              ? 'වම් පසින් බ්ලොක් එකක් හෝ Photo එකක් මෙතැනට අදින්න'
+                              : 'Click or drag any HTML block or photo here'}
                           </p>
                         </div>
                       ) : (
-                        blocks.map((blk, idx) => {
-                          const catMeta = getCategoryMetaForBlockType(blk.type);
-                          const isSelected = blk.id === selectedBlock?.id;
-                          return (
-                            <div
-                              key={blk.id}
-                              onClick={() => setSelectedBlockId(blk.id)}
-                              className={`rounded-xl bg-[#131822] border transition-all cursor-pointer p-3 ${
-                                isSelected
-                                  ? 'border-[#4D97FF] ring-2 ring-[#4D97FF]/30 shadow-lg'
-                                  : 'border-white/10 hover:border-white/25'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2 mb-2">
-                                <div className="flex items-center gap-2 min-w-0">
-                                  <span
-                                    className="w-3 h-3 rounded-full shrink-0"
-                                    style={{ backgroundColor: catMeta.color }}
-                                  />
-                                  <span className="text-xs font-bold text-white truncate">
-                                    {blk.name}
-                                  </span>
-                                  <span className="text-[10px] font-mono text-slate-500">
-                                    {blk.type}
-                                  </span>
-                                </div>
-
+                        <>
+                          {blocks.map((blk, idx) => {
+                            const catMeta = getCategoryMetaForBlockType(blk.type);
+                            const isSelected = blk.id === selectedBlock?.id;
+                            const isBeingDragged = draggingCanvasBlockId === blk.id;
+                            const showTopBar = canvasDropIndex === idx;
+                            return (
+                              <React.Fragment key={blk.id}>
+                                {showTopBar && (
+                                  <div
+                                    onDragOver={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                    }}
+                                    onDrop={(e) => void handleDropAtIndex(e, idx)}
+                                    className="h-2.5 rounded-full bg-[#4D97FF] shadow-[0_0_12px_rgba(77,151,255,0.8)] flex items-center justify-center transition-all"
+                                  >
+                                    <span className="px-2 py-0.5 rounded bg-[#0A0D13] border border-[#4D97FF] text-[9px] font-bold text-[#60A5FA] uppercase tracking-wider">
+                                      Drop Block Here
+                                    </span>
+                                  </div>
+                                )}
                                 <div
-                                  className="flex items-center gap-1 shrink-0"
-                                  onClick={(e) => e.stopPropagation()}
+                                  draggable
+                                  onDragStart={(e) => handleCanvasBlockDragStart(e, blk.id)}
+                                  onDragEnd={() => {
+                                    setDraggingCanvasBlockId(null);
+                                    setCanvasDropIndex(null);
+                                  }}
+                                  onDragOver={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const midY = rect.top + rect.height / 2;
+                                    setCanvasDropIndex(e.clientY < midY ? idx : idx + 1);
+                                  }}
+                                  onDrop={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    const midY = rect.top + rect.height / 2;
+                                    void handleDropAtIndex(e, e.clientY < midY ? idx : idx + 1);
+                                  }}
+                                  onClick={() => setSelectedBlockId(blk.id)}
+                                  className={`rounded-xl bg-[#131822] border transition-all cursor-pointer p-3 ${
+                                    isBeingDragged ? 'opacity-45 scale-[0.99]' : ''
+                                  } ${
+                                    isSelected
+                                      ? 'border-[#4D97FF] ring-2 ring-[#4D97FF]/30 shadow-lg'
+                                      : 'border-white/10 hover:border-white/25'
+                                  }`}
                                 >
-                                  <button
-                                    type="button"
-                                    disabled={idx === 0}
-                                    onClick={() => handleMoveBlock(blk.id, -1)}
-                                    title="Move Up"
-                                    className="p-1 rounded bg-white/5 hover:bg-white/15 text-slate-300 disabled:opacity-30 cursor-pointer"
-                                  >
-                                    <ArrowUp className="w-3 h-3" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={idx === blocks.length - 1}
-                                    onClick={() => handleMoveBlock(blk.id, 1)}
-                                    title="Move Down"
-                                    className="p-1 rounded bg-white/5 hover:bg-white/15 text-slate-300 disabled:opacity-30 cursor-pointer"
-                                  >
-                                    <ArrowDown className="w-3 h-3" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleDeleteBlock(blk.id)}
-                                    title="Delete Block"
-                                    className="p-1 rounded bg-white/5 hover:bg-rose-600/80 text-slate-300 hover:text-white cursor-pointer"
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
-                                </div>
-                              </div>
+                                  <div className="flex items-center justify-between gap-2 mb-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                      <span
+                                        title="Drag to reorder"
+                                        className="text-slate-500 hover:text-white cursor-grab active:cursor-grabbing shrink-0"
+                                      >
+                                        <GripVertical className="w-3.5 h-3.5" />
+                                      </span>
+                                      <span
+                                        className="w-3 h-3 rounded-full shrink-0"
+                                        style={{ backgroundColor: catMeta.color }}
+                                      />
+                                      <span className="text-xs font-bold text-white truncate">
+                                        {blk.name}
+                                      </span>
+                                      <span className="text-[10px] font-mono text-slate-500">
+                                        {blk.type}
+                                      </span>
+                                    </div>
 
-                              <div className="space-y-2">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <input
-                                    type="text"
-                                    value={blk.type === 'ui-stat' ? (blk.statValue ?? blk.content) : blk.content}
-                                    placeholder="Primary text..."
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedBlockId(blk.id);
-                                    }}
-                                    onChange={(e) =>
-                                      handleUpdateBlock(
-                                        blk.type === 'ui-stat'
-                                          ? { ...blk, content: e.target.value, statValue: e.target.value }
-                                          : { ...blk, content: e.target.value }
-                                      )
-                                    }
-                                    className="flex-1 min-w-[160px] bg-[#0A0D13] border border-white/10 focus:border-[#4D97FF] rounded-lg px-2.5 py-1.5 text-xs text-slate-100 outline-none"
-                                  />
-                                  {blk.targetId && (
-                                    <span className="text-[10px] font-mono text-amber-300 flex items-center gap-1">
-                                      <Zap className="w-3 h-3" />
-                                      {blk.action}
-                                    </span>
-                                  )}
-                                  {blk.apiEndpoint && (
-                                    <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-                                      <Server className="w-3 h-3" />
-                                      {blk.apiEndpoint}
-                                    </span>
-                                  )}
-                                </div>
+                                    <div
+                                      className="flex items-center gap-1 shrink-0"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <button
+                                        type="button"
+                                        disabled={idx === 0}
+                                        onClick={() => handleMoveBlock(blk.id, -1)}
+                                        title="Move Up"
+                                        className="p-1 rounded bg-white/5 hover:bg-white/15 text-slate-300 disabled:opacity-30 cursor-pointer"
+                                      >
+                                        <ArrowUp className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={idx === blocks.length - 1}
+                                        onClick={() => handleMoveBlock(blk.id, 1)}
+                                        title="Move Down"
+                                        className="p-1 rounded bg-white/5 hover:bg-white/15 text-slate-300 disabled:opacity-30 cursor-pointer"
+                                      >
+                                        <ArrowDown className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteBlock(blk.id)}
+                                        title="Delete Block"
+                                        className="p-1 rounded bg-white/5 hover:bg-rose-600/80 text-slate-300 hover:text-white cursor-pointer"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  </div>
 
-                                {/* Secondary / Subtitle / Role / Badge Text Editor */}
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <input
-                                    type="text"
-                                    value={
-                                      blk.type === 'ui-stat'
-                                        ? (blk.statLabel ?? blk.subtitle ?? '')
-                                        : blk.subtitle || ''
-                                    }
-                                    placeholder={
-                                      blk.type === 'ui-navbar'
-                                        ? 'Nav links (e.g. Home · About · Contact)'
-                                        : blk.type === 'ui-testimonial'
-                                        ? 'Author name...'
-                                        : blk.type === 'ui-input' || blk.type === 'ui-textarea'
-                                        ? 'Field label...'
-                                        : 'Subtitle / secondary text...'
-                                    }
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setSelectedBlockId(blk.id);
-                                    }}
-                                    onChange={(e) =>
-                                      handleUpdateBlock(
-                                        blk.type === 'ui-stat'
-                                          ? { ...blk, subtitle: e.target.value, statLabel: e.target.value }
-                                          : { ...blk, subtitle: e.target.value }
-                                      )
-                                    }
-                                    className="flex-1 min-w-[140px] bg-[#0B0E15] border border-white/5 focus:border-[#4D97FF] rounded-lg px-2.5 py-1 text-[11px] text-slate-300 placeholder-slate-600 outline-none"
-                                  />
-                                  {blk.type === 'ui-testimonial' && (
-                                    <input
-                                      type="text"
-                                      value={blk.authorRole || ''}
-                                      placeholder="Author role..."
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedBlockId(blk.id);
-                                      }}
-                                      onChange={(e) =>
-                                        handleUpdateBlock({ ...blk, authorRole: e.target.value })
-                                      }
-                                      className="w-36 bg-[#0B0E15] border border-white/5 focus:border-[#4D97FF] rounded-lg px-2 py-1 text-[11px] text-slate-300 placeholder-slate-600 outline-none"
-                                    />
-                                  )}
-                                  {(blk.type === 'ui-navbar' ||
-                                    blk.type === 'ui-pricing' ||
-                                    blk.type === 'logic-click') && (
-                                    <input
-                                      type="text"
-                                      value={
-                                        blk.badgeText ??
-                                        (blk.type === 'ui-navbar'
-                                          ? 'SL'
-                                          : blk.type === 'ui-pricing'
-                                          ? 'PRO'
-                                          : 'Fire')
-                                      }
-                                      placeholder="Badge..."
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSelectedBlockId(blk.id);
-                                      }}
-                                      onChange={(e) =>
-                                        handleUpdateBlock({ ...blk, badgeText: e.target.value })
-                                      }
-                                      className="w-20 bg-[#0B0E15] border border-white/5 focus:border-[#4D97FF] rounded-lg px-2 py-1 text-[11px] font-mono text-sky-300 placeholder-slate-600 outline-none"
-                                    />
-                                  )}
+                                  <div className="space-y-2">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={
+                                          blk.type === 'ui-stat'
+                                            ? blk.statValue ?? blk.content
+                                            : blk.content
+                                        }
+                                        placeholder="Primary text..."
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedBlockId(blk.id);
+                                        }}
+                                        onChange={(e) =>
+                                          handleUpdateBlock(
+                                            blk.type === 'ui-stat'
+                                              ? {
+                                                  ...blk,
+                                                  content: e.target.value,
+                                                  statValue: e.target.value,
+                                                }
+                                              : { ...blk, content: e.target.value }
+                                          )
+                                        }
+                                        className="flex-1 min-w-[160px] bg-[#0A0D13] border border-white/10 focus:border-[#4D97FF] rounded-lg px-2.5 py-1.5 text-xs text-slate-100 outline-none"
+                                      />
+                                      {blk.action && (
+                                        <span className="text-[10px] font-mono text-amber-300 flex items-center gap-1">
+                                          <Zap className="w-3 h-3" />
+                                          {blk.action}
+                                        </span>
+                                      )}
+                                      {blk.apiEndpoint && (
+                                        <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
+                                          <Server className="w-3 h-3" />
+                                          {blk.apiEndpoint}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {(blk.type === 'ui-image' ||
+                                      blk.type === 'ui-avatar' ||
+                                      blk.type === 'ui-card') && (
+                                      <div
+                                        className="flex items-center gap-2 pt-0.5"
+                                        onClick={(e) => e.stopPropagation()}
+                                      >
+                                        {blk.imageUrl && (
+                                          <img
+                                            src={blk.imageUrl}
+                                            alt=""
+                                            className="w-8 h-8 rounded object-cover border border-white/15 shrink-0"
+                                          />
+                                        )}
+                                        <label className="px-2 py-1 rounded bg-sky-600/80 hover:bg-sky-500 text-white text-[10px] font-semibold flex items-center gap-1 cursor-pointer shrink-0">
+                                          <Upload className="w-3 h-3" />
+                                          <span>{blk.imageUrl ? 'Change Photo' : 'Upload Photo'}</span>
+                                          <input
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={async (e) => {
+                                              const file = e.target.files?.[0];
+                                              e.target.value = '';
+                                              if (!file) return;
+                                              try {
+                                                const url = await readAndCompressImageFile(file);
+                                                handleUpdateBlock({ ...blk, imageUrl: url });
+                                                onToast(`Uploaded photo "${file.name}"`, 'success');
+                                              } catch (err) {
+                                                onToast(
+                                                  err instanceof Error
+                                                    ? err.message
+                                                    : 'Failed to load image',
+                                                  'error'
+                                                );
+                                              }
+                                            }}
+                                          />
+                                        </label>
+                                        {blk.imageUrl && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              handleUpdateBlock({ ...blk, imageUrl: '' })
+                                            }
+                                            className="px-2 py-1 rounded bg-white/5 hover:bg-rose-500/30 text-[10px] text-slate-300 cursor-pointer"
+                                          >
+                                            Clear
+                                          </button>
+                                        )}
+                                      </div>
+                                    )}
+
+                                    {/* Secondary / Subtitle / Role / Badge Text Editor */}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={
+                                          blk.type === 'ui-stat'
+                                            ? blk.statLabel ?? blk.subtitle ?? ''
+                                            : blk.subtitle || ''
+                                        }
+                                        placeholder={
+                                          blk.type === 'ui-navbar'
+                                            ? 'Nav links (e.g. Home · About · Contact)'
+                                            : blk.type === 'ui-testimonial'
+                                            ? 'Author name...'
+                                            : blk.type === 'ui-input' || blk.type === 'ui-textarea'
+                                            ? 'Field label...'
+                                            : 'Subtitle / secondary text...'
+                                        }
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedBlockId(blk.id);
+                                        }}
+                                        onChange={(e) =>
+                                          handleUpdateBlock(
+                                            blk.type === 'ui-stat'
+                                              ? {
+                                                  ...blk,
+                                                  subtitle: e.target.value,
+                                                  statLabel: e.target.value,
+                                                }
+                                              : { ...blk, subtitle: e.target.value }
+                                          )
+                                        }
+                                        className="flex-1 min-w-[140px] bg-[#0B0E15] border border-white/5 focus:border-[#4D97FF] rounded-lg px-2.5 py-1 text-[11px] text-slate-300 placeholder-slate-600 outline-none"
+                                      />
+                                      {blk.type === 'ui-testimonial' && (
+                                        <input
+                                          type="text"
+                                          value={blk.authorRole || ''}
+                                          placeholder="Author role..."
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedBlockId(blk.id);
+                                          }}
+                                          onChange={(e) =>
+                                            handleUpdateBlock({
+                                              ...blk,
+                                              authorRole: e.target.value,
+                                            })
+                                          }
+                                          className="w-36 bg-[#0B0E15] border border-white/5 focus:border-[#4D97FF] rounded-lg px-2 py-1 text-[11px] text-slate-300 placeholder-slate-600 outline-none"
+                                        />
+                                      )}
+                                      {(blk.type === 'ui-navbar' ||
+                                        blk.type === 'ui-pricing' ||
+                                        blk.type === 'ui-modal' ||
+                                        blk.type === 'ui-section' ||
+                                        blk.type === 'logic-click' ||
+                                        blk.type === 'logic-if') && (
+                                        <input
+                                          type="text"
+                                          value={
+                                            blk.badgeText ??
+                                            (blk.type === 'ui-navbar'
+                                              ? 'SL'
+                                              : blk.type === 'ui-pricing'
+                                              ? 'PRO'
+                                              : blk.type === 'ui-modal'
+                                              ? 'Open Dialog'
+                                              : blk.type === 'ui-section'
+                                              ? 'Section'
+                                              : blk.type === 'logic-if'
+                                              ? 'Eval'
+                                              : 'Fire')
+                                          }
+                                          placeholder="Badge..."
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedBlockId(blk.id);
+                                          }}
+                                          onChange={(e) =>
+                                            handleUpdateBlock({
+                                              ...blk,
+                                              badgeText: e.target.value,
+                                            })
+                                          }
+                                          className="w-24 bg-[#0B0E15] border border-white/5 focus:border-[#4D97FF] rounded-lg px-2 py-1 text-[11px] font-mono text-sky-300 placeholder-slate-600 outline-none"
+                                        />
+                                      )}
+                                    </div>
+
+                                    {(blk.type === 'ui-sidebar' ||
+                                      blk.type === 'ui-tabbar' ||
+                                      blk.type === 'ui-row' ||
+                                      blk.type === 'ui-column' ||
+                                      blk.type === 'ui-grid' ||
+                                      blk.type === 'ui-select' ||
+                                      (blk.type === 'ui-checkbox' &&
+                                        blk.controlVariant === 'radio')) && (
+                                      <input
+                                        type="text"
+                                        value={
+                                          Array.isArray(blk.options) && blk.options.length > 0
+                                            ? blk.options.join(', ')
+                                            : blk.content
+                                        }
+                                        placeholder="Items (comma separated, e.g. Item 1, Item 2, Item 3)"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSelectedBlockId(blk.id);
+                                        }}
+                                        onChange={(e) => {
+                                          const raw = e.target.value;
+                                          const parsed = raw
+                                            .split(/[,|]+/)
+                                            .map((s) => s.trim())
+                                            .filter(Boolean);
+                                          handleUpdateBlock({
+                                            ...blk,
+                                            options: parsed,
+                                            content: parsed.join(' | '),
+                                          });
+                                        }}
+                                        className="w-full bg-[#0B0E15] border border-sky-500/20 focus:border-[#4D97FF] rounded-lg px-2.5 py-1 text-[11px] text-sky-200 placeholder-slate-600 outline-none"
+                                      />
+                                    )}
+                                  </div>
                                 </div>
-                              </div>
+                              </React.Fragment>
+                            );
+                          })}
+                          {canvasDropIndex === blocks.length && (
+                            <div
+                              onDragOver={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                              }}
+                              onDrop={(e) => void handleDropAtIndex(e, blocks.length)}
+                              className="h-2.5 rounded-full bg-[#4D97FF] shadow-[0_0_12px_rgba(77,151,255,0.8)] flex items-center justify-center transition-all"
+                            >
+                              <span className="px-2 py-0.5 rounded bg-[#0A0D13] border border-[#4D97FF] text-[9px] font-bold text-[#60A5FA] uppercase tracking-wider">
+                                Drop Block Here
+                              </span>
                             </div>
-                          );
-                        })
+                          )}
+                        </>
                       )}
                     </div>
                   ) : (
@@ -3498,6 +4058,72 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         </div>
 
                         {/* Specialized Logic / Data / Backend Editors */}
+                        {(selectedBlock.type === 'logic-click' ||
+                          selectedBlock.type === 'logic-oninput') && (
+                          <div className="p-3 rounded-xl bg-[#090B10] border border-amber-500/20 space-y-1.5">
+                            <label className="text-[10px] text-amber-300 font-semibold block">
+                              {selectedBlock.type === 'logic-click'
+                                ? 'Triggered When Button Clicked (Source Button)'
+                                : 'Triggered When Input Changes (Source Field)'}
+                            </label>
+                            <select
+                              value={selectedBlock.logicConfig?.triggerSourceId || ''}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  logicConfig: {
+                                    ...selectedBlock.logicConfig,
+                                    triggerSourceId: e.target.value || undefined,
+                                  },
+                                })
+                              }
+                              className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
+                            >
+                              <option value="">
+                                {selectedBlock.type === 'logic-click'
+                                  ? 'Any Button on Page'
+                                  : 'Any Input Field on Page'}
+                              </option>
+                              {blocks
+                                .filter((b) =>
+                                  selectedBlock.type === 'logic-click'
+                                    ? b.type === 'ui-button'
+                                    : b.type === 'ui-input' ||
+                                      b.type === 'ui-textarea' ||
+                                      b.type === 'ui-select' ||
+                                      b.type === 'ui-checkbox'
+                                )
+                                .map((b) => (
+                                  <option key={b.id} value={b.id}>
+                                    {b.name} — &quot;{(b.content || b.subtitle || b.type).slice(0, 28)}&quot;
+                                  </option>
+                                ))}
+                            </select>
+                            {selectedBlock.type === 'logic-oninput' && (
+                              <div className="pt-1 space-y-1">
+                                <label className="text-[10px] text-slate-400">
+                                  Sync Typed Value Into Variable Name (Optional)
+                                </label>
+                                <input
+                                  type="text"
+                                  value={selectedBlock.logicConfig?.varName ?? ''}
+                                  placeholder="e.g. searchQuery or userName"
+                                  onChange={(e) =>
+                                    handleUpdateBlock({
+                                      ...selectedBlock,
+                                      logicConfig: {
+                                        ...selectedBlock.logicConfig,
+                                        varName: e.target.value,
+                                      },
+                                    })
+                                  }
+                                  className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-200 font-mono outline-none"
+                                />
+                              </div>
+                            )}
+                          </div>
+                        )}
+
                         {selectedBlock.type === 'logic-onkey' && (
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-[#090B10] border border-amber-500/20">
                             <div className="space-y-1">
@@ -3533,6 +4159,50 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                   })
                                 }
                                 className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-200 outline-none"
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {selectedBlock.type === 'logic-timer' && (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3 rounded-xl bg-[#090B10] border border-amber-500/20">
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-amber-300 font-semibold">
+                                Countdown Seconds
+                              </label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={3600}
+                                value={selectedBlock.logicConfig?.timerSeconds ?? selectedBlock.counterValue ?? 10}
+                                onChange={(e) => {
+                                  const secs = Math.max(1, Number(e.target.value) || 10);
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    counterValue: secs,
+                                    logicConfig: {
+                                      ...selectedBlock.logicConfig,
+                                      timerSeconds: secs,
+                                    },
+                                  });
+                                }}
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-200 font-mono outline-none"
+                              />
+                            </div>
+                            <div className="space-y-1">
+                              <label className="text-[10px] text-amber-300 font-semibold">
+                                Completion Message
+                              </label>
+                              <input
+                                type="text"
+                                value={selectedBlock.actionPayload || 'Timer completed!'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    actionPayload: e.target.value,
+                                  })
+                                }
+                                className="w-full px-2.5 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
                               />
                             </div>
                           </div>
@@ -3614,8 +4284,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white outline-none"
                               >
                                 <option value="NONE">Single Check</option>
-                                <option value="AND">AND (isLoggedIn == true)</option>
-                                <option value="OR">OR (isLoggedIn == true)</option>
+                                <option value="AND">AND (2nd Check)</option>
+                                <option value="OR">OR (2nd Check)</option>
                                 <option value="NOT">NOT (Invert)</option>
                               </select>
                             </div>
@@ -3653,6 +4323,69 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-rose-300 outline-none"
                               />
                             </div>
+                            {(selectedBlock.logicConfig?.combinator === 'AND' ||
+                              selectedBlock.logicConfig?.combinator === 'OR') && (
+                              <>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] text-amber-300">2nd Left Var</label>
+                                  <input
+                                    type="text"
+                                    value={selectedBlock.logicConfig?.secondLeft ?? 'isLoggedIn'}
+                                    onChange={(e) =>
+                                      handleUpdateBlock({
+                                        ...selectedBlock,
+                                        logicConfig: {
+                                          ...selectedBlock.logicConfig,
+                                          secondLeft: e.target.value,
+                                        },
+                                      })
+                                    }
+                                    className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white font-mono outline-none"
+                                  />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] text-amber-300">2nd Operator</label>
+                                  <select
+                                    value={selectedBlock.logicConfig?.secondOp ?? '=='}
+                                    onChange={(e) =>
+                                      handleUpdateBlock({
+                                        ...selectedBlock,
+                                        logicConfig: {
+                                          ...selectedBlock.logicConfig,
+                                          secondOp: e.target.value as BlockLogicConfig['secondOp'],
+                                        },
+                                      })
+                                    }
+                                    className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-amber-300 font-mono outline-none"
+                                  >
+                                    <option value="==">==</option>
+                                    <option value="!=">!=</option>
+                                    <option value=">">&gt;</option>
+                                    <option value="<">&lt;</option>
+                                    <option value=">=">&gt;=</option>
+                                    <option value="<=">&lt;=</option>
+                                    <option value="contains">contains</option>
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[10px] text-amber-300">2nd Right Val</label>
+                                  <input
+                                    type="text"
+                                    value={selectedBlock.logicConfig?.secondRight ?? 'true'}
+                                    onChange={(e) =>
+                                      handleUpdateBlock({
+                                        ...selectedBlock,
+                                        logicConfig: {
+                                          ...selectedBlock.logicConfig,
+                                          secondRight: e.target.value,
+                                        },
+                                      })
+                                    }
+                                    className="w-full px-2 py-1.5 rounded-lg bg-[#11151E] border border-white/15 text-white font-mono outline-none"
+                                  />
+                                </div>
+                              </>
+                            )}
                           </div>
                         )}
 
@@ -4710,6 +5443,12 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                   onToggleTimer={(blk) =>
                     setRunningTimers((prev) => ({ ...prev, [blk.id]: !prev[blk.id] }))
                   }
+                  onDropAtStageIndex={(payload, idx) => {
+                    handleDropPayloadAtIndex(payload, idx);
+                  }}
+                  onDismissSubmission={() =>
+                    setRuntimeState((prev) => ({ ...prev, lastSubmission: null }))
+                  }
                 />
               </div>
             </div>
@@ -4785,6 +5524,70 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                           className="flex-1 min-w-0 px-2.5 py-1 rounded-full bg-[#0A0D13] border border-white/15 text-slate-100 outline-none focus:border-[#4C97FF]"
                         />
                       </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-slate-400 w-9 shrink-0">Sub</span>
+                        <input
+                          type="text"
+                          value={
+                            selectedBlock.type === 'ui-stat'
+                              ? (selectedBlock.statLabel ?? selectedBlock.subtitle ?? '')
+                              : selectedBlock.subtitle || ''
+                          }
+                          placeholder={
+                            selectedBlock.type === 'ui-tabbar'
+                              ? 'Panel text (separate tabs with |)...'
+                              : 'Subtitle / label...'
+                          }
+                          onChange={(e) =>
+                            handleUpdateBlock(
+                              selectedBlock.type === 'ui-stat'
+                                ? {
+                                    ...selectedBlock,
+                                    subtitle: e.target.value,
+                                    statLabel: e.target.value,
+                                  }
+                                : { ...selectedBlock, subtitle: e.target.value }
+                            )
+                          }
+                          className="flex-1 min-w-0 px-2.5 py-1 rounded-full bg-[#0A0D13] border border-white/10 text-slate-300 placeholder-slate-600 outline-none focus:border-[#4C97FF]"
+                        />
+                      </div>
+
+                      {(selectedBlock.type === 'ui-sidebar' ||
+                        selectedBlock.type === 'ui-tabbar' ||
+                        selectedBlock.type === 'ui-row' ||
+                        selectedBlock.type === 'ui-column' ||
+                        selectedBlock.type === 'ui-grid' ||
+                        selectedBlock.type === 'ui-select' ||
+                        (selectedBlock.type === 'ui-checkbox' &&
+                          selectedBlock.controlVariant === 'radio')) && (
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-sky-400 w-9 shrink-0">Items</span>
+                          <input
+                            type="text"
+                            value={
+                              Array.isArray(selectedBlock.options) && selectedBlock.options.length > 0
+                                ? selectedBlock.options.join(', ')
+                                : selectedBlock.content
+                            }
+                            placeholder="Comma separated items..."
+                            onChange={(e) => {
+                              const raw = e.target.value;
+                              const parsed = raw
+                                .split(/[,|]+/)
+                                .map((s) => s.trim())
+                                .filter(Boolean);
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                options: parsed,
+                                content: parsed.join(' | '),
+                              });
+                            }}
+                            className="flex-1 min-w-0 px-2.5 py-1 rounded-full bg-[#0A0D13] border border-sky-500/30 text-sky-200 outline-none focus:border-[#4C97FF]"
+                          />
+                        </div>
+                      )}
 
                       {/* Inspector Mode Switcher: CapCut Templates vs Custom Properties */}
                       <div className="flex items-center gap-1 bg-[#0A0D13] p-0.5 rounded-lg border border-white/10">
@@ -5089,10 +5892,13 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
                       {(selectedBlock.type === 'ui-navbar' ||
                         selectedBlock.type === 'ui-pricing' ||
-                        selectedBlock.type === 'logic-click') && (
+                        selectedBlock.type === 'ui-modal' ||
+                        selectedBlock.type === 'ui-section' ||
+                        selectedBlock.type === 'logic-click' ||
+                        selectedBlock.type === 'logic-if') && (
                         <div className="space-y-1">
                           <span className="font-semibold text-slate-400 block">
-                            Badge / Button Tag Text
+                            Badge / Button / Kicker Text
                           </span>
                           <input
                             type="text"
@@ -5102,6 +5908,12 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 ? 'SL'
                                 : selectedBlock.type === 'ui-pricing'
                                 ? 'PRO'
+                                : selectedBlock.type === 'ui-modal'
+                                ? 'Open Dialog'
+                                : selectedBlock.type === 'ui-section'
+                                ? 'Section Container'
+                                : selectedBlock.type === 'logic-if'
+                                ? 'Eval'
                                 : 'Fire')
                             }
                             onChange={(e) =>
@@ -5112,17 +5924,68 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         </div>
                       )}
 
-                      {selectedBlock.type === 'ui-image' && (
-                        <div className="space-y-1">
-                          <span className="font-semibold text-slate-400 block">Image URL (Optional)</span>
+                      {(selectedBlock.type === 'ui-image' ||
+                        selectedBlock.type === 'ui-avatar' ||
+                        selectedBlock.type === 'ui-card') && (
+                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-sky-500/20">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-sky-300 flex items-center gap-1">
+                              <ImageIcon className="w-3 h-3" />
+                              Photo / Image
+                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <label className="px-2 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer">
+                                <Upload className="w-3 h-3" />
+                                <span>Upload Photo</span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={async (e) => {
+                                    const file = e.target.files?.[0];
+                                    e.target.value = '';
+                                    if (!file) return;
+                                    try {
+                                      const dataUrl = await readAndCompressImageFile(file);
+                                      handleUpdateBlock({ ...selectedBlock, imageUrl: dataUrl });
+                                      onToast(`Uploaded photo "${file.name}"`, 'success');
+                                    } catch (err) {
+                                      onToast(
+                                        err instanceof Error ? err.message : 'Failed to load image',
+                                        'error'
+                                      );
+                                    }
+                                  }}
+                                />
+                              </label>
+                              {selectedBlock.imageUrl && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    handleUpdateBlock({ ...selectedBlock, imageUrl: '' })
+                                  }
+                                  className="px-2 py-1 rounded bg-white/10 hover:bg-rose-500/30 text-[10px] text-slate-300 cursor-pointer"
+                                >
+                                  Clear
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {selectedBlock.imageUrl && (
+                            <img
+                              src={selectedBlock.imageUrl}
+                              alt={selectedBlock.name}
+                              className="w-full h-20 object-cover rounded border border-white/10"
+                            />
+                          )}
                           <input
                             type="text"
                             value={selectedBlock.imageUrl || ''}
                             onChange={(e) =>
                               handleUpdateBlock({ ...selectedBlock, imageUrl: e.target.value })
                             }
-                            placeholder="https://..."
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
+                            placeholder="Or paste Image URL (https://...)"
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#0A0D13] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
                           />
                         </div>
                       )}
@@ -5658,29 +6521,45 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
             </div>
 
             <div className="p-4 flex flex-wrap items-center justify-between gap-2 bg-[#0D1017] border-b border-white/10">
-              <div className="flex flex-wrap items-center gap-1 bg-[#161B26] p-1 rounded-xl border border-white/10">
-                {(
-                  [
-                    { id: 'html', label: 'HTML5' },
-                    { id: 'css', label: 'CSS' },
-                    { id: 'js', label: 'JavaScript' },
-                    { id: 'react', label: 'React TSX' },
-                    { id: 'flask', label: 'Python Flask' },
-                  ] as const
-                ).map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setExportTarget(t.id)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
-                      exportTarget === t.id
-                        ? 'bg-[#2563EB] text-white'
-                        : 'text-slate-400 hover:text-white'
-                    }`}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1 bg-[#161B26] p-1 rounded-xl border border-white/10">
+                  {(
+                    [
+                      { id: 'html', label: 'HTML5' },
+                      { id: 'css', label: 'CSS' },
+                      { id: 'js', label: 'JavaScript' },
+                      { id: 'react', label: 'React TSX' },
+                      { id: 'flask', label: 'Python Flask' },
+                    ] as const
+                  ).map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setExportTarget(t.id)}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer ${
+                        exportTarget === t.id
+                          ? 'bg-[#2563EB] text-white'
+                          : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {pages.length > 1 && (
+                  <select
+                    value={activePage?.id || ''}
+                    onChange={(e) => handleSelectPage(e.target.value, false)}
+                    className="px-2.5 py-1.5 rounded-lg bg-[#161B26] border border-white/15 text-xs text-sky-300 outline-none cursor-pointer"
                   >
-                    {t.label}
-                  </button>
-                ))}
+                    {pages.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        Page: {p.name} ({p.slug}.html)
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
 
               <div className="flex items-center gap-2">
@@ -5717,6 +6596,35 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                   <Download className="w-3.5 h-3.5" />
                   <span>Download</span>
                 </button>
+                {pages.length > 1 && exportTarget === 'html' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      pages.forEach((pg, index) => {
+                        setTimeout(() => {
+                          const code = generateHtmlExport(
+                            projectName,
+                            pg.blocks,
+                            pages,
+                            pg.pageStyle
+                          );
+                          const blob = new Blob([code], { type: 'text/html' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a');
+                          a.href = url;
+                          a.download = `${pg.slug || 'page'}.html`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                        }, index * 180);
+                      });
+                      onToast(`Exported all ${pages.length} HTML pages!`, 'success');
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold text-white flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                    <span>All Pages ({pages.length})</span>
+                  </button>
+                )}
               </div>
             </div>
 

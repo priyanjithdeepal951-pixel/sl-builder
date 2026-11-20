@@ -326,6 +326,24 @@ export const WEB_STUDIO_BLOCK_TEMPLATES: WebStudioBlockTemplate[] = [
 
   // ================= 3. INTERACTIVE UI & USER INPUT FORMS =================
   {
+    id: 'tpl-submit-button',
+    type: 'ui-button',
+    studioCategory: 'interactive',
+    blockCategory: 'ui',
+    group: 'Buttons & Actions',
+    siGroup: 'බොත්තම්',
+    name: 'Submit / Enter Form Button',
+    siName: 'දත්ත ඇතුළත් කිරීමේ බොත්තම (Submit)',
+    defaultContent: 'Submit & Enter Inputs',
+    defaultSubtitle: 'Captures & enters all form inputs above',
+    defaults: {
+      buttonVariant: 'primary',
+      action: 'submit-form',
+      actionPayload: 'Form inputs entered & saved!',
+      style: { bgColor: 'bg-indigo-600', textColor: 'text-white', borderRadius: 'rounded-xl', padding: 'py-3 px-6', textAlign: 'center' },
+    },
+  },
+  {
     id: 'tpl-button',
     type: 'ui-button',
     studioCategory: 'interactive',
@@ -334,11 +352,10 @@ export const WEB_STUDIO_BLOCK_TEMPLATES: WebStudioBlockTemplate[] = [
     siGroup: 'බොත්තම්',
     name: 'Action Button',
     siName: 'ක්‍රියා බොත්තම (Button)',
-    defaultContent: '⚡ Trigger Live Action',
+    defaultContent: 'Trigger Live Action',
     defaults: {
       buttonVariant: 'primary',
-      action: 'increment-counter',
-      actionPayload: 'Event fired!',
+      actionPayload: 'Action executed!',
       style: { bgColor: 'bg-indigo-600', textColor: 'text-white', borderRadius: 'rounded-xl', padding: 'py-3 px-6', textAlign: 'center' },
     },
   },

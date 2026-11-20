@@ -36,6 +36,8 @@ import {
   MapPin,
   Camera,
   X,
+  Pencil,
+  GripVertical,
 } from 'lucide-react';
 import {
   CanvasBlock,
@@ -56,6 +58,7 @@ import {
   evaluateMathTextOperation,
   parseOptionsList,
 } from '../../utils/studioRuntime';
+import { readAndCompressImageFile } from '../../utils/imageUpload';
 
 export interface PreviewConfirmDialog {
   id: string;
@@ -82,6 +85,17 @@ interface WebPreviewRendererProps {
   onResolveConfirm?: (accepted: boolean) => void;
   runningTimers?: Record<string, boolean>;
   onToggleTimer?: (block: CanvasBlock) => void;
+  onDropAtStageIndex?: (
+    payload: {
+      tplId?: string;
+      blockType?: string;
+      moveBlockId?: string;
+      imageDataUrl?: string;
+      fileName?: string;
+    },
+    index: number
+  ) => void;
+  onDismissSubmission?: () => void;
 }
 
 const FONT_SIZE_MAP: Record<string, string> = {
@@ -197,6 +211,8 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
   onResolveConfirm,
   runningTimers = {},
   onToggleTimer,
+  onDropAtStageIndex,
+  onDismissSubmission,
 }) => {
   const [apiResponses, setApiResponses] = useState<Record<string, string>>({});
   const [localFormInputs, setLocalFormInputs] = useState<Record<string, string>>({});
@@ -204,6 +220,43 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
     Record<string, { name: string; sizeKb: number; imageUrl?: string }>
   >({});
   const [sidebarActiveIdx, setSidebarActiveIdx] = useState<Record<string, number>>({});
+  const [inlineEditBlockId, setInlineEditBlockId] = useState<string | null>(null);
+  const [stageDropIdx, setStageDropIdx] = useState<number | null>(null);
+
+  const handleStageDragOver = (e: React.DragEvent, idx: number) => {
+    if (!onDropAtStageIndex) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const insertIdx = e.clientY < rect.top + rect.height / 2 ? idx : idx + 1;
+    if (stageDropIdx !== insertIdx) setStageDropIdx(insertIdx);
+  };
+
+  const handleStageDropPayload = async (e: React.DragEvent, fallbackIdx: number) => {
+    if (!onDropAtStageIndex) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const targetIdx = stageDropIdx !== null ? stageDropIdx : fallbackIdx;
+    setStageDropIdx(null);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      try {
+        const dataUrl = await readAndCompressImageFile(file);
+        onDropAtStageIndex({ imageDataUrl: dataUrl, fileName: file.name }, targetIdx);
+      } catch {
+        // ignore invalid file
+      }
+      return;
+    }
+
+    const moveBlockId = e.dataTransfer.getData('application/x-slbuilder-move-id');
+    const tplId = e.dataTransfer.getData('application/x-slbuilder-tpl-id');
+    const blockType = e.dataTransfer.getData('application/x-slbuilder-type');
+    if (moveBlockId || tplId || blockType) {
+      onDropAtStageIndex({ moveBlockId, tplId, blockType }, targetIdx);
+    }
+  };
 
   const formInputs = controlledFormInputs ?? localFormInputs;
   const setFormInput = (blockId: string, value: string, fireInputEvent = true) => {
@@ -222,33 +275,70 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
   if (blocks.length === 0) {
     return (
       <div
-        className="relative h-full min-h-[220px] flex flex-col items-center justify-center text-center p-6 overflow-hidden"
+        onDragOver={(e) => {
+          if (!onDropAtStageIndex) return;
+          e.preventDefault();
+          setStageDropIdx(0);
+        }}
+        onDragLeave={() => setStageDropIdx(null)}
+        onDrop={(e) => handleStageDropPayload(e, 0)}
+        className={`relative h-full min-h-[220px] flex flex-col items-center justify-center text-center p-6 overflow-hidden transition-all ${
+          stageDropIdx === 0 ? 'ring-2 ring-inset ring-[#4D97FF] bg-[#4D97FF]/10' : ''
+        }`}
         style={{ background: pageBgCss, color: pageTextColor }}
       >
         <LiveBackgroundLayer pageStyle={pageStyle} />
         <div className="relative z-10">
-          <p className="text-xs font-semibold">Empty Web Page</p>
+          <p className="text-xs font-semibold">
+            {stageDropIdx === 0 ? 'Release to place block here' : 'Empty Web Page'}
+          </p>
           <p className="text-[11px] opacity-70 mt-1 max-w-xs">
-            Click or drag any block from the HTML toolbox to populate this page.
+            Click or drag any block from the HTML toolbox — or drop a photo directly here.
           </p>
         </div>
       </div>
     );
   }
 
+  const inlineEditBlock = inlineEditBlockId
+    ? blocks.find((b) => b.id === inlineEditBlockId) || null
+    : null;
+  const supportsOptionsList = (tp: CanvasBlock['type'], variant?: string) =>
+    tp === 'ui-sidebar' ||
+    tp === 'ui-tabbar' ||
+    tp === 'ui-row' ||
+    tp === 'ui-column' ||
+    tp === 'ui-grid' ||
+    tp === 'ui-select' ||
+    (tp === 'ui-checkbox' && variant === 'radio');
+
   return (
     <div
+      onDragOver={(e) => {
+        if (!onDropAtStageIndex) return;
+        e.preventDefault();
+        if (stageDropIdx === null) setStageDropIdx(blocks.length);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setStageDropIdx(null);
+        }
+      }}
+      onDrop={(e) => handleStageDropPayload(e, blocks.length)}
       className="relative min-h-full flex flex-col overflow-hidden"
       style={{ background: pageBgCss, color: pageTextColor }}
     >
       <LiveBackgroundLayer pageStyle={pageStyle} />
       <div className="relative z-10 min-h-full flex flex-col flex-1">
-        {blocks.map((block) => {
+        {blocks.map((block, blockIdx) => {
           const isSelected = block.id === selectedBlockId;
           const isEdgeToEdge = block.type === 'ui-navbar' || block.type === 'ui-footer';
-          const isHidden = Boolean(
-            block.style?.isHidden || runtimeState.hiddenBlocks?.[block.id]
-          );
+          const isCssHidden = Boolean(block.style?.isHidden);
+          const isRuntimeHidden = Boolean(runtimeState.hiddenBlocks?.[block.id]);
+          if (isRuntimeHidden) {
+            return null;
+          }
+          const isHidden = isCssHidden;
           const isDisabled = Boolean(
             block.isDisabled || runtimeState.disabledBlocks?.[block.id]
           );
@@ -356,16 +446,65 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
           const parsedOptions = parseOptionsList(block.content, block.options);
 
           return (
-            <div
-              key={block.id}
-              id={`sl-el-${block.id}`}
-              style={layoutBoxStyle}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectBlock(block.id);
-              }}
-              className={wrapperClass}
-            >
+            <React.Fragment key={block.id}>
+              {stageDropIdx === blockIdx && (
+                <div className="mx-4 my-1 h-1.5 rounded-full bg-[#4D97FF] shadow-[0_0_12px_rgba(77,151,255,0.85)] relative flex items-center justify-center">
+                  <span className="px-2 py-0.5 rounded bg-[#4D97FF] text-white text-[9px] font-bold uppercase tracking-wider shadow">
+                    Drop Block Here
+                  </span>
+                </div>
+              )}
+              <div
+                id={`sl-el-${block.id}`}
+                style={layoutBoxStyle}
+                draggable={Boolean(onDropAtStageIndex)}
+                onDragStart={(e) => {
+                  const targetTag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
+                  if (targetTag === 'input' || targetTag === 'textarea' || targetTag === 'select') {
+                    e.preventDefault();
+                    return;
+                  }
+                  e.stopPropagation();
+                  e.dataTransfer.setData('application/x-slbuilder-move-id', block.id);
+                  e.dataTransfer.effectAllowed = 'move';
+                }}
+                onDragOver={(e) => handleStageDragOver(e, blockIdx)}
+                onDrop={(e) => handleStageDropPayload(e, blockIdx)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectBlock(block.id);
+                }}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  onSelectBlock(block.id);
+                  setInlineEditBlockId(block.id);
+                }}
+                className={wrapperClass}
+              >
+                {isSelected && (
+                  <div className="absolute top-1.5 right-1.5 z-30 flex items-center gap-1">
+                    {onDropAtStageIndex && (
+                      <span
+                        title="Drag block to reorder"
+                        className="px-1 py-0.5 rounded bg-[#1E2B45]/90 text-slate-300 border border-white/15 cursor-grab active:cursor-grabbing flex items-center shadow-md"
+                      >
+                        <GripVertical className="w-2.5 h-2.5" />
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setInlineEditBlockId(block.id);
+                      }}
+                      title="Edit all text & media on this block"
+                      className="px-1.5 py-0.5 rounded bg-[#1E2B45]/90 hover:bg-[#2563EB] text-white border border-sky-400/40 text-[9px] font-semibold flex items-center gap-1 shadow-md cursor-pointer"
+                    >
+                      <Pencil className="w-2.5 h-2.5" />
+                      <span>Edit</span>
+                    </button>
+                  </div>
+                )}
               {isHidden && (
                 <div className="mx-5 mt-1 px-2.5 py-1 rounded-md border border-dashed border-slate-400/50 bg-slate-900/60 text-[10px] font-mono text-slate-300 flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5">
@@ -519,11 +658,20 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         }
                       )}
                     </div>
-                    <div className="px-2 py-1 text-[11px] text-slate-300">
+                    <div className="px-2 py-1 text-[11px] text-slate-300" style={subtitleStyle}>
                       <span className="font-semibold text-sky-300">
                         {parsedOptions[block.counterValue ?? 0] || 'Tab 1'}:
                       </span>{' '}
-                      {block.subtitle || 'Active tab panel content ready for customization.'}
+                      {(() => {
+                        const panels = (block.subtitle || '')
+                          .split('|')
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                        if (panels.length > 1) {
+                          return panels[block.counterValue ?? 0] || panels[0];
+                        }
+                        return block.subtitle || 'Active tab panel content ready for customization.';
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -558,9 +706,11 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       customBg || 'bg-white/[0.03]'
                     } border border-dashed border-white/15 ${alignClass} space-y-1.5`}
                   >
-                    <span className="text-[9px] font-mono uppercase tracking-widest text-sky-400">
-                      Section Container
-                    </span>
+                    {(block.badgeText === undefined || block.badgeText !== '') && (
+                      <span className="text-[9px] font-mono uppercase tracking-widest text-sky-400 block">
+                        {block.badgeText || 'Section Container'}
+                      </span>
+                    )}
                     <h3
                       style={primaryStyle}
                       className={`${customFont || 'text-sm'} ${customWeight || 'font-bold'} ${
@@ -589,14 +739,19 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                   >
                     <div className="flex items-center gap-1.5 text-[10px] font-mono text-sky-400">
                       <Columns3 className="w-3 h-3" />
-                      <span>Flex Row ({parsedOptions.length || 3} items)</span>
+                      <span style={subtitleStyle}>
+                        {block.subtitle || `Flex Row (${parsedOptions.length || 3} items)`}
+                      </span>
                     </div>
                     <div className="flex flex-wrap sm:flex-nowrap gap-2">
                       {(parsedOptions.length > 0 ? parsedOptions : ['Col A', 'Col B', 'Col C']).map(
                         (item, idx) => (
                           <div
                             key={`${item}_${idx}`}
-                            className="flex-1 min-w-[80px] p-2.5 rounded-lg bg-[#090B10] border border-white/10 text-[11px] font-semibold text-white text-center"
+                            style={primaryStyle}
+                            className={`flex-1 min-w-[80px] p-2.5 rounded-lg bg-[#090B10] border border-white/10 text-[11px] font-semibold ${
+                              customTextColor || 'text-white'
+                            } text-center`}
                           >
                             {item}
                           </div>
@@ -616,7 +771,9 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       customBg || 'bg-white/[0.04]'
                     } border border-white/10 space-y-2`}
                   >
-                    <div className="text-[10px] font-mono text-sky-400">Vertical Column Stack</div>
+                    <div style={subtitleStyle} className="text-[10px] font-mono text-sky-400">
+                      {block.subtitle || 'Vertical Column Stack'}
+                    </div>
                     <div className="flex flex-col gap-1.5">
                       {(parsedOptions.length > 0
                         ? parsedOptions
@@ -624,7 +781,10 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       ).map((item, idx) => (
                         <div
                           key={`${item}_${idx}`}
-                          className="w-full px-3 py-2 rounded-lg bg-[#090B10] border border-white/10 text-[11px] text-slate-200"
+                          style={primaryStyle}
+                          className={`w-full px-3 py-2 rounded-lg bg-[#090B10] border border-white/10 text-[11px] ${
+                            customTextColor || 'text-slate-200'
+                          }`}
                         >
                           {item}
                         </div>
@@ -644,9 +804,9 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     } border border-white/10 space-y-2`}
                   >
                     <div className="flex items-center justify-between text-[10px] font-mono text-sky-400">
-                      <span className="flex items-center gap-1">
+                      <span style={subtitleStyle} className="flex items-center gap-1">
                         <LayoutGrid className="w-3 h-3" />
-                        Grid ({block.gridColumns === 3 ? '3 Columns' : '2 Columns'})
+                        {block.subtitle || `Grid (${block.gridColumns === 3 ? '3 Columns' : '2 Columns'})`}
                       </span>
                     </div>
                     <div
@@ -660,7 +820,10 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       ).map((cell, idx) => (
                         <div
                           key={`${cell}_${idx}`}
-                          className="p-2.5 rounded-lg bg-[#090B10] border border-white/10 text-[11px] font-semibold text-white"
+                          style={primaryStyle}
+                          className={`p-2.5 rounded-lg bg-[#090B10] border border-white/10 text-[11px] font-semibold ${
+                            customTextColor || 'text-white'
+                          }`}
                         >
                           {cell}
                         </div>
@@ -1279,18 +1442,85 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                 <div className="px-5 py-1.5">
                   <div
                     style={surfaceStyle}
+                    onDragOver={(e) => {
+                      if (e.dataTransfer.types.includes('Files')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                      }
+                    }}
+                    onDrop={async (e) => {
+                      const file = e.dataTransfer.files?.[0];
+                      if (file && file.type.startsWith('image/')) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        try {
+                          const dataUrl = await readAndCompressImageFile(file);
+                          onUpdateBlock({ ...block, imageUrl: dataUrl });
+                        } catch {
+                          // ignore invalid file
+                        }
+                      }
+                    }}
                     className={`${customPad || 'p-4'} ${customRadius} ${
                       customBg || 'bg-gradient-to-br from-slate-900 to-[#111827]'
-                    } border border-white/10 flex flex-col items-center justify-center ${alignClass} gap-1.5 min-h-[100px] overflow-hidden`}
+                    } border border-white/10 flex flex-col items-center justify-center ${alignClass} gap-2 min-h-[115px] overflow-hidden relative group`}
                   >
                     {block.imageUrl ? (
-                      <img
-                        src={block.imageUrl}
-                        alt={block.content}
-                        className="w-full max-h-40 object-cover rounded-lg mb-1"
-                      />
+                      <div className="relative w-full">
+                        <img
+                          src={block.imageUrl}
+                          alt={block.content}
+                          className="w-full max-h-52 object-cover rounded-lg"
+                        />
+                        <label
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-black/75 hover:bg-indigo-600 text-white text-[10px] font-semibold border border-white/20 flex items-center gap-1 cursor-pointer opacity-90 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
+                        >
+                          <Upload className="w-3 h-3" />
+                          <span>Change Photo</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              try {
+                                const dataUrl = await readAndCompressImageFile(file);
+                                onUpdateBlock({ ...block, imageUrl: dataUrl });
+                              } catch {
+                                // ignore invalid image
+                              }
+                            }}
+                          />
+                        </label>
+                      </div>
                     ) : (
-                      <ImageIcon className="w-6 h-6 text-sky-400" />
+                      <label
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full py-4 rounded-xl border border-dashed border-sky-400/35 hover:border-sky-400/70 bg-sky-500/5 hover:bg-sky-500/10 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <ImageIcon className="w-6 h-6 text-sky-400" />
+                        <span className="text-[11px] font-semibold text-sky-300">
+                          Click or Drop Photo Here
+                        </span>
+                        <span className="text-[9px] text-slate-400">PNG, JPG, WEBP, GIF</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const dataUrl = await readAndCompressImageFile(file);
+                              onUpdateBlock({ ...block, imageUrl: dataUrl });
+                            } catch {
+                              // ignore invalid image
+                            }
+                          }}
+                        />
+                      </label>
                     )}
                     <p
                       style={primaryStyle}
@@ -1373,9 +1603,36 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       customBg || 'bg-white/[0.04]'
                     } border border-white/10 flex items-center gap-3`}
                   >
-                    <div className="w-9 h-9 rounded-full bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-300 shrink-0">
-                      <User className="w-4 h-4" />
-                    </div>
+                    <label
+                      onClick={(e) => e.stopPropagation()}
+                      title="Upload profile photo"
+                      className="w-10 h-10 rounded-full bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-300 shrink-0 overflow-hidden cursor-pointer hover:ring-2 hover:ring-sky-400"
+                    >
+                      {block.imageUrl ? (
+                        <img
+                          src={block.imageUrl}
+                          alt={displayContent}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <User className="w-4 h-4" />
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          try {
+                            const dataUrl = await readAndCompressImageFile(file, 480, 0.85);
+                            onUpdateBlock({ ...block, imageUrl: dataUrl });
+                          } catch {
+                            // ignore
+                          }
+                        }}
+                      />
+                    </label>
                     <div className="min-w-0 flex-1">
                       <p
                         style={primaryStyle}
@@ -1600,7 +1857,10 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          onUpdateBlock({ ...block, counterValue: 10 });
+                          onUpdateBlock({
+                            ...block,
+                            counterValue: block.logicConfig?.timerSeconds ?? 10,
+                          });
                         }}
                         className="p-1 rounded bg-white/10 hover:bg-white/20 text-white cursor-pointer"
                         title="Reset Timer"
@@ -1617,7 +1877,8 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                 const passed = evaluateLogicCondition(
                   block.logicConfig,
                   runtimeState.variables,
-                  formInputs
+                  formInputs,
+                  blocks
                 );
                 return (
                   <div className="px-5 py-1.5">
@@ -1658,7 +1919,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           }}
                           className="px-2 py-1 rounded bg-amber-500 text-slate-950 text-[10px] font-bold cursor-pointer shrink-0"
                         >
-                          Eval
+                          {block.badgeText || 'Eval'}
                         </button>
                       </div>
                     </div>
@@ -2102,10 +2363,259 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                   {block.subtitle && <span style={subtitleStyle}>{block.subtitle}</span>}
                 </footer>
               )}
-            </div>
+              </div>
+              {blockIdx === blocks.length - 1 && stageDropIdx === blocks.length && (
+                <div className="mx-4 my-1.5 h-1.5 rounded-full bg-[#4D97FF] shadow-[0_0_12px_rgba(77,151,255,0.85)] relative flex items-center justify-center">
+                  <span className="px-2 py-0.5 rounded bg-[#4D97FF] text-white text-[9px] font-bold uppercase tracking-wider shadow">
+                    Drop Block Here
+                  </span>
+                </div>
+              )}
+            </React.Fragment>
           );
         })}
+
+        {runtimeState.lastSubmission && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="mx-5 my-3 p-3.5 rounded-xl bg-emerald-950/85 border border-emerald-400/40 text-xs shadow-lg space-y-2"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 font-bold text-emerald-300">
+                <Check className="w-3.5 h-3.5" />
+                <span>{runtimeState.lastSubmission.message}</span>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-emerald-400/80 font-mono">
+                <span>{runtimeState.lastSubmission.timestamp}</span>
+                {onDismissSubmission && (
+                  <button
+                    type="button"
+                    onClick={onDismissSubmission}
+                    className="p-0.5 rounded hover:bg-white/10 text-emerald-200 cursor-pointer"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+            {runtimeState.lastSubmission.fields.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1 border-t border-emerald-500/20">
+                {runtimeState.lastSubmission.fields.map((f, fIdx) => (
+                  <div
+                    key={`${f.label}_${fIdx}`}
+                    className="px-2 py-1 rounded bg-black/30 text-[10px] flex items-center justify-between gap-2"
+                  >
+                    <span className="text-emerald-300/80 font-semibold truncate">{f.label}:</span>
+                    <span className="text-white font-mono truncate">{f.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
+
+      {/* Inline Quick Text Editor Overlay (Double-Click or Edit Text pill on Stage) */}
+      {inlineEditBlock && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setInlineEditBlockId(null);
+          }}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="bg-[#11151E] border border-sky-500/30 rounded-2xl max-w-md w-full p-4 shadow-2xl space-y-3 text-xs"
+          >
+            <div className="flex items-center justify-between border-b border-white/10 pb-2">
+              <div className="flex items-center gap-1.5 font-bold text-white">
+                <Pencil className="w-3.5 h-3.5 text-sky-400" />
+                <span>Edit All Text — {inlineEditBlock.name}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInlineEditBlockId(null)}
+                className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5">
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-semibold block">
+                  {inlineEditBlock.type === 'ui-stat'
+                    ? 'Stat / KPI Value'
+                    : 'Primary Text / Title'}
+                </label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={
+                    inlineEditBlock.type === 'ui-stat'
+                      ? (inlineEditBlock.statValue ?? inlineEditBlock.content)
+                      : inlineEditBlock.content
+                  }
+                  onChange={(e) =>
+                    onUpdateBlock(
+                      inlineEditBlock.type === 'ui-stat'
+                        ? { ...inlineEditBlock, content: e.target.value, statValue: e.target.value }
+                        : { ...inlineEditBlock, content: e.target.value }
+                    )
+                  }
+                  className="w-full px-3 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-white outline-none focus:border-sky-400"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-semibold block">
+                  {inlineEditBlock.type === 'ui-stat'
+                    ? 'KPI Label'
+                    : inlineEditBlock.type === 'ui-testimonial'
+                    ? 'Author Name'
+                    : inlineEditBlock.type === 'ui-tabbar'
+                    ? 'Tab Panels (separate per tab with |)'
+                    : 'Subtitle / Helper Label'}
+                </label>
+                <input
+                  type="text"
+                  value={
+                    inlineEditBlock.type === 'ui-stat'
+                      ? (inlineEditBlock.statLabel ?? inlineEditBlock.subtitle ?? '')
+                      : inlineEditBlock.subtitle || ''
+                  }
+                  onChange={(e) =>
+                    onUpdateBlock(
+                      inlineEditBlock.type === 'ui-stat'
+                        ? { ...inlineEditBlock, subtitle: e.target.value, statLabel: e.target.value }
+                        : { ...inlineEditBlock, subtitle: e.target.value }
+                    )
+                  }
+                  className="w-full px-3 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-slate-200 outline-none focus:border-sky-400"
+                />
+              </div>
+
+              {supportsOptionsList(inlineEditBlock.type, inlineEditBlock.controlVariant) && (
+                <div className="space-y-1">
+                  <label className="text-[10px] text-sky-300 font-semibold block">
+                    Items / Options (comma separated)
+                  </label>
+                  <input
+                    type="text"
+                    value={parseOptionsList(inlineEditBlock.content, inlineEditBlock.options).join(', ')}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      const parsed = raw
+                        .split(/[,|]+/)
+                        .map((s) => s.trim())
+                        .filter(Boolean);
+                      onUpdateBlock({
+                        ...inlineEditBlock,
+                        options: parsed,
+                        content: parsed.join(' | '),
+                      });
+                    }}
+                    className="w-full px-3 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-sky-200 outline-none focus:border-sky-400"
+                  />
+                </div>
+              )}
+
+              {inlineEditBlock.type === 'ui-testimonial' && (
+                <div className="space-y-1">
+                  <label className="text-[10px] text-slate-400 font-semibold block">
+                    Author Role / Company
+                  </label>
+                  <input
+                    type="text"
+                    value={inlineEditBlock.authorRole || ''}
+                    onChange={(e) =>
+                      onUpdateBlock({ ...inlineEditBlock, authorRole: e.target.value })
+                    }
+                    className="w-full px-3 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-slate-200 outline-none focus:border-sky-400"
+                  />
+                </div>
+              )}
+
+              {(inlineEditBlock.type === 'ui-image' ||
+                inlineEditBlock.type === 'ui-avatar' ||
+                inlineEditBlock.type === 'ui-card') && (
+                <div className="space-y-1.5 p-2.5 rounded-xl bg-[#090B10] border border-sky-500/25">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-sky-300 font-semibold">
+                      Photo / Image Asset
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <label className="px-2.5 py-1 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 text-[10px] font-bold flex items-center gap-1 cursor-pointer">
+                        <Upload className="w-3 h-3" />
+                        <span>Upload Photo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const dataUrl = await readAndCompressImageFile(file);
+                              onUpdateBlock({ ...inlineEditBlock, imageUrl: dataUrl });
+                            } catch {
+                              // ignore
+                            }
+                          }}
+                        />
+                      </label>
+                      {inlineEditBlock.imageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => onUpdateBlock({ ...inlineEditBlock, imageUrl: '' })}
+                          className="px-2 py-1 rounded-lg bg-rose-500/20 text-rose-300 text-[10px] font-semibold cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    type="text"
+                    value={inlineEditBlock.imageUrl || ''}
+                    onChange={(e) =>
+                      onUpdateBlock({ ...inlineEditBlock, imageUrl: e.target.value })
+                    }
+                    placeholder="Or paste Image URL (https://...)"
+                    className="w-full px-2.5 py-1 rounded-lg bg-[#11151E] border border-white/10 text-[11px] text-slate-200 outline-none focus:border-sky-400"
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1">
+                <label className="text-[10px] text-slate-400 font-semibold block">
+                  Badge / Button / Kicker Text (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={inlineEditBlock.badgeText ?? ''}
+                  placeholder="Custom tag, button label, or section kicker..."
+                  onChange={(e) =>
+                    onUpdateBlock({ ...inlineEditBlock, badgeText: e.target.value })
+                  }
+                  className="w-full px-3 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-amber-200 outline-none focus:border-sky-400"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setInlineEditBlockId(null)}
+                className="px-4 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-slate-950 font-bold cursor-pointer"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* In-App Confirm Dialog Overlay inside Stage (No native window.confirm) */}
       {confirmDialog && (

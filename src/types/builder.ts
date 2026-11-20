@@ -148,13 +148,15 @@ export type BlockActionType =
   | 'device-camera';
 
 export interface BlockLogicConfig {
+  // Event Trigger Source (e.g., which button/input fires a Hat block)
+  triggerSourceId?: string;
   // Conditionals & Comparisons
   leftOperand?: string;
   operator?: '==' | '!=' | '>' | '<' | '>=' | '<=' | 'contains';
   rightOperand?: string;
   combinator?: 'NONE' | 'AND' | 'OR' | 'NOT';
   secondLeft?: string;
-  secondOp?: '==' | '!=' | '>' | '<' | '>=' | '<=';
+  secondOp?: '==' | '!=' | '>' | '<' | '>=' | '<=' | 'contains';
   secondRight?: string;
   thenMessage?: string;
   elseMessage?: string;
@@ -162,6 +164,7 @@ export interface BlockLogicConfig {
   loopMode?: 'repeat' | 'foreach' | 'while';
   repeatCount?: number;
   intervalMs?: number;
+  timerSeconds?: number;
   // Variables, Lists & Objects
   varName?: string;
   varValue?: string;
