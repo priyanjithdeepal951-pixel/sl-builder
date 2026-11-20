@@ -34,9 +34,15 @@ export interface BlockStyle {
   textColor?: string;
   customTextHex?: string;
   subtitleColorHex?: string;
+  textGradient?: string;
+  textShadow?: string;
+  textStroke?: string;
   bgColor?: string;
   customBgHex?: string;
+  bgGradient?: string;
   borderColor?: string;
+  boxShadow?: string;
+  templateId?: string;
   fontFamily?: 'sans' | 'serif' | 'mono' | 'display' | 'rounded';
   fontWeight?: 'normal' | 'medium' | 'semibold' | 'bold' | 'extrabold';
   fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';

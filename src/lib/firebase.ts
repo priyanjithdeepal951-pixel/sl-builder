@@ -13,6 +13,7 @@ import {
 } from 'firebase/auth';
 import {
   getFirestore,
+  initializeFirestore,
   doc,
   getDoc,
   getDocFromServer,
@@ -27,6 +28,7 @@ import {
   onSnapshot,
   arrayUnion,
   arrayRemove,
+  Firestore,
 } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
 import {
@@ -47,8 +49,23 @@ import {
 // Initialize Firebase App
 export const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 
-// Initialize Firestore with specific database ID (CRITICAL: Required for multi-database instances)
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Firestore with long-polling enabled for reliable connectivity across proxies/iframes
+function createFirestoreInstance(): Firestore {
+  try {
+    return initializeFirestore(
+      app,
+      {
+        experimentalForceLongPolling: true,
+        ignoreUndefinedProperties: true,
+      },
+      firebaseConfig.firestoreDatabaseId
+    );
+  } catch {
+    return getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  }
+}
+
+export const db = createFirestoreInstance();
 
 // Initialize Auth
 export const auth = getAuth(app);
@@ -108,6 +125,9 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
 
 // Test initial connection to Firestore
 export async function testConnection(): Promise<boolean> {
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    return false;
+  }
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
     return true;
@@ -516,28 +536,54 @@ export function subscribeToSiteSettings(
   onSettings: (settings: SiteSettingsConfig) => void
 ): () => void {
   const path = 'appConfig/siteSettings';
-  return onSnapshot(
-    doc(db, 'appConfig', 'siteSettings'),
-    (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data() as Partial<SiteSettingsConfig>;
-        onSettings({
-          ...DEFAULT_SITE_SETTINGS,
-          ...data,
-          templates:
-            Array.isArray(data.templates) && data.templates.length > 0
-              ? data.templates
-              : DEFAULT_SITE_SETTINGS.templates,
-        });
-      } else {
+  let unsubscribeSnapshot: (() => void) | null = null;
+  let cancelled = false;
+
+  const attachListener = () => {
+    if (cancelled || unsubscribeSnapshot) return;
+    unsubscribeSnapshot = onSnapshot(
+      doc(db, 'appConfig', 'siteSettings'),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data() as Partial<SiteSettingsConfig>;
+          onSettings({
+            ...DEFAULT_SITE_SETTINGS,
+            ...data,
+            templates:
+              Array.isArray(data.templates) && data.templates.length > 0
+                ? data.templates
+                : DEFAULT_SITE_SETTINGS.templates,
+          });
+        } else {
+          onSettings(DEFAULT_SITE_SETTINGS);
+        }
+      },
+      (error) => {
+        console.warn(`Site settings subscription notice (${path}):`, error.message);
         onSettings(DEFAULT_SITE_SETTINGS);
       }
-    },
-    (error) => {
-      console.warn(`Site settings subscription notice (${path}):`, error.message);
-      onSettings(DEFAULT_SITE_SETTINGS);
-    }
-  );
+    );
+  };
+
+  if (typeof navigator !== 'undefined' && !navigator.onLine) {
+    onSettings(DEFAULT_SITE_SETTINGS);
+    const handleOnline = () => {
+      attachListener();
+      window.removeEventListener('online', handleOnline);
+    };
+    window.addEventListener('online', handleOnline);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('online', handleOnline);
+      unsubscribeSnapshot?.();
+    };
+  }
+
+  attachListener();
+  return () => {
+    cancelled = true;
+    unsubscribeSnapshot?.();
+  };
 }
 
 export async function saveSiteSettings(

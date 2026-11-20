@@ -72,6 +72,12 @@ import {
   PAGE_THEME_PRESETS,
   resolvePageBackgroundCss,
 } from '../../utils/pageStylePresets';
+import {
+  BLOCK_STYLE_TEMPLATES,
+  BlockStyleTemplate,
+  TemplateCategory,
+  getTemplatesForBlockType,
+} from '../../data/blockStyleTemplates';
 import { getEffectiveNavLinks } from '../../utils/navLinkHelpers';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -202,6 +208,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   const [newPageName, setNewPageName] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [inspectorMode, setInspectorMode] = useState<'templates' | 'properties'>('templates');
+  const [templateFilter, setTemplateFilter] = useState<'recommended' | TemplateCategory>('recommended');
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -3026,9 +3034,261 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                           className="flex-1 min-w-0 px-2.5 py-1 rounded-full bg-[#0A0D13] border border-white/15 text-slate-100 outline-none focus:border-[#4C97FF]"
                         />
                       </div>
+
+                      {/* Inspector Mode Switcher: CapCut Templates vs Custom Properties */}
+                      <div className="flex items-center gap-1 bg-[#0A0D13] p-0.5 rounded-lg border border-white/10">
+                        <button
+                          type="button"
+                          onClick={() => setInspectorMode('templates')}
+                          className={`flex-1 py-1 px-2 rounded-md font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                            inspectorMode === 'templates'
+                              ? 'bg-[#2563EB] text-white shadow-xs'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          <span>{lang === 'si' ? 'ටෙම්ප්ලේට් (Templates)' : 'Style Templates'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInspectorMode('properties')}
+                          className={`flex-1 py-1 px-2 rounded-md font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                            inspectorMode === 'properties'
+                              ? 'bg-[#1E2B45] text-sky-300 border border-sky-400/30'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Wand2 className="w-3 h-3" />
+                          <span>{lang === 'si' ? 'වෙනස් කරන්න (Edit)' : 'Customize'}</span>
+                        </button>
+                      </div>
                     </div>
 
-                    <div className="flex-1 p-3 bg-[#0C0F16] overflow-y-auto space-y-2.5 text-[11px]">
+                    {inspectorMode === 'templates' ? (
+                      <div className="flex-1 p-2.5 bg-[#0C0F16] overflow-y-auto flex flex-col gap-2 text-[11px]">
+                        {/* Filter Pills + Reset */}
+                        <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                          <div className="flex items-center gap-1">
+                            {(
+                              [
+                                { id: 'recommended', label: 'For Block' },
+                                { id: 'text-fx', label: 'Text FX' },
+                                { id: 'surface', label: 'Box FX' },
+                                { id: 'button', label: 'Buttons' },
+                              ] as const
+                            ).map((tab) => (
+                              <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setTemplateFilter(tab.id)}
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer ${
+                                  templateFilter === tab.id
+                                    ? 'bg-sky-500/20 text-sky-300 border border-sky-400/40'
+                                    : 'bg-white/5 text-slate-400 hover:text-white border border-transparent'
+                                }`}
+                              >
+                                {tab.label}
+                              </button>
+                            ))}
+                          </div>
+                          {selectedBlock.style?.templateId && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: {
+                                    textAlign: selectedBlock.style?.textAlign,
+                                    fontSize: selectedBlock.style?.fontSize,
+                                  },
+                                })
+                              }
+                              className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/5 hover:bg-white/10 text-slate-300 flex items-center gap-1 cursor-pointer"
+                              title="Reset Template Style"
+                            >
+                              <RotateCcw className="w-2.5 h-2.5" />
+                              <span>Reset</span>
+                            </button>
+                          )}
+                        </div>
+
+                        {/* CapCut-Style Visual Template Cards Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                          {(templateFilter === 'recommended'
+                            ? getTemplatesForBlockType(selectedBlock.type)
+                            : BLOCK_STYLE_TEMPLATES.filter((t) => t.category === templateFilter)
+                          ).map((tpl: BlockStyleTemplate) => {
+                            const isActive = selectedBlock.style?.templateId === tpl.id;
+                            const previewFont =
+                              tpl.style.fontFamily === 'serif'
+                                ? "Georgia, Cambria, 'Times New Roman', serif"
+                                : tpl.style.fontFamily === 'mono'
+                                ? "'JetBrains Mono', ui-monospace, monospace"
+                                : tpl.style.fontFamily === 'display'
+                                ? "'Space Grotesk', system-ui, sans-serif"
+                                : tpl.style.fontFamily === 'rounded'
+                                ? "'Nunito', 'Quicksand', system-ui, sans-serif"
+                                : 'Inter, system-ui, sans-serif';
+
+                            const applyTemplate = () => {
+                              if (tpl.category === 'text-fx') {
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: {
+                                    ...selectedBlock.style,
+                                    templateId: tpl.id,
+                                    fontFamily: tpl.style.fontFamily,
+                                    fontWeight: tpl.style.fontWeight,
+                                    customTextHex: tpl.style.customTextHex,
+                                    subtitleColorHex: tpl.style.subtitleColorHex,
+                                    textGradient: tpl.style.textGradient,
+                                    textShadow: tpl.style.textShadow,
+                                    textStroke: tpl.style.textStroke,
+                                  },
+                                });
+                              } else {
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: {
+                                    ...selectedBlock.style,
+                                    templateId: tpl.id,
+                                    fontFamily: tpl.style.fontFamily || selectedBlock.style?.fontFamily,
+                                    fontWeight: tpl.style.fontWeight || selectedBlock.style?.fontWeight,
+                                    customTextHex: tpl.style.customTextHex,
+                                    subtitleColorHex: tpl.style.subtitleColorHex,
+                                    textGradient: undefined,
+                                    textShadow: undefined,
+                                    textStroke: undefined,
+                                    customBgHex: tpl.style.customBgHex,
+                                    bgGradient: tpl.style.bgGradient,
+                                    borderColor: tpl.style.borderColor,
+                                    boxShadow: tpl.style.boxShadow,
+                                    borderRadius: tpl.style.borderRadius,
+                                  },
+                                });
+                              }
+                            };
+
+                            return (
+                              <button
+                                key={tpl.id}
+                                type="button"
+                                onClick={applyTemplate}
+                                className={`group relative rounded-xl p-1.5 border text-left transition-all cursor-pointer overflow-hidden ${
+                                  isActive
+                                    ? 'border-[#4C97FF] ring-2 ring-[#4C97FF]/40 bg-[#182236]'
+                                    : 'border-white/10 bg-[#141923] hover:border-white/30 hover:bg-[#19202e]'
+                                }`}
+                              >
+                                <div
+                                  className="h-11 rounded-lg flex items-center justify-center px-2 relative overflow-hidden border border-white/10"
+                                  style={{
+                                    background: tpl.style.bgGradient || tpl.previewBg,
+                                    borderColor: tpl.style.borderColor || 'rgba(255,255,255,0.1)',
+                                    boxShadow: tpl.style.boxShadow,
+                                  }}
+                                >
+                                  {tpl.badge && (
+                                    <span className="absolute top-1 left-1 text-[8px] font-mono font-bold px-1 rounded bg-black/50 text-slate-300">
+                                      {tpl.badge}
+                                    </span>
+                                  )}
+                                  {isActive && (
+                                    <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-[#4C97FF] text-white flex items-center justify-center">
+                                      <Check className="w-2.5 h-2.5" />
+                                    </span>
+                                  )}
+                                  {tpl.category === 'button' ? (
+                                    <span
+                                      className={`px-2.5 py-0.5 text-[10px] font-bold ${
+                                        tpl.style.borderRadius || 'rounded-lg'
+                                      }`}
+                                      style={{
+                                        background: tpl.style.bgGradient,
+                                        color: tpl.style.customTextHex || '#ffffff',
+                                        border: tpl.style.borderColor
+                                          ? `1px solid ${tpl.style.borderColor}`
+                                          : undefined,
+                                        boxShadow: tpl.style.boxShadow,
+                                        fontFamily: previewFont,
+                                      }}
+                                    >
+                                      {(selectedBlock.content || 'Click').slice(0, 8)}
+                                    </span>
+                                  ) : (
+                                    <span
+                                      className="text-sm font-extrabold tracking-tight truncate max-w-full"
+                                      style={{
+                                        fontFamily: previewFont,
+                                        color: tpl.style.customTextHex || '#ffffff',
+                                        textShadow: tpl.style.textShadow,
+                                        WebkitTextStroke: tpl.style.textStroke,
+                                        ...(tpl.style.textGradient
+                                          ? {
+                                              backgroundImage: tpl.style.textGradient,
+                                              WebkitBackgroundClip: 'text',
+                                              backgroundClip: 'text',
+                                              WebkitTextFillColor: 'transparent',
+                                              color: 'transparent',
+                                            }
+                                          : {}),
+                                      }}
+                                    >
+                                      Aa{' '}
+                                      {selectedBlock.content
+                                        ? selectedBlock.content.slice(0, 7)
+                                        : 'Style'}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="mt-1 flex items-center justify-between px-0.5">
+                                  <span className="text-[10px] font-semibold text-slate-200 truncate">
+                                    {tpl.name}
+                                  </span>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1 mt-auto border-t border-white/10">
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              onClick={() => setInspectorMode('properties')}
+                              className="text-[10px] font-semibold text-slate-300 hover:text-white cursor-pointer"
+                            >
+                              Customize &rarr;
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCssSection('element');
+                                setActiveTab('css');
+                              }}
+                              className="text-[10px] font-semibold text-sky-400 hover:underline cursor-pointer"
+                            >
+                              More CSS &rarr;
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('js')}
+                              className="text-[10px] font-semibold text-amber-300 hover:underline cursor-pointer"
+                            >
+                              Edit JS &rarr;
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteBlock(selectedBlock.id)}
+                            className="text-[10px] font-semibold text-rose-400 hover:text-rose-300 cursor-pointer"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex-1 p-3 bg-[#0C0F16] overflow-y-auto space-y-2.5 text-[11px]">
                       <div className="space-y-1">
                         <span className="font-semibold text-slate-400 block">
                           {selectedBlock.type === 'ui-stat'
@@ -3173,7 +3433,11 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             onChange={(e) =>
                               handleUpdateBlock({
                                 ...selectedBlock,
-                                style: { ...selectedBlock.style, customTextHex: e.target.value },
+                                style: {
+                                  ...selectedBlock.style,
+                                  customTextHex: e.target.value,
+                                  textGradient: undefined,
+                                },
                               })
                             }
                             className="w-5 h-4 bg-transparent border-0 cursor-pointer p-0"
@@ -3329,6 +3593,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         </button>
                       </div>
                     </div>
+                    )}
                   </>
                 ) : (
                   <div className="flex-1 flex items-center justify-center text-xs text-slate-500 p-4">

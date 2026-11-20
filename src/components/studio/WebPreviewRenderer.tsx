@@ -180,6 +180,17 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
         const primaryStyle: React.CSSProperties = {
           ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}),
           ...(block.style?.customTextHex ? { color: block.style.customTextHex } : {}),
+          ...(block.style?.textShadow ? { textShadow: block.style.textShadow } : {}),
+          ...(block.style?.textStroke ? { WebkitTextStroke: block.style.textStroke } : {}),
+          ...(block.style?.textGradient
+            ? {
+                backgroundImage: block.style.textGradient,
+                WebkitBackgroundClip: 'text',
+                backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                color: 'transparent',
+              }
+            : {}),
         };
 
         const subtitleStyle: React.CSSProperties = {
@@ -189,11 +200,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
 
         const surfaceStyle: React.CSSProperties = {
           ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}),
-          ...(block.style?.customBgHex ? { backgroundColor: block.style.customBgHex } : {}),
+          ...(block.style?.customBgHex && !block.style?.bgGradient
+            ? { backgroundColor: block.style.customBgHex }
+            : {}),
+          ...(block.style?.bgGradient ? { background: block.style.bgGradient } : {}),
+          ...(block.style?.borderColor ? { borderColor: block.style.borderColor } : {}),
+          ...(block.style?.boxShadow ? { boxShadow: block.style.boxShadow } : {}),
         };
 
         const hasExplicitBg = Boolean(
-          block.style?.customBgHex || (customBg && customBg !== 'bg-transparent')
+          block.style?.customBgHex ||
+            block.style?.bgGradient ||
+            (customBg && customBg !== 'bg-transparent')
         );
 
         const wrapperClass = `relative transition-all cursor-pointer ${
@@ -290,7 +308,9 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
               <section
                 style={surfaceStyle}
                 className={`${customPad || 'px-5 py-7'} ${
-                  hasExplicitBg && customBg !== 'bg-white/[0.04]' ? customBg : ''
+                  hasExplicitBg && customBg !== 'bg-white/[0.04]'
+                    ? `${customBg} mx-4 my-2 ${customRadius} border border-white/10`
+                    : ''
                 } space-y-2 ${alignClass}`}
               >
                 <h1
@@ -536,20 +556,29 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                   style={{
                     ...(block.buttonVariant === 'primary' &&
                     !block.style?.customBgHex &&
+                    !block.style?.bgGradient &&
                     (!customBg || customBg === 'bg-indigo-600')
                       ? { backgroundColor: resolvedAccent }
                       : {}),
-                    ...(block.style?.customBgHex
+                    ...(block.style?.customBgHex && !block.style?.bgGradient
                       ? { backgroundColor: block.style.customBgHex }
                       : {}),
-                    ...primaryStyle,
+                    ...(block.style?.bgGradient ? { background: block.style.bgGradient } : {}),
+                    ...(block.style?.borderColor
+                      ? { borderColor: block.style.borderColor, borderWidth: '1px', borderStyle: 'solid' }
+                      : {}),
+                    ...(block.style?.boxShadow ? { boxShadow: block.style.boxShadow } : {}),
+                    ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}),
+                    ...(block.style?.customTextHex && !block.style?.textGradient
+                      ? { color: block.style.customTextHex }
+                      : {}),
                   }}
                   className={`px-5 py-2 ${customRadius} ${customFont || 'text-xs'} ${
                     customWeight || 'font-semibold'
                   } inline-flex items-center gap-1.5 shadow-md transition-transform active:scale-95 cursor-pointer ${
-                    block.buttonVariant === 'outline'
+                    block.buttonVariant === 'outline' && !block.style?.bgGradient
                       ? `border border-white/25 bg-transparent ${customTextColor || 'text-white'} hover:bg-white/10`
-                      : block.buttonVariant === 'danger'
+                      : block.buttonVariant === 'danger' && !block.style?.bgGradient
                       ? `bg-rose-600 hover:bg-rose-500 ${customTextColor || 'text-white'}`
                       : `${customBg || ''} ${customTextColor || 'text-white'} hover:opacity-95`
                   }`}
@@ -557,7 +586,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                   {!(block.content || '').trim().startsWith('⚡') && (
                     <Zap className="w-3.5 h-3.5 shrink-0" />
                   )}
-                  <span>{block.content}</span>
+                  <span style={primaryStyle}>{block.content}</span>
                 </button>
               </div>
             )}

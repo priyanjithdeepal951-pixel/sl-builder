@@ -41,38 +41,64 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const [showForgotModal, setShowForgotModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [loading, setLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  const EXPECTED_AUTH_CODES = new Set([
+    'auth/invalid-credential',
+    'auth/wrong-password',
+    'auth/user-not-found',
+    'auth/email-already-in-use',
+    'auth/popup-closed-by-user',
+    'auth/cancelled-popup-request',
+    'auth/too-many-requests',
+    'auth/weak-password',
+    'auth/invalid-email',
+    'auth/operation-not-allowed',
+  ]);
 
   useEffect(() => {
     if (!allowSignups && mode === 'signup') {
       setMode('login');
     }
+    setAuthError(null);
   }, [allowSignups]);
 
   // REAL FIREBASE EMAIL/PASSWORD AUTH
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setAuthError(null);
 
     if (mode === 'signup' && !allowSignups) {
-      onToast('New user registrations are currently paused by the administrator.', 'error');
+      const msg = 'New user registrations are currently paused by the administrator.';
+      setAuthError(msg);
+      onToast(msg, 'error');
       return;
     }
 
     if (!email || !email.includes('@')) {
-      onToast('Please enter a valid email address.', 'error');
+      const msg = 'Please enter a valid email address.';
+      setAuthError(msg);
+      onToast(msg, 'error');
       return;
     }
 
     if (mode === 'signup') {
       if (email !== confirmEmail) {
-        onToast('Emails do not match.', 'error');
+        const msg = 'Emails do not match.';
+        setAuthError(msg);
+        onToast(msg, 'error');
         return;
       }
       if (password.length < 6) {
-        onToast('Password must be at least 6 characters.', 'error');
+        const msg = 'Password must be at least 6 characters.';
+        setAuthError(msg);
+        onToast(msg, 'error');
         return;
       }
       if (password !== confirmPassword) {
-        onToast('Passwords do not match.', 'error');
+        const msg = 'Passwords do not match.';
+        setAuthError(msg);
+        onToast(msg, 'error');
         return;
       }
     }
@@ -101,18 +127,35 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         onLoginSuccess(userProfile);
       }
     } catch (err: any) {
-      console.error('Firebase Auth Error:', err);
-      if (err.code === 'auth/email-already-in-use') {
-        onToast('This email is already in use. Please log in instead.', 'error');
+      const code = err?.code || '';
+      if (!EXPECTED_AUTH_CODES.has(code)) {
+        console.warn('Unexpected Firebase Auth notice:', code, err?.message);
+      }
+      if (code === 'auth/email-already-in-use') {
+        const msg = 'This email is already registered. Switched to Log In — enter your password or continue with Google.';
+        setAuthError(msg);
+        onToast(msg, 'info');
         setMode('login');
-      } else if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+      } else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
+        const msg = 'Incorrect email or password. Double-check your credentials, reset your password, or use Google Sign-In.';
+        setAuthError(msg);
         onToast('Invalid email or password.', 'error');
-      } else if (err.code === 'auth/user-not-found') {
-        onToast('No account found for this email. Please sign up.', 'error');
-      } else if (err.code === 'auth/operation-not-allowed') {
-        onToast('Email/Password provider not active yet. Please sign in with Google!', 'info');
+      } else if (code === 'auth/user-not-found') {
+        const msg = 'No account found for this email. Please create an account first.';
+        setAuthError(msg);
+        onToast(msg, 'error');
+      } else if (code === 'auth/too-many-requests') {
+        const msg = 'Too many attempts. Wait a moment or reset your password.';
+        setAuthError(msg);
+        onToast(msg, 'error');
+      } else if (code === 'auth/operation-not-allowed') {
+        const msg = 'Email/Password sign-in is not enabled. Please continue with Google!';
+        setAuthError(msg);
+        onToast(msg, 'info');
       } else {
-        onToast(err.message || 'Authentication failed. Please try again.', 'error');
+        const msg = err?.message || 'Authentication failed. Please try again.';
+        setAuthError(msg);
+        onToast(msg, 'error');
       }
     } finally {
       setLoading(false);
@@ -121,6 +164,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
   // REAL FIREBASE GOOGLE SIGN-IN
   const handleGoogleLogin = async () => {
+    setAuthError(null);
     setLoading(true);
     try {
       const cred = await signInWithPopup(auth, googleProvider);
@@ -129,13 +173,18 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       onToast(`Signed in with Google as ${userProfile.name}!`, 'success');
       onLoginSuccess(userProfile);
     } catch (err: any) {
-      console.error('Google Sign-In Error:', err);
-      if (err.code === 'auth/popup-closed-by-user') {
-        onToast('Google Sign-In popup was closed.', 'info');
-      } else if (err.code === 'auth/cancelled-popup-request') {
+      const code = err?.code || '';
+      if (!EXPECTED_AUTH_CODES.has(code)) {
+        console.warn('Unexpected Google Sign-In notice:', code, err?.message);
+      }
+      if (code === 'auth/popup-closed-by-user') {
+        onToast('Google Sign-In popup was closed before completing sign-in.', 'info');
+      } else if (code === 'auth/cancelled-popup-request') {
         onToast('Sign-In request cancelled.', 'info');
       } else {
-        onToast(err.message || 'Google authentication failed.', 'error');
+        const msg = err?.message || 'Google authentication failed.';
+        setAuthError(msg);
+        onToast(msg, 'error');
       }
     } finally {
       setLoading(false);
@@ -153,8 +202,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
       onToast(`Password reset link sent to ${forgotEmail}. Please check your inbox.`, 'success');
       setForgotEmail('');
     } catch (err: any) {
-      console.error('Password Reset Error:', err);
-      onToast(err.message || 'Failed to send reset email.', 'error');
+      if (!EXPECTED_AUTH_CODES.has(err?.code || '')) {
+        console.warn('Password Reset notice:', err?.code, err?.message);
+      }
+      onToast(err?.message || 'Failed to send reset email.', 'error');
     } finally {
       setLoading(false);
     }
@@ -246,7 +297,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             <div className="flex items-center bg-white/5 p-1 rounded-xl border border-white/5 mb-5 text-xs font-medium">
               <button
                 type="button"
-                onClick={() => setMode('signup')}
+                onClick={() => {
+                  setMode('signup');
+                  setAuthError(null);
+                }}
                 className={`flex-1 py-1.5 rounded-lg transition-colors text-center ${
                   mode === 'signup' ? 'bg-white/15 text-white font-semibold' : 'text-slate-400 hover:text-white'
                 }`}
@@ -255,7 +309,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </button>
               <button
                 type="button"
-                onClick={() => setMode('login')}
+                onClick={() => {
+                  setMode('login');
+                  setAuthError(null);
+                }}
                 className={`flex-1 py-1.5 rounded-lg transition-colors text-center ${
                   mode === 'login' ? 'bg-white/15 text-white font-semibold' : 'text-slate-400 hover:text-white'
                 }`}
@@ -263,6 +320,16 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                 Log In
               </button>
             </div>
+
+            {authError && (
+              <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-200 text-xs flex items-start gap-2.5">
+                <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-semibold text-rose-300">Authentication Notice</p>
+                  <p className="text-[11px] text-rose-200/85 mt-0.5 leading-relaxed">{authError}</p>
+                </div>
+              </div>
+            )}
 
             {mode === 'signup' && !allowSignups && (
               <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">

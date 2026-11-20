@@ -338,7 +338,17 @@ export function generateHtmlExport(
       const subColor = b.style?.subtitleColorHex || defaultMutedColor;
       const fontFam = getCssFontFamily(b.style?.fontFamily);
       const fontWt = getCssFontWeight(b.style?.fontWeight, b.type === 'ui-paragraph' ? '400' : '700');
-      const bgVal = getCssBgColor(b.style?.bgColor, b.style?.customBgHex);
+      const bgVal = b.style?.bgGradient || getCssBgColor(b.style?.bgColor, b.style?.customBgHex);
+      const surfaceFxCss = `${bgVal ? `background: ${bgVal};` : ''}${
+        b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''
+      }${b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''}`;
+      const textFxCss = `${
+        b.style?.textGradient
+          ? `background-image: ${b.style.textGradient}; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;`
+          : `color: ${primaryColor};`
+      }${b.style?.textShadow ? ` text-shadow: ${b.style.textShadow};` : ''}${
+        b.style?.textStroke ? ` -webkit-text-stroke: ${b.style.textStroke};` : ''
+      }`;
       const radiusClass = b.style?.borderRadius || 'rounded-xl';
       const elId = `sl-el-${escapeHtml(b.id)}`;
 
@@ -393,11 +403,13 @@ export function generateHtmlExport(
         }
 
         case 'ui-heading':
-          return `  <section id="${elId}" style="font-family: ${fontFam}; ${
-            bgVal && bgVal !== 'rgba(255, 255, 255, 0.04)' ? `background: ${bgVal};` : ''
-          }" class="w-full py-16 sm:py-20 px-6">
-    <div class="max-w-4xl mx-auto space-y-4 ${alignClass}">
-      <h1 style="color: ${primaryColor}; font-weight: ${getCssFontWeight(
+          return `  <section id="${elId}" style="font-family: ${fontFam};" class="w-full py-16 sm:py-20 px-6">
+    <div style="${
+            bgVal && bgVal !== 'rgba(255, 255, 255, 0.04)' ? `${surfaceFxCss}` : ''
+          }" class="max-w-4xl mx-auto space-y-4 ${alignClass} ${
+            bgVal && bgVal !== 'rgba(255, 255, 255, 0.04)' ? `p-8 ${radiusClass} border border-white/10` : ''
+          }">
+      <h1 style="${textFxCss} font-weight: ${getCssFontWeight(
             b.style?.fontWeight,
             '800'
           )};" class="${getHtmlTextSizeClass(
@@ -415,17 +427,19 @@ export function generateHtmlExport(
   </section>`;
 
         case 'ui-paragraph':
-          return `  <section id="${elId}" style="font-family: ${fontFam}; ${
-            bgVal ? `background: ${bgVal};` : ''
-          }" class="w-full py-4 px-6">
-    <div class="max-w-4xl mx-auto ${alignClass} space-y-2 ${
+          return `  <section id="${elId}" style="font-family: ${fontFam};" class="w-full py-4 px-6">
+    <div style="${surfaceFxCss}" class="max-w-4xl mx-auto ${alignClass} space-y-2 ${
             bgVal && bgVal !== 'transparent' ? `p-6 ${radiusClass} border border-white/10` : ''
           }">
-      <p style="color: ${getCssColor(
-        b.style?.textColor,
-        b.style?.customTextHex,
-        isLightPage ? '#334155' : '#cbd5e1'
-      )}; font-weight: ${fontWt};" class="${getHtmlTextSizeClass(
+      <p style="${
+        b.style?.textGradient
+          ? textFxCss
+          : `color: ${getCssColor(
+              b.style?.textColor,
+              b.style?.customTextHex,
+              isLightPage ? '#334155' : '#cbd5e1'
+            )};${b.style?.textShadow ? ` text-shadow: ${b.style.textShadow};` : ''}`
+      } font-weight: ${fontWt};" class="${getHtmlTextSizeClass(
             b.style?.fontSize,
             'text-base sm:text-lg'
           )} leading-relaxed">${content}</p>
@@ -435,11 +449,15 @@ export function generateHtmlExport(
 
         case 'ui-badge':
           return `  <div id="${elId}" style="font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 pt-8 pb-2 ${alignClass}">
-    <span style="color: ${getCssColor(
-      b.style?.textColor,
-      b.style?.customTextHex,
-      '#818cf8'
-    )}; font-weight: ${fontWt};" class="inline-block ${getHtmlTextSizeClass(
+    <span style="${
+      b.style?.textGradient
+        ? textFxCss
+        : `color: ${getCssColor(
+            b.style?.textColor,
+            b.style?.customTextHex,
+            '#818cf8'
+          )};${b.style?.textShadow ? ` text-shadow: ${b.style.textShadow};` : ''}`
+    } font-weight: ${fontWt};" class="inline-block ${getHtmlTextSizeClass(
             b.style?.fontSize,
             'text-xs'
           )} uppercase tracking-widest font-mono">${content}</span>
@@ -449,11 +467,13 @@ export function generateHtmlExport(
           return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
-          };" class="p-6 ${radiusClass} border border-white/10 ${alignClass}">
+          };${b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''}${
+            b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''
+          }" class="p-6 ${radiusClass} border border-white/10 ${alignClass}">
       <div style="color: ${subColor};" class="text-xs font-mono uppercase tracking-wider">${escapeHtml(
             b.statLabel ?? b.subtitle ?? b.name
           )}</div>
-      <div style="color: ${primaryColor}; font-weight: ${getCssFontWeight(
+      <div style="${textFxCss} font-weight: ${getCssFontWeight(
             b.style?.fontWeight,
             '800'
           )};" class="${getHtmlTextSizeClass(
@@ -467,8 +487,10 @@ export function generateHtmlExport(
           return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
-          };" class="p-6 ${radiusClass} border border-white/10 space-y-2 ${alignClass}">
-      <h3 style="color: ${primaryColor}; font-weight: ${fontWt};" class="${getHtmlTextSizeClass(
+          };${b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''}${
+            b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''
+          }" class="p-6 ${radiusClass} border border-white/10 space-y-2 ${alignClass}">
+      <h3 style="${textFxCss} font-weight: ${fontWt};" class="${getHtmlTextSizeClass(
             b.style?.fontSize,
             'text-xl'
           )}">${content}</h3>
@@ -480,9 +502,11 @@ export function generateHtmlExport(
           return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
     <div style="font-family: ${fontFam}; background: ${
             bgVal || 'linear-gradient(135deg, rgba(30,27,75,0.55), rgba(15,23,42,0.9))'
-          };" class="p-7 ${radiusClass} border border-indigo-500/30 space-y-3 ${alignClass}">
+          };${b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''}${
+            b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''
+          }" class="p-7 ${radiusClass} border border-indigo-500/30 space-y-3 ${alignClass}">
       <div class="flex items-center justify-between gap-4">
-        <h3 style="color: ${primaryColor}; font-weight: ${fontWt};" class="${getHtmlTextSizeClass(
+        <h3 style="${textFxCss} font-weight: ${fontWt};" class="${getHtmlTextSizeClass(
             b.style?.fontSize,
             'text-2xl'
           )}">${content}</h3>
@@ -498,12 +522,14 @@ export function generateHtmlExport(
           return `  <section id="${elId}" class="max-w-5xl mx-auto px-6 py-4">
     <blockquote style="font-family: ${fontFam}; background: ${
             bgVal || 'rgba(255, 255, 255, 0.04)'
-          };" class="p-6 ${radiusClass} border border-white/10 space-y-4 ${alignClass}">
-      <p style="color: ${getCssColor(
-        b.style?.textColor,
-        b.style?.customTextHex,
-        '#e2e8f0'
-      )};" class="${getHtmlTextSizeClass(b.style?.fontSize, 'text-lg')} italic leading-relaxed">&ldquo;${content}&rdquo;</p>
+          };${b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''}${
+            b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''
+          }" class="p-6 ${radiusClass} border border-white/10 space-y-4 ${alignClass}">
+      <p style="${
+        b.style?.textGradient
+          ? textFxCss
+          : `color: ${getCssColor(b.style?.textColor, b.style?.customTextHex, '#e2e8f0')};`
+      }" class="${getHtmlTextSizeClass(b.style?.fontSize, 'text-lg')} italic leading-relaxed">&ldquo;${content}&rdquo;</p>
       <footer class="flex items-center gap-3">
         <div class="w-9 h-9 rounded-full bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300 font-bold text-xs">${escapeHtml(
           (b.subtitle || 'U').slice(0, 2).toUpperCase()
@@ -655,10 +681,12 @@ export function generateHtmlExport(
             b.action || ''
           )}" data-payload="${escapeHtml(b.actionPayload || '')}" data-endpoint="${escapeHtml(
             b.apiEndpoint || ''
-          )}" style="font-family: ${fontFam}; color: ${primaryColor}; background: ${
+          )}" style="font-family: ${fontFam}; background: ${
             bgVal || resolvedAccent
-          }; font-weight: ${fontWt};" class="sl-action-btn px-7 py-3 ${radiusClass} text-sm shadow-lg hover:opacity-95 transition-opacity cursor-pointer">
-      ${content}
+          }; font-weight: ${fontWt};${
+            b.style?.borderColor ? ` border: 1px solid ${b.style.borderColor};` : ''
+          }${b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''}" class="sl-action-btn px-7 py-3 ${radiusClass} text-sm shadow-lg hover:opacity-95 transition-opacity cursor-pointer">
+      <span style="${textFxCss}">${content}</span>
     </button>
   </div>`;
         }
