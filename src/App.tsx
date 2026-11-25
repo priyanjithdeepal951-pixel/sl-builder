@@ -337,22 +337,22 @@ function AppContent() {
   // Security Gate 1: Suspended User Lockout (never locks out verified Admin)
   if (isSuspendedUser && !isAdmin) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center p-6 text-[#f3f4f6] relative"
-        style={{ backgroundColor: themeConfig.bgHex }}
-      >
+      <div className="min-h-screen flex items-center justify-center p-6 bg-[#f5f5f2] dark:bg-[#0b0c0f] text-stone-900 dark:text-zinc-100 relative">
         <CosmicBackground meteorShowerMode={false} />
-        <div className="relative z-10 max-w-md w-full rounded-2xl bg-[#0c101b]/95 border border-rose-500/30 p-7 text-center shadow-2xl space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto">
+        <div className="relative z-10 max-w-md w-full rounded-2xl atelier-surface p-7 text-center shadow-xl space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800/50 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">
             <AlertTriangle className="w-6 h-6" />
           </div>
-          <h1 className="text-xl font-bold text-white">Account Suspended</h1>
-          <p className="text-xs text-slate-400 leading-relaxed">
+          <h1 className="font-display text-xl font-bold text-stone-900 dark:text-white">
+            Account Suspended
+          </h1>
+          <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
             Your workspace access has been temporarily suspended by an administrator. If you believe this is an error, please contact platform support.
           </p>
           <button
+            type="button"
             onClick={handleLogout}
-            className="w-full py-2.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-rose-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors"
+            className="w-full py-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 dark:hover:bg-rose-950/60 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-200 text-xs font-semibold flex items-center justify-center gap-2 transition-colors cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
             <span>Sign Out</span>
@@ -371,33 +371,34 @@ function AppContent() {
     currentPage !== 'admin'
   ) {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center p-6 text-[#f3f4f6] relative"
-        style={{ backgroundColor: themeConfig.bgHex }}
-      >
+      <div className="min-h-screen flex items-center justify-center p-6 bg-[#f5f5f2] dark:bg-[#0b0c0f] text-stone-900 dark:text-zinc-100 relative">
         <CosmicBackground meteorShowerMode={false} />
-        <div className="relative z-10 max-w-md w-full rounded-2xl bg-[#0c101b]/95 border border-amber-500/30 p-7 text-center shadow-2xl space-y-4">
-          <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center mx-auto">
+        <div className="relative z-10 max-w-md w-full rounded-2xl atelier-surface p-7 text-center shadow-xl space-y-4">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/50 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto">
             <ShieldCheck className="w-6 h-6" />
           </div>
-          <div className="text-[10px] font-mono uppercase tracking-wider text-amber-400">
-            Maintenance Mode Active
+          <div className="text-xs font-mono text-amber-600 dark:text-amber-400">
+            Scheduled Maintenance
           </div>
-          <h1 className="text-xl font-bold text-white">{siteSettings.brandName}</h1>
-          <p className="text-xs text-slate-300 leading-relaxed">
+          <h1 className="font-display text-xl font-bold text-stone-900 dark:text-white">
+            {siteSettings.brandName}
+          </h1>
+          <p className="text-xs text-stone-600 dark:text-zinc-400 leading-relaxed">
             {siteSettings.maintenanceMessage || DEFAULT_SITE_SETTINGS.maintenanceMessage}
           </p>
           <div className="pt-2 flex flex-col sm:flex-row gap-2.5">
             <button
+              type="button"
               onClick={() => setCurrentPage('auth')}
-              className="flex-1 py-2.5 px-4 rounded-xl text-white text-xs font-semibold transition-all hover:opacity-90"
+              className="flex-1 py-2.5 px-4 rounded-xl text-white text-xs font-semibold transition-opacity hover:opacity-90 cursor-pointer"
               style={{ backgroundColor: themeConfig.accentHex }}
             >
               Admin Sign In
             </button>
             <button
+              type="button"
               onClick={() => setCurrentPage('admin')}
-              className="flex-1 py-2.5 px-4 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-200 text-xs font-semibold transition-colors"
+              className="flex-1 py-2.5 px-4 rounded-xl bg-stone-100 dark:bg-zinc-900 hover:bg-stone-200 dark:hover:bg-zinc-800 border border-stone-200 dark:border-zinc-800 text-stone-800 dark:text-zinc-200 text-xs font-semibold transition-colors cursor-pointer"
             >
               Admin Console
             </button>
@@ -409,13 +410,8 @@ function AppContent() {
   }
 
   return (
-    <div
-      className="min-h-screen flex flex-col text-[#f3f4f6] relative overflow-x-hidden transition-colors duration-300"
-      style={{
-        backgroundColor: themeConfig.bgHex,
-      }}
-    >
-      {/* Dynamic Star & Live Meteor (උල්කාපාත) particles canvas */}
+    <div className="min-h-screen flex flex-col bg-[#f5f5f2] dark:bg-[#0b0c0f] text-stone-900 dark:text-zinc-100 relative overflow-x-hidden transition-colors duration-300">
+      {/* Subtle Live Architectural Contour & Interactive Field */}
       <CosmicBackground meteorShowerMode={isMeteorShower} />
 
       {/* Global Top Navbar */}
@@ -461,10 +457,21 @@ function AppContent() {
       {currentPage === 'projects' && (
         <ProjectsHub
           projects={projects}
+          currentUser={currentUser}
+          isAdmin={isAdmin}
+          maxProjects={siteSettings.maxProjectsPerUser || 50}
+          templates={siteSettings.templates}
+          isMeteorShower={isMeteorShower}
+          onToggleMeteorShower={handleToggleMeteorShower}
           onOpenProject={handleOpenProject}
           onCreateProject={handleCreateProject}
           onDuplicateProject={handleDuplicateProject}
           onDeleteProject={handleDeleteProject}
+          onOpenTemplate={handleOpenTemplate}
+          onBackToHome={() => setCurrentPage('welcome')}
+          onOpenAdmin={() => setCurrentPage('admin')}
+          onNavigateAuth={() => setCurrentPage('auth')}
+          onLogout={handleLogout}
           onToast={addToast}
         />
       )}

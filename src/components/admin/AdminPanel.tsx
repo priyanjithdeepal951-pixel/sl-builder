@@ -359,7 +359,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           <div className="space-y-1.5">
             <h1 className="text-lg font-bold text-white">Administrator Sign-In Required</h1>
             <p className="text-xs text-slate-400 leading-relaxed">
-              The SL Builder Admin Command Center is protected by Firebase Authentication and Firestore zero-trust RBAC rules. Sign in with a verified administrator Google account to continue.
+              The BlockCraft Studio Admin Command Center is protected by Firebase Authentication and Firestore zero-trust RBAC rules. Sign in with a verified administrator Google account to continue.
             </p>
           </div>
           <div className="flex items-center gap-2.5 pt-2">
@@ -757,7 +757,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
           type: 'ui-heading',
           name: 'Hero Heading',
           content: createProjectModal.name.trim(),
-          subtitle: createProjectModal.description.trim() || 'Created from SL Builder Admin Console',
+          subtitle: createProjectModal.description.trim() || 'Created from BlockCraft Studio Admin Console',
           category: 'ui',
           style: {
             fontSize: '3xl',
@@ -813,7 +813,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
 
   const handleExportCmsJson = () => {
     triggerDownloadFile(
-      `sl-builder-cms-${new Date().toISOString().slice(0, 10)}.json`,
+      `blockcraft-studio-cms-${new Date().toISOString().slice(0, 10)}.json`,
       JSON.stringify(draftSettings, null, 2),
       'application/json'
     );
@@ -863,7 +863,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       auditLogs,
     };
     triggerDownloadFile(
-      `sl-builder-snapshot-${new Date().toISOString().slice(0, 10)}.json`,
+      `blockcraft-studio-snapshot-${new Date().toISOString().slice(0, 10)}.json`,
       JSON.stringify(snapshot, null, 2),
       'application/json'
     );
@@ -887,7 +887,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       ),
     ];
     triggerDownloadFile(
-      `sl-builder-audit-${new Date().toISOString().slice(0, 10)}.csv`,
+      `blockcraft-studio-audit-${new Date().toISOString().slice(0, 10)}.csv`,
       rows.join('\n'),
       'text/csv;charset=utf-8'
     );
@@ -991,7 +991,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
             </div>
             <div className="min-w-0">
               <div className="text-xs font-bold text-white truncate">Admin Console</div>
-              <div className="text-[11px] text-slate-400 truncate font-mono">SL Builder</div>
+              <div className="text-[11px] text-slate-400 truncate font-mono">BlockCraft Studio</div>
             </div>
           </div>
           <button
@@ -1048,7 +1048,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
         {/* TOP HEADER BAR */}
         <header className="h-14 px-6 border-b border-white/10 bg-[#0B0F17]/80 flex items-center justify-between gap-4 shrink-0">
           <div className="flex items-center gap-2 text-xs text-slate-400 min-w-0">
-            <span className="font-medium text-slate-300 truncate">SL Builder</span>
+            <span className="font-medium text-slate-300 truncate">BlockCraft Studio</span>
             <span aria-hidden="true">/</span>
             <span className="text-white font-semibold truncate">{activeTabLabel}</span>
           </div>
@@ -1170,7 +1170,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
                     <div>
                       <h2 className="text-sm font-bold text-white">Live Security &amp; Access Controls</h2>
                       <p className="text-xs text-slate-400">
-                        Changes apply immediately across the entire SL Builder application.
+                        Changes apply immediately across the entire BlockCraft Studio application.
                       </p>
                     </div>
                   </div>

@@ -1,7 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Check, Eye, EyeOff, Sparkles, Mail, Lock, KeyRound, Loader2, ShieldAlert } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Eye,
+  EyeOff,
+  Mail,
+  Lock,
+  KeyRound,
+  Loader2,
+  ShieldAlert,
+} from 'lucide-react';
 import { UserProfile } from '../types/builder';
 import { useTheme } from '../context/ThemeContext';
+import { STUDIO_IMAGES } from '../assets/studioAssets';
+import { StudioImage } from './StudioImage';
 import {
   auth,
   googleProvider,
@@ -63,7 +75,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     setAuthError(null);
   }, [allowSignups]);
 
-  // REAL FIREBASE EMAIL/PASSWORD AUTH
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setAuthError(null);
@@ -123,7 +134,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         const cred = await signInWithEmailAndPassword(auth, email, password);
         const userProfile = mapFirebaseUser(cred.user);
         await syncUserProfile(userProfile).catch((err) => console.warn('Profile sync notice:', err));
-        onToast(`Welcome back, ${userProfile.name}! (Firebase Auth)`, 'success');
+        onToast(`Welcome back, ${userProfile.name}!`, 'success');
         onLoginSuccess(userProfile);
       }
     } catch (err: any) {
@@ -132,12 +143,14 @@ export const AuthPage: React.FC<AuthPageProps> = ({
         console.warn('Unexpected Firebase Auth notice:', code, err?.message);
       }
       if (code === 'auth/email-already-in-use') {
-        const msg = 'This email is already registered. Switched to Log In — enter your password or continue with Google.';
+        const msg =
+          'This email is already registered. Switched to Log In — enter your password or continue with Google.';
         setAuthError(msg);
         onToast(msg, 'info');
         setMode('login');
       } else if (code === 'auth/wrong-password' || code === 'auth/invalid-credential') {
-        const msg = 'Incorrect email or password. Double-check your credentials, reset your password, or use Google Sign-In.';
+        const msg =
+          'Incorrect email or password. Double-check your credentials, reset your password, or use Google Sign-In.';
         setAuthError(msg);
         onToast('Invalid email or password.', 'error');
       } else if (code === 'auth/user-not-found') {
@@ -162,7 +175,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     }
   };
 
-  // REAL FIREBASE GOOGLE SIGN-IN
   const handleGoogleLogin = async () => {
     setAuthError(null);
     setLoading(true);
@@ -191,7 +203,6 @@ export const AuthPage: React.FC<AuthPageProps> = ({
     }
   };
 
-  // REAL FIREBASE PASSWORD RESET
   const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!forgotEmail) return;
@@ -214,95 +225,109 @@ export const AuthPage: React.FC<AuthPageProps> = ({
   const handleDemoLogin = () => {
     const demoUser: UserProfile = {
       id: 'demo_user',
-      email: 'alex.builder@universe.io',
-      name: 'Alex Sterling',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&h=100&fit=crop&crop=face',
+      email: 'alex.builder@studio.io',
+      name: 'Elena Rostova',
+      avatar: STUDIO_IMAGES.creatorAvatar,
       role: 'Pro Creator',
     };
-    onToast('Logged in as Offline Demo Explorer (Alex Sterling)', 'info');
+    onToast('Signed in to Sandbox Mode as Elena Rostova', 'info');
     onLoginSuccess(demoUser);
   };
 
   return (
     <div className="flex-grow flex flex-col relative z-10 px-6 py-8 max-w-5xl mx-auto w-full">
-      {/* Top back button */}
-      <div className="flex justify-end mb-6">
+      <div className="flex justify-between items-center mb-8">
         <button
+          type="button"
           onClick={onBackToHome}
-          className="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 font-medium text-xs flex items-center gap-2 transition-colors"
+          className="px-3.5 py-2 rounded-lg bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 text-stone-700 dark:text-zinc-300 font-medium text-xs inline-flex items-center gap-2 hover:bg-stone-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
         >
           <ArrowLeft className="w-3.5 h-3.5" />
-          <span>Back to Home</span>
+          <span>Back to Showcase</span>
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center py-2">
-        {/* Left Column: Info */}
-        <div className="lg:col-span-6 space-y-5">
-          <div className="flex items-center gap-2 text-xs font-mono text-indigo-400">
-            <span>SL BUILDER AUTH</span>
-            <span aria-hidden="true">·</span>
-            <span>DEVELOPER GATEWAY</span>
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight">
-            Sign in to your <br />
-            <span className={`text-transparent bg-clip-text bg-gradient-to-r ${themeConfig.gradientText}`}>
-              studio workspace.
-            </span>
-          </h1>
-          <p className="text-xs sm:text-sm text-slate-400 leading-relaxed max-w-md">
-            Create an account or log in to manage your canvases, auto-sync reactive logic states, and compile code.
-          </p>
-
-          <div className="space-y-3 pt-1">
-            <div className="flex items-center gap-2.5 text-xs text-slate-300">
-              <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>One unified profile for every workspace & canvas</span>
-            </div>
-            <div className="flex items-center gap-2.5 text-xs text-slate-300">
-              <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Instant local-first offline activation</span>
-            </div>
-            <div className="flex items-center gap-2.5 text-xs text-slate-300">
-              <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-              <span>Unlimited export to HTML, React, and Python</span>
-            </div>
-          </div>
-
-          {/* Quick Demo Access */}
-          {allowDemoLogin && (
-            <div className="pt-2">
-              <div className="p-3.5 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-bold text-white">Instant Sandbox Mode</p>
-                  <p className="text-[11px] text-slate-400">Test without creating an account</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDemoLogin}
-                  className="px-3 py-1.5 rounded-lg text-white text-xs font-semibold transition-all hover:opacity-90"
-                  style={{ backgroundColor: themeConfig.accentHex }}
-                >
-                  Demo Login
-                </button>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-stretch">
+        {/* Left Column: Studio Visual & Sandbox */}
+        <div className="lg:col-span-6 flex flex-col justify-between space-y-6">
+          <div className="relative rounded-2xl overflow-hidden border border-stone-200 dark:border-zinc-800 aspect-[16/10] bg-stone-900">
+            <StudioImage
+              src={STUDIO_IMAGES.heroWorkspace}
+              alt="BlockCraft Studio workstation preview"
+              className="w-full h-full object-cover"
+              fallbackLabel="BlockCraft Studio"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+            <div className="absolute bottom-4 left-4 right-4 flex items-center gap-3">
+              <img
+                src={STUDIO_IMAGES.creatorAvatar}
+                alt="Elena Rostova"
+                referrerPolicy="no-referrer"
+                className="w-10 h-10 rounded-full object-cover border border-white/30"
+              />
+              <div>
+                <p className="text-xs font-semibold text-white">
+                  Visual wiring & multi-target export in one canvas
+                </p>
+                <p className="text-[11px] text-zinc-300">
+                  Elena Rostova · Studio Workspace
+                </p>
               </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <h1 className="font-display text-2xl sm:text-3xl font-bold text-stone-900 dark:text-white tracking-tight">
+              Access your studio workspace
+            </h1>
+            <div className="space-y-2.5 text-sm text-stone-600 dark:text-zinc-400">
+              <div className="flex items-center gap-2.5">
+                <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>Sync projects across sessions with Firebase</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                <span>Export clean HTML, React TSX, and Flask code</span>
+              </div>
+            </div>
+          </div>
+
+          {allowDemoLogin && (
+            <div className="atelier-surface rounded-xl p-4 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-stone-900 dark:text-white">
+                  Instant Sandbox Mode
+                </p>
+                <p className="text-xs text-stone-500 dark:text-zinc-400">
+                  Test the full studio without creating an account
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDemoLogin}
+                className="px-4 py-2 rounded-lg text-white text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer hover:opacity-90 transition-opacity"
+                style={{ backgroundColor: themeConfig.accentHex }}
+              >
+                Demo Login
+              </button>
             </div>
           )}
         </div>
 
         {/* Right Column: Form Card */}
-        <div className="lg:col-span-6">
-          <div className="studio-card rounded-2xl p-6 sm:p-7 border border-white/10 shadow-2xl relative">
-            {/* Mode Switch Tabs */}
-            <div className="flex items-center bg-white/5 p-1 rounded-xl border border-white/5 mb-5 text-xs font-medium">
+        <div className="lg:col-span-6 flex items-center">
+          <div className="w-full atelier-surface rounded-2xl p-6 sm:p-8 shadow-sm">
+            <div className="flex items-center bg-stone-100 dark:bg-zinc-900 p-1 rounded-xl mb-6 text-xs font-medium">
               <button
                 type="button"
                 onClick={() => {
                   setMode('signup');
                   setAuthError(null);
                 }}
-                className={`flex-1 py-1.5 rounded-lg transition-colors text-center ${
-                  mode === 'signup' ? 'bg-white/15 text-white font-semibold' : 'text-slate-400 hover:text-white'
+                className={`flex-1 py-2 rounded-lg transition-colors text-center cursor-pointer ${
+                  mode === 'signup'
+                    ? 'bg-white dark:bg-zinc-800 text-stone-900 dark:text-white font-semibold shadow-xs'
+                    : 'text-stone-500 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-white'
                 }`}
               >
                 Create Account
@@ -313,8 +338,10 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                   setMode('login');
                   setAuthError(null);
                 }}
-                className={`flex-1 py-1.5 rounded-lg transition-colors text-center ${
-                  mode === 'login' ? 'bg-white/15 text-white font-semibold' : 'text-slate-400 hover:text-white'
+                className={`flex-1 py-2 rounded-lg transition-colors text-center cursor-pointer ${
+                  mode === 'login'
+                    ? 'bg-white dark:bg-zinc-800 text-stone-900 dark:text-white font-semibold shadow-xs'
+                    : 'text-stone-500 dark:text-zinc-400 hover:text-stone-900 dark:hover:text-white'
                 }`}
               >
                 Log In
@@ -322,30 +349,26 @@ export const AuthPage: React.FC<AuthPageProps> = ({
             </div>
 
             {authError && (
-              <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-200 text-xs flex items-start gap-2.5">
-                <ShieldAlert className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="font-semibold text-rose-300">Authentication Notice</p>
-                  <p className="text-[11px] text-rose-200/85 mt-0.5 leading-relaxed">{authError}</p>
-                </div>
+              <div className="mb-4 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800/50 text-rose-800 dark:text-rose-200 text-xs flex items-start gap-2.5">
+                <ShieldAlert className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">{authError}</p>
               </div>
             )}
 
             {mode === 'signup' && !allowSignups && (
-              <div className="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-200 text-xs flex items-start gap-2.5">
-                <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold text-amber-300">Registrations Temporarily Paused</p>
-                  <p className="text-[11px] text-amber-200/80 mt-0.5">
-                    New account signups are disabled by the platform administrator. Existing members and admins can still log in.
-                  </p>
-                </div>
+              <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/50 text-amber-800 dark:text-amber-200 text-xs flex items-start gap-2.5">
+                <ShieldAlert className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                <p className="leading-relaxed">
+                  New account signups are currently paused by the administrator.
+                </p>
               </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
+            <form onSubmit={handleSubmit} className="space-y-4 text-xs">
               <div>
-                <label className="block font-medium text-slate-300 mb-1">Email</label>
+                <label className="block font-medium text-stone-700 dark:text-zinc-300 mb-1.5">
+                  Email
+                </label>
                 <div className="relative">
                   <input
                     type="email"
@@ -353,15 +376,17 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@example.com"
-                    className="w-full bg-[#080b13] border border-white/10 rounded-xl px-3 py-2.5 pl-8 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full bg-stone-50 dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 pl-9 text-stone-900 dark:text-white placeholder-stone-400 dark:placeholder-zinc-500 focus:outline-none focus:border-blue-600 transition-colors"
                   />
-                  <Mail className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <Mail className="w-4 h-4 text-stone-400 dark:text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                 </div>
               </div>
 
               {mode === 'signup' && (
                 <div>
-                  <label className="block font-medium text-slate-300 mb-1">Confirm Email</label>
+                  <label className="block font-medium text-stone-700 dark:text-zinc-300 mb-1.5">
+                    Confirm Email
+                  </label>
                   <div className="relative">
                     <input
                       type="email"
@@ -369,25 +394,26 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       value={confirmEmail}
                       onChange={(e) => setConfirmEmail(e.target.value)}
                       placeholder="name@example.com"
-                      className="w-full bg-[#080b13] border border-white/10 rounded-xl px-3 py-2.5 pl-8 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                      className="w-full bg-stone-50 dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 pl-9 text-stone-900 dark:text-white placeholder-stone-400 dark:placeholder-zinc-500 focus:outline-none focus:border-blue-600 transition-colors"
                     />
-                    <Mail className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <Mail className="w-4 h-4 text-stone-400 dark:text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   </div>
                 </div>
               )}
 
               <div>
-                <div className="flex items-center justify-between mb-1">
-                  <label className="block font-medium text-slate-300">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block font-medium text-stone-700 dark:text-zinc-300">
                     {mode === 'signup' ? 'Password (6+ characters)' : 'Password'}
                   </label>
                   {mode === 'login' && (
                     <button
                       type="button"
                       onClick={() => setShowForgotModal(true)}
-                      className="text-indigo-400 hover:underline text-[11px]"
+                      className="font-medium hover:underline cursor-pointer"
+                      style={{ color: themeConfig.accentHex }}
                     >
-                      Forgot?
+                      Forgot password?
                     </button>
                   )}
                 </div>
@@ -398,22 +424,24 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full bg-[#080b13] border border-white/10 rounded-xl px-3 py-2.5 pl-8 pr-8 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                    className="w-full bg-stone-50 dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 pl-9 pr-9 text-stone-900 dark:text-white placeholder-stone-400 dark:placeholder-zinc-500 focus:outline-none focus:border-blue-600 transition-colors"
                   />
-                  <Lock className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <Lock className="w-4 h-4 text-stone-400 dark:text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-stone-400 hover:text-stone-700 dark:hover:text-zinc-200 cursor-pointer"
                   >
-                    {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
               {mode === 'signup' && (
                 <div>
-                  <label className="block font-medium text-slate-300 mb-1">Confirm Password</label>
+                  <label className="block font-medium text-stone-700 dark:text-zinc-300 mb-1.5">
+                    Confirm Password
+                  </label>
                   <div className="relative">
                     <input
                       type={showPassword ? 'text' : 'password'}
@@ -421,9 +449,9 @@ export const AuthPage: React.FC<AuthPageProps> = ({
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full bg-[#080b13] border border-white/10 rounded-xl px-3 py-2.5 pl-8 pr-8 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500 transition-colors"
+                      className="w-full bg-stone-50 dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl px-3 py-2.5 pl-9 text-stone-900 dark:text-white placeholder-stone-400 dark:placeholder-zinc-500 focus:outline-none focus:border-blue-600 transition-colors"
                     />
-                    <KeyRound className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                    <KeyRound className="w-4 h-4 text-stone-400 dark:text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                   </div>
                 </div>
               )}
@@ -431,7 +459,7 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               <button
                 type="submit"
                 disabled={loading || (mode === 'signup' && !allowSignups)}
-                className="w-full py-2.5 rounded-xl text-white font-semibold text-xs shadow-lg transition-all mt-2 flex items-center justify-center gap-2 disabled:opacity-50"
+                className="w-full py-2.5 rounded-xl text-white font-semibold text-xs transition-opacity hover:opacity-90 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 style={{ backgroundColor: themeConfig.accentHex }}
               >
                 {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
@@ -439,20 +467,21 @@ export const AuthPage: React.FC<AuthPageProps> = ({
               </button>
 
               <div className="relative flex py-1 items-center">
-                <div className="flex-grow border-t border-white/10" />
-                <span className="shrink-0 mx-3 text-slate-600 text-[10px]">or</span>
-                <div className="flex-grow border-t border-white/10" />
+                <div className="flex-grow border-t border-stone-200 dark:border-zinc-800" />
+                <span className="shrink-0 mx-3 text-stone-400 dark:text-zinc-500 text-[11px]">
+                  or
+                </span>
+                <div className="flex-grow border-t border-stone-200 dark:border-zinc-800" />
               </div>
 
-              {/* Google Login button */}
               <button
                 type="button"
                 onClick={handleGoogleLogin}
                 disabled={loading}
-                className="w-full py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white font-medium flex items-center justify-center gap-2 transition-colors text-xs disabled:opacity-50"
+                className="w-full py-2.5 rounded-xl bg-stone-50 dark:bg-zinc-900 hover:bg-stone-100 dark:hover:bg-zinc-800 border border-stone-200 dark:border-zinc-800 text-stone-800 dark:text-zinc-200 font-medium flex items-center justify-center gap-2 transition-colors text-xs disabled:opacity-50 cursor-pointer"
               >
                 {loading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
                   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
                     <path
@@ -482,32 +511,34 @@ export const AuthPage: React.FC<AuthPageProps> = ({
 
       {/* Forgot Password Modal */}
       {showForgotModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4">
-          <div className="bg-[#0b0f19] border border-white/10 rounded-2xl p-6 max-w-md w-full shadow-2xl relative">
-            <h3 className="text-base font-bold text-white mb-1">Reset Password</h3>
-            <p className="text-xs text-slate-400 mb-4 leading-relaxed">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="atelier-surface rounded-2xl p-6 max-w-md w-full shadow-2xl">
+            <h3 className="text-base font-bold text-stone-900 dark:text-white mb-1">
+              Reset Password
+            </h3>
+            <p className="text-xs text-stone-500 dark:text-zinc-400 mb-4 leading-relaxed">
               Enter your account email to receive a password recovery link.
             </p>
-            <form onSubmit={handleForgotSubmit} className="space-y-3.5 text-xs">
+            <form onSubmit={handleForgotSubmit} className="space-y-4 text-xs">
               <input
                 type="email"
                 required
                 value={forgotEmail}
                 onChange={(e) => setForgotEmail(e.target.value)}
                 placeholder="name@example.com"
-                className="w-full bg-[#080b13] border border-white/10 rounded-xl px-3 py-2.5 text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500"
+                className="w-full bg-stone-50 dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 rounded-xl px-3.5 py-2.5 text-stone-900 dark:text-white placeholder-stone-400 focus:outline-none focus:border-blue-600"
               />
-              <div className="flex items-center justify-end gap-2.5 pt-2">
+              <div className="flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setShowForgotModal(false)}
-                  className="px-3.5 py-1.5 rounded-xl bg-white/5 text-slate-300 font-semibold text-xs hover:bg-white/10"
+                  className="px-4 py-2 rounded-xl bg-stone-100 dark:bg-zinc-800 text-stone-700 dark:text-zinc-300 font-semibold cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-xl text-white font-semibold text-xs shadow-md"
+                  className="px-4 py-2 rounded-xl text-white font-semibold cursor-pointer"
                   style={{ backgroundColor: themeConfig.accentHex }}
                 >
                   Send Recovery Link

@@ -15,8 +15,8 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg', 'pwa-192x192.png', 'pwa-512x512.png', 'pwa-maskable-512x512.png'],
         manifest: {
           id: '/',
-          name: 'SL Builder — Visual Drag & Drop Studio',
-          short_name: 'SL Builder',
+          name: 'BlockCraft Studio — Visual Drag & Drop Studio',
+          short_name: 'BlockCraft Studio',
           description: 'Visual drag & drop website builder with interactive logic wiring, live multi-language code export, and cosmic developer aesthetics.',
           theme_color: '#07090e',
           background_color: '#07090e',

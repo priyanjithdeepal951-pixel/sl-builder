@@ -1,4 +1,5 @@
 import { CanvasBlock, Project } from '../types/builder';
+import { STUDIO_IMAGES } from '../assets/studioAssets';
 
 export const INITIAL_DEMO_BLOCKS: CanvasBlock[] = [
   {
@@ -6,7 +7,7 @@ export const INITIAL_DEMO_BLOCKS: CanvasBlock[] = [
     type: 'ui-navbar',
     category: 'ui',
     name: 'Top Navigation',
-    content: 'SL Universe',
+    content: 'BlockCraft Studio',
     subtitle: 'Features · Pricing · Docs · Community',
     style: {
       bgColor: 'bg-white/5',
@@ -85,10 +86,10 @@ export const INITIAL_DEMO_BLOCKS: CanvasBlock[] = [
     type: 'ui-testimonial',
     category: 'ui',
     name: 'Customer Review',
-    content: 'SL Builder allowed our distributed engineering team to build, simulate, and export production frontends in hours instead of weeks.',
+    content: 'BlockCraft Studio allowed our distributed engineering team to build, simulate, and export production frontends in hours instead of weeks.',
     subtitle: 'Elena Rostova',
     authorRole: 'VP of Engineering at CloudScale',
-    authorAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&h=80&fit=crop&crop=face',
+    authorAvatar: STUDIO_IMAGES.creatorAvatar,
     style: {
       bgColor: 'bg-white/5',
       borderRadius: 'rounded-xl',
@@ -101,7 +102,7 @@ export const INITIAL_DEMO_BLOCKS: CanvasBlock[] = [
     category: 'ui',
     name: 'Interactive FAQ Item',
     content: 'How does code compilation work without vendor lock-in?',
-    subtitle: 'SL Builder converts your visual graph directly into standard HTML5, clean React 19 functional components, or Python Flask APIs with zero proprietary runtime libraries.',
+    subtitle: 'BlockCraft Studio converts your visual graph directly into standard HTML5, clean React 19 functional components, or Python Flask APIs with zero proprietary runtime libraries.',
     isExpanded: false,
     style: {
       bgColor: 'bg-white/5',
@@ -130,7 +131,7 @@ export const INITIAL_DEMO_BLOCKS: CanvasBlock[] = [
     type: 'ui-footer',
     category: 'ui',
     name: 'Footer Bar',
-    content: '© 2026 SL Builder Studio. All rights reserved.',
+    content: '© 2026 BlockCraft Studio. All rights reserved.',
     subtitle: 'Privacy Policy · Terms · API Docs · GitHub',
     style: {
       bgColor: 'bg-transparent',

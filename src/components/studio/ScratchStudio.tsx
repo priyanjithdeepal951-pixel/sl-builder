@@ -864,7 +864,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
               b.type === 'ui-select'
           );
         if (targetInp) {
-          const newVal = actor.actionPayload || 'Hello from SL Builder';
+          const newVal = actor.actionPayload || 'Hello from BlockCraft Studio';
           setFormInputs((prev) => ({ ...prev, [targetInp.id]: newVal }));
           onToast(`Set input value to "${newVal}"`, 'success');
         }
@@ -1241,7 +1241,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
     if (sourceBlock.type === 'logic-object') {
       try {
-        const parsed = JSON.parse(cfg?.varValue || '{"name":"SL Builder"}');
+        const parsed = JSON.parse(cfg?.varValue || '{"name":"BlockCraft Studio"}');
         const key = (cfg?.objectKey || 'name').trim();
         const op = cfg?.objectOp || 'get-prop';
         if (op === 'stringify') {
@@ -1284,7 +1284,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
           onToast(`Removed LocalStorage key "${key}"`, 'info');
           appendConsoleLog('warn', `LocalStorage REMOVE ${key}`);
         } else {
-          const val = cfg?.varValue || 'Saved from SL Builder';
+          const val = cfg?.varValue || 'Saved from BlockCraft Studio';
           window.localStorage.setItem(key, val);
           onToast(`Saved "${key}" to LocalStorage!`, 'success');
           appendConsoleLog('success', `LocalStorage SET ${key} = "${val}"`);
@@ -1354,7 +1354,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
     if (sourceBlock.type === 'backend-auth') {
       const op = cfg?.authOp || 'login';
-      const email = (cfg?.varValue || 'creator@slbuilder.app').trim();
+      const email = (cfg?.varValue || 'creator@blockcraft.app').trim();
       if (op === 'logout') {
         setRuntimeState((prev) => ({
           ...prev,
@@ -1704,7 +1704,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
             if (parsed.name) setProjectName(parsed.name);
             onToast('Blueprint imported into current page!', 'success');
           } else {
-            onToast('Invalid SL Builder blueprint file.', 'error');
+            onToast('Invalid BlockCraft Studio blueprint file.', 'error');
           }
         }
       } catch {
@@ -1774,10 +1774,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         className="hidden"
       />
 
-      {/* ================= 1. TOP BLACK SL BUILDER STUDIO BAR ================= */}
+      {/* ================= 1. TOP BLACK BLOCKCRAFT STUDIO BAR ================= */}
       <header className="h-12 bg-[#11151E] text-slate-100 px-3 flex items-center justify-between shrink-0 border-b border-white/10 shadow-md relative z-40">
         <div className="flex items-center gap-1.5 sm:gap-2.5">
-          {/* Back to Projects & SL BUILDER Wordmark */}
+          {/* Back to Projects & BLOCKCRAFT STUDIO Wordmark */}
           <button
             type="button"
             onClick={onBackToProjects}
@@ -1786,7 +1786,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
           >
             <ArrowLeft className="w-3.5 h-3.5 text-slate-300" />
             <span style={{ color: themeConfig.accentHex }} className="font-black tracking-wide">
-              SL BUILDER
+              BLOCKCRAFT STUDIO
             </span>
             <span className="hidden md:inline text-slate-300 font-semibold">WebStudio</span>
           </button>
@@ -1851,7 +1851,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                     commitBlocks(() => [...INITIAL_DEMO_BLOCKS]);
                     setSelectedBlockId(INITIAL_DEMO_BLOCKS[0]?.id || null);
                     setOpenMenu(null);
-                    onToast('Loaded default SL Builder blueprint.', 'info');
+                    onToast('Loaded default BlockCraft Studio blueprint.', 'info');
                   }}
                   className="w-full text-left px-3 py-2 hover:bg-white/10 flex items-center gap-2"
                 >
@@ -2687,7 +2687,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                           value={
                                             blk.badgeText ??
                                             (blk.type === 'ui-navbar'
-                                              ? 'SL'
+                                              ? 'BC'
                                               : blk.type === 'ui-pricing'
                                               ? 'PRO'
                                               : blk.type === 'ui-modal'
@@ -4730,7 +4730,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                               <label className="text-[10px] text-slate-400">JSON Object</label>
                               <input
                                 type="text"
-                                value={selectedBlock.logicConfig?.varValue ?? '{"name":"SL Builder"}'}
+                                value={selectedBlock.logicConfig?.varValue ?? '{"name":"BlockCraft Studio"}'}
                                 onChange={(e) =>
                                   handleUpdateBlock({
                                     ...selectedBlock,
@@ -4963,7 +4963,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                               <label className="text-[10px] text-slate-400">Demo Email</label>
                               <input
                                 type="email"
-                                value={selectedBlock.logicConfig?.varValue ?? 'creator@slbuilder.app'}
+                                value={selectedBlock.logicConfig?.varValue ?? 'creator@blockcraft.app'}
                                 onChange={(e) =>
                                   handleUpdateBlock({
                                     ...selectedBlock,
@@ -5480,7 +5480,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                   <span className="w-2 h-2 rounded-full bg-emerald-500/80" />
                 </div>
                 <span className="text-[10px] font-mono text-slate-400 truncate max-w-[210px]">
-                  preview.slbuilder.app/{activePage?.slug === 'index' ? '' : activePage?.slug} · {viewport}
+                  preview.blockcraft.app/{activePage?.slug === 'index' ? '' : activePage?.slug} · {viewport}
                 </span>
                 <span className="text-[10px] font-mono text-emerald-400">Live</span>
               </div>
@@ -6001,7 +6001,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             value={
                               selectedBlock.badgeText ??
                               (selectedBlock.type === 'ui-navbar'
-                                ? 'SL'
+                                ? 'BC'
                                 : selectedBlock.type === 'ui-pricing'
                                 ? 'PRO'
                                 : selectedBlock.type === 'ui-modal'
@@ -6493,7 +6493,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-[#121620] rounded-2xl max-w-lg w-full shadow-2xl overflow-hidden border border-white/15">
             <div className="bg-[#181E2B] border-b border-white/10 text-white px-5 py-3 flex items-center justify-between">
-              <h3 className="text-sm font-bold">Add SL Builder Section Bundle</h3>
+              <h3 className="text-sm font-bold">Add BlockCraft Studio Section Bundle</h3>
               <button
                 type="button"
                 onClick={() => setShowSectionModal(false)}
@@ -6751,7 +6751,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         <div className="fixed inset-0 z-50 bg-black/75 flex items-center justify-center p-4">
           <div className="bg-[#121620] rounded-2xl max-w-sm w-full p-5 shadow-2xl border border-white/15 space-y-3 text-xs">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold text-slate-100">SL Builder WebStudio Guide</h3>
+              <h3 className="text-sm font-bold text-slate-100">BlockCraft Studio WebStudio Guide</h3>
               <button
                 type="button"
                 onClick={() => setShowHelpModal(false)}

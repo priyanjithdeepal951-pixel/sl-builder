@@ -594,7 +594,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       className="px-1.5 min-w-[22px] h-5 rounded-md flex items-center justify-center text-[10px] font-bold text-white shrink-0"
                       style={{ backgroundColor: resolvedAccent }}
                     >
-                      {block.badgeText || 'SL'}
+                      {block.badgeText || 'BC'}
                     </div>
                     <span
                       style={primaryStyle}
@@ -2247,7 +2247,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
               {/* 15. STORAGE / CLOUD DB / AUTH / FETCH / FLASK / DEVICE */}
               {block.type === 'backend-storage' && (() => {
                 const sKey = block.logicConfig?.storageKey || 'sl_user_data';
-                const sVal = block.logicConfig?.varValue ?? 'Saved from SL Builder!';
+                const sVal = block.logicConfig?.varValue ?? 'Saved from BlockCraft Studio!';
                 let liveStored: string | null = null;
                 try {
                   liveStored = typeof window !== 'undefined' ? window.localStorage.getItem(sKey) : null;
@@ -2453,7 +2453,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
 
               {block.type === 'backend-auth' && (() => {
                 const draft = authDrafts[block.id] || {
-                  email: block.logicConfig?.varValue || 'creator@slbuilder.app',
+                  email: block.logicConfig?.varValue || 'creator@blockcraft.app',
                   password: '••••••••',
                 };
                 const runAuthOp = (authOp: 'signup' | 'login' | 'logout' | 'current-user') => {
@@ -2463,7 +2463,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       logicConfig: {
                         ...block.logicConfig,
                         authOp,
-                        varValue: draft.email || 'creator@slbuilder.app',
+                        varValue: draft.email || 'creator@blockcraft.app',
                       },
                     },
                     formInputs

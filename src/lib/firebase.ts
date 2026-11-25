@@ -561,6 +561,38 @@ function decodeFirestoreRestValue(val: unknown): unknown {
   return undefined;
 }
 
+function normalizeSiteSettingsDefaults(data: Partial<SiteSettingsConfig>): SiteSettingsConfig {
+  const brandName =
+    data.brandName === 'SL Builder' ? DEFAULT_SITE_SETTINGS.brandName : data.brandName;
+  const announcementText =
+    data.announcementText ===
+    'SL Builder WebStudio 2026 — Multi-page visual builder and live CSS animations are ready.'
+      ? DEFAULT_SITE_SETTINGS.announcementText
+      : data.announcementText;
+  const maintenanceMessage =
+    data.maintenanceMessage ===
+    'SL Builder is currently undergoing scheduled maintenance. Please check back shortly.'
+      ? DEFAULT_SITE_SETTINGS.maintenanceMessage
+      : data.maintenanceMessage;
+  const footerCopyright =
+    data.footerCopyright === 'SL Builder · Visual Logic & Web Studio'
+      ? DEFAULT_SITE_SETTINGS.footerCopyright
+      : data.footerCopyright;
+
+  return {
+    ...DEFAULT_SITE_SETTINGS,
+    ...data,
+    ...(brandName !== undefined ? { brandName } : {}),
+    ...(announcementText !== undefined ? { announcementText } : {}),
+    ...(maintenanceMessage !== undefined ? { maintenanceMessage } : {}),
+    ...(footerCopyright !== undefined ? { footerCopyright } : {}),
+    templates:
+      Array.isArray(data.templates) && data.templates.length > 0
+        ? data.templates
+        : DEFAULT_SITE_SETTINGS.templates,
+  };
+}
+
 async function fetchSiteSettingsViaRest(): Promise<SiteSettingsConfig> {
   if (typeof navigator !== 'undefined' && !navigator.onLine) {
     return DEFAULT_SITE_SETTINGS;
@@ -586,14 +618,7 @@ async function fetchSiteSettingsViaRest(): Promise<SiteSettingsConfig> {
       decoded[k] = decodeFirestoreRestValue(val);
     });
     const data = decoded as Partial<SiteSettingsConfig>;
-    return {
-      ...DEFAULT_SITE_SETTINGS,
-      ...data,
-      templates:
-        Array.isArray(data.templates) && data.templates.length > 0
-          ? data.templates
-          : DEFAULT_SITE_SETTINGS.templates,
-    };
+    return normalizeSiteSettingsDefaults(data);
   } catch {
     return DEFAULT_SITE_SETTINGS;
   } finally {
@@ -623,14 +648,7 @@ export function subscribeToSiteSettings(
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data() as Partial<SiteSettingsConfig>;
-          onSettings({
-            ...DEFAULT_SITE_SETTINGS,
-            ...data,
-            templates:
-              Array.isArray(data.templates) && data.templates.length > 0
-                ? data.templates
-                : DEFAULT_SITE_SETTINGS.templates,
-          });
+          onSettings(normalizeSiteSettingsDefaults(data));
         } else {
           onSettings(DEFAULT_SITE_SETTINGS);
         }

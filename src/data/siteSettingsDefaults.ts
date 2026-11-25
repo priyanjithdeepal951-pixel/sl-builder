@@ -3,7 +3,7 @@ import { SiteSettingsConfig } from '../types/builder';
 export const SUPER_ADMIN_EMAIL = 'priyanjithdeepal951@gmail.com';
 
 export const DEFAULT_SITE_SETTINGS: SiteSettingsConfig = {
-  brandName: 'SL Builder',
+  brandName: 'BlockCraft Studio',
   heroKicker: 'Visual Drag & Drop · Reactive State Wiring · 4-Way Code Export',
   heroTitle: 'Visual web studio for engineers who',
   heroHighlight: 'ship fast.',
@@ -13,15 +13,15 @@ export const DEFAULT_SITE_SETTINGS: SiteSettingsConfig = {
   heroSecondaryCta: 'Inspect Studio Engine',
   announcementEnabled: false,
   announcementText:
-    'SL Builder WebStudio 2026 — Multi-page visual builder and live CSS animations are ready.',
+    'BlockCraft Studio WebStudio 2026 — Multi-page visual builder and live CSS animations are ready.',
   maintenanceMode: false,
   maintenanceMessage:
-    'SL Builder is currently undergoing scheduled maintenance. Please check back shortly.',
+    'BlockCraft Studio is currently undergoing scheduled maintenance. Please check back shortly.',
   allowSignups: true,
   allowDemoLogin: true,
   maxProjectsPerUser: 50,
   defaultTheme: 'cosmic',
-  footerCopyright: 'SL Builder · Visual Logic & Web Studio',
+  footerCopyright: 'BlockCraft Studio · Visual Logic & Web Studio',
   footerLinksText: 'Features · Blueprints · Projects Hub',
   templates: [
     {

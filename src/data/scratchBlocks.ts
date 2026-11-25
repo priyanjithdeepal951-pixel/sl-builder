@@ -626,7 +626,7 @@ export function createDefaultStudioState(): StudioWorkspaceState {
                 opcode: 'looks_sayforsecs',
                 category: 'looks',
                 shape: 'stack',
-                params: { MESSAGE: 'Hello from SL Builder!', SECS: 2 },
+                params: { MESSAGE: 'Hello from BlockCraft Studio!', SECS: 2 },
               },
             ],
           },

@@ -18,14 +18,14 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
 
   const handleInstallClick = async () => {
     if (isInstalled) {
-      if (onToast) onToast('SL Builder is already installed on your PC!', 'info');
+      if (onToast) onToast('BlockCraft Studio is already installed on your PC!', 'info');
       return;
     }
 
     if (isInstallable) {
       const success = await install();
       if (success && onToast) {
-        onToast('🎉 SL Builder PC App installed successfully!', 'success');
+        onToast('🎉 BlockCraft Studio PC App installed successfully!', 'success');
       }
     } else {
       // Show desktop / browser installation instructions
@@ -56,7 +56,7 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
         <button
           onClick={handleInstallClick}
           className={`px-2.5 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-300 hover:text-white transition-all flex items-center gap-1.5 text-xs font-semibold cursor-pointer shadow-sm group ${className}`}
-          title="Install SL Builder App on your PC (Desktop PWA)"
+          title="Install BlockCraft Studio App on your PC (Desktop PWA)"
         >
           <Monitor className="w-3.5 h-3.5 text-indigo-400 group-hover:scale-110 transition-transform" />
           <span className="hidden sm:inline">Install PC App</span>
@@ -72,19 +72,20 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   if (variant === 'menu-item') {
     return (
       <>
-        <div
+        <button
+          type="button"
           onClick={handleInstallClick}
-          className="p-2 rounded-lg bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/30 text-xs text-indigo-200 hover:text-white cursor-pointer transition-all flex items-center justify-between group"
+          className="w-full p-2.5 rounded-lg bg-stone-50 dark:bg-zinc-900 hover:bg-stone-100 dark:hover:bg-zinc-800 border border-stone-200 dark:border-zinc-800 text-xs text-stone-800 dark:text-zinc-200 cursor-pointer transition-colors flex items-center justify-between text-left"
         >
           <div className="flex items-center gap-2">
-            <Monitor className="w-3.5 h-3.5 text-indigo-400 group-hover:text-cyan-300" />
+            <Monitor className="w-3.5 h-3.5 text-stone-500 dark:text-zinc-400" />
             <div>
-              <div className="font-semibold text-white">Install PC Desktop App</div>
-              <div className="text-[10px] text-indigo-300/80">Offline cache, desktop window & dock icon</div>
+              <div className="font-semibold">Install Desktop App</div>
+              <div className="text-[11px] text-stone-500 dark:text-zinc-400">Offline cache & window</div>
             </div>
           </div>
-          <Download className="w-3.5 h-3.5 text-indigo-400 group-hover:translate-y-0.5 transition-transform" />
-        </div>
+          <Download className="w-3.5 h-3.5 text-stone-400 dark:text-zinc-500" />
+        </button>
 
         {showGuideModal && <PWAInstallGuideModal onClose={() => setShowGuideModal(false)} />}
       </>
@@ -96,9 +97,9 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
     <>
       <button
         onClick={handleInstallClick}
-        className={`px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-indigo-700 hover:from-indigo-500 hover:to-indigo-600 text-white font-medium text-xs shadow-lg shadow-indigo-900/30 transition-all flex items-center gap-2 cursor-pointer ${className}`}
+        className={`px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs transition-colors flex items-center gap-2 cursor-pointer ${className}`}
       >
-        <Monitor className="w-4 h-4 text-indigo-200" />
+        <Monitor className="w-4 h-4" />
         <span>Install App on PC</span>
       </button>
 
@@ -107,88 +108,62 @@ export const PWAInstallButton: React.FC<PWAInstallButtonProps> = ({
   );
 };
 
-// Modal that guides PC (Chrome/Edge), Mac, and Mobile users on installation
 interface PWAInstallGuideModalProps {
   onClose: () => void;
 }
 
 const PWAInstallGuideModal: React.FC<PWAInstallGuideModalProps> = ({ onClose }) => {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md bg-[#0c101b] border border-white/15 rounded-2xl p-5 sm:p-6 shadow-2xl text-slate-200 relative select-none">
-        {/* Close Button */}
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-md atelier-surface rounded-2xl p-6 shadow-2xl text-stone-800 dark:text-zinc-200 relative">
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+          className="absolute top-4 right-4 p-1 rounded-lg text-stone-400 hover:text-stone-900 dark:hover:text-white cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
 
-        {/* Header */}
         <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 rounded-xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-400">
+          <div className="w-10 h-10 rounded-xl bg-stone-100 dark:bg-zinc-800 flex items-center justify-center text-stone-700 dark:text-zinc-200">
             <Monitor className="w-5 h-5" />
           </div>
           <div>
-            <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <span>Install SL Builder on PC</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                PWA Desktop
-              </span>
+            <h3 className="text-base font-bold text-stone-900 dark:text-white">
+              Install BlockCraft Studio
             </h3>
-            <p className="text-xs text-slate-400">Run as a standalone native desktop application</p>
+            <p className="text-xs text-stone-500 dark:text-zinc-400">Run as a standalone desktop app</p>
           </div>
         </div>
 
-        {/* Steps for Desktop PC */}
-        <div className="space-y-3 my-4">
-          <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-white">
-              <Laptop className="w-4 h-4 text-cyan-400" />
-              <span>For Chrome, Edge & Brave on Windows / Mac:</span>
+        <div className="space-y-3 my-4 text-xs text-stone-600 dark:text-zinc-300">
+          <div className="p-3 rounded-xl bg-stone-50 dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 space-y-1.5">
+            <div className="flex items-center gap-2 font-semibold text-stone-900 dark:text-white">
+              <Laptop className="w-4 h-4" />
+              <span>Chrome, Edge & Brave (Windows / Mac)</span>
             </div>
-            <ol className="text-xs text-slate-300 space-y-1.5 pl-5 list-decimal leading-relaxed">
-              <li>
-                Look at the <strong>right side of your browser's address bar</strong> (URL bar).
-              </li>
-              <li>
-                Click the <strong>Install App icon (⊕ or computer monitor icon)</strong>.
-              </li>
-              <li>
-                Click <strong>"Install"</strong> in the popup to place SL Builder on your Desktop and Taskbar!
-              </li>
+            <ol className="space-y-1 pl-5 list-decimal leading-relaxed">
+              <li>Look at the right side of your browser's address bar.</li>
+              <li>Click the Install App icon and confirm installation.</li>
             </ol>
           </div>
 
-          <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-white">
-              <HelpCircle className="w-4 h-4 text-amber-400" />
-              <span>Browser Menu Alternative:</span>
+          <div className="p-3 rounded-xl bg-stone-50 dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 space-y-1.5">
+            <div className="flex items-center gap-2 font-semibold text-stone-900 dark:text-white">
+              <Smartphone className="w-4 h-4" />
+              <span>Mobile / iOS Safari</span>
             </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Click browser menu <strong>( ⋮ or ⋯ at top-right)</strong> ➔ <strong>"Save and share"</strong> or <strong>"Apps"</strong> ➔ Click <strong>"Install SL Builder"</strong>.
-            </p>
-          </div>
-
-          <div className="p-3 rounded-xl bg-white/5 border border-white/10 space-y-1.5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-white">
-              <Smartphone className="w-4 h-4 text-emerald-400" />
-              <span>Mobile / iOS Safari:</span>
-            </div>
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Tap the <strong>Share</strong> button at bottom ➔ Select <strong>"Add to Home Screen"</strong>.
+            <p className="leading-relaxed">
+              Tap Share at the bottom of your browser and select Add to Home Screen.
             </p>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="pt-3 border-t border-white/10 flex items-center justify-between">
-          <span className="text-[11px] text-slate-500 font-mono">sw.js & manifest.json active</span>
+        <div className="pt-3 border-t border-stone-200 dark:border-zinc-800 flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md transition-colors"
+            className="px-4 py-2 rounded-xl bg-stone-900 dark:bg-white text-white dark:text-stone-900 font-semibold text-xs cursor-pointer"
           >
-            Got it
+            Done
           </button>
         </div>
       </div>

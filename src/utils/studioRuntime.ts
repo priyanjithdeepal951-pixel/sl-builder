@@ -40,7 +40,7 @@ export const INITIAL_RUNTIME_STATE: StudioRuntimeState = {
     tasks: ['Design Layout', 'Wire Logic', 'Export App'],
   },
   objects: {
-    profile: { name: 'SL Builder', plan: 'Pro', active: true },
+    profile: { name: 'BlockCraft Studio', plan: 'Pro', active: true },
   },
   dbCollections: {
     users: [

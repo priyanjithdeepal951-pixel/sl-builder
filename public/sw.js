@@ -1,12 +1,10 @@
 /**
- * SL Builder — Service Worker (sw.js)
- * High-performance offline caching, asset precaching, and PWA installation support
+ * BlockCraft Studio — Service Worker (sw.js)
+ * Network-first for app updates with offline fallback cache
  */
 
-const CACHE_NAME = 'sl-builder-v1';
+const CACHE_NAME = 'blockcraft-studio-v3';
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/icon.svg',
   '/pwa-192x192.png',
@@ -16,86 +14,87 @@ const PRECACHE_ASSETS = [
   '/favicon.ico',
 ];
 
-// Install Event: Precaches core app shell
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      console.log('[Service Worker] Precaching app shell assets');
-      return cache.addAll(PRECACHE_ASSETS).catch((err) => {
-        console.warn('[Service Worker] Precache non-blocking warning:', err);
-      });
+      return cache.addAll(PRECACHE_ASSETS).catch(() => {});
     })
   );
   self.skipWaiting();
 });
 
-// Activate Event: Cleans up old cache versions and claims clients immediately
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((name) => {
-          if (name !== CACHE_NAME) {
-            console.log('[Service Worker] Removing old cache:', name);
-            return caches.delete(name);
-          }
-        })
-      );
-    }).then(() => self.clients.claim())
+    caches
+      .keys()
+      .then((cacheNames) =>
+        Promise.all(
+          cacheNames.map((name) => {
+            if (name !== CACHE_NAME) {
+              return caches.delete(name);
+            }
+          })
+        )
+      )
+      .then(() => self.clients.claim())
   );
 });
 
-// Fetch Event: Network-first for Firestore/APIs, Stale-while-revalidate for local assets
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  // Skip non-GET requests and browser extensions
   if (request.method !== 'GET' || !url.protocol.startsWith('http')) {
     return;
   }
 
-  // Network-First for Firebase, Firestore, Google Auth, or dynamic API calls
+  // Bypass service worker cache for Vite dev modules & HMR/source files
+  if (
+    url.pathname.startsWith('/src/') ||
+    url.pathname.startsWith('/@') ||
+    url.pathname.startsWith('/node_modules/') ||
+    url.pathname.endsWith('.tsx') ||
+    url.pathname.endsWith('.ts')
+  ) {
+    return;
+  }
+
+  // Network-first for APIs, Firebase, navigation, and app bundles
   if (
     url.hostname.includes('firestore.googleapis.com') ||
     url.hostname.includes('identitytoolkit.googleapis.com') ||
     url.hostname.includes('firebaseapp.com') ||
-    url.pathname.startsWith('/api/')
+    url.pathname.startsWith('/api/') ||
+    request.mode === 'navigate'
   ) {
     event.respondWith(
-      fetch(request).catch(() => {
-        return caches.match(request);
-      })
+      fetch(request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match(request).then((res) => res || caches.match('/index.html')))
     );
     return;
   }
 
-  // Stale-While-Revalidate for application shell, static scripts, images, and fonts
+  // Network-first with cache fallback for static assets
   event.respondWith(
-    caches.open(CACHE_NAME).then(async (cache) => {
-      const cachedResponse = await cache.match(request);
-
-      const fetchPromise = fetch(request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            cache.put(request, networkResponse.clone());
-          }
-          return networkResponse;
-        })
-        .catch(() => {
-          // If offline and request is navigation, return cached /index.html
-          if (request.mode === 'navigate') {
-            return cache.match('/index.html');
-          }
-          return cachedResponse;
-        });
-
-      return cachedResponse || fetchPromise;
-    })
+    fetch(request)
+      .then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const copy = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
+        }
+        return networkResponse;
+      })
+      .catch(() => caches.match(request))
   );
 });
 
-// Listen for message from client (e.g., skip waiting on update)
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();

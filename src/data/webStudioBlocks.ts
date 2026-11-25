@@ -94,7 +94,7 @@ export const WEB_STUDIO_BLOCK_TEMPLATES: WebStudioBlockTemplate[] = [
     siGroup: 'මෙනු සහ පිටු',
     name: 'Navigation Bar',
     siName: 'මෙනු තීරුව (Navbar)',
-    defaultContent: 'SL Builder Brand',
+    defaultContent: 'BlockCraft Studio',
     defaultSubtitle: 'Features · Blueprints · Docs · Pricing',
     defaults: {
       style: { bgColor: 'bg-white/5', textColor: 'text-white', borderRadius: 'rounded-xl', padding: 'p-4' },
@@ -146,7 +146,7 @@ export const WEB_STUDIO_BLOCK_TEMPLATES: WebStudioBlockTemplate[] = [
     defaultSubtitle: 'Navigates to target page or opens external URL',
     defaults: {
       action: 'navigate-page',
-      actionPayload: 'https://slbuilder.app',
+      actionPayload: 'https://blockcraft.app',
       style: { textColor: 'text-indigo-400', borderRadius: 'rounded-lg', padding: 'p-2' },
     },
   },
@@ -255,7 +255,7 @@ export const WEB_STUDIO_BLOCK_TEMPLATES: WebStudioBlockTemplate[] = [
     siGroup: 'මෙනු සහ පිටු',
     name: 'Footer Strip',
     siName: 'පාදක තීරුව (Footer)',
-    defaultContent: '© 2026 SL Builder WebStudio.',
+    defaultContent: '© 2026 BlockCraft Studio.',
     defaultSubtitle: 'Privacy · Terms · API Docs',
     defaults: {
       style: { bgColor: 'bg-transparent', borderRadius: 'rounded-none', padding: 'p-3' },
@@ -578,7 +578,7 @@ export const WEB_STUDIO_BLOCK_TEMPLATES: WebStudioBlockTemplate[] = [
     siGroup: 'UI කොටස්',
     name: 'Customer Testimonial',
     siName: 'පාරිභෝගික අදහස',
-    defaultContent: 'SL Builder cut our frontend prototyping time by 70% with zero lock-in.',
+    defaultContent: 'BlockCraft Studio cut our frontend prototyping time by 70% with zero lock-in.',
     defaultSubtitle: 'Kasun Perera',
     defaults: {
       authorRole: 'Lead Architect at LankaCloud',
@@ -595,7 +595,7 @@ export const WEB_STUDIO_BLOCK_TEMPLATES: WebStudioBlockTemplate[] = [
     name: 'FAQ Accordion',
     siName: 'ප්‍රශ්න සහ පිළිතුරු',
     defaultContent: 'How does multi-target export work?',
-    defaultSubtitle: 'SL Builder compiles your visual canvas directly to standalone HTML5, React 19 TSX, and Python Flask routes.',
+    defaultSubtitle: 'BlockCraft Studio compiles your visual canvas directly to standalone HTML5, React 19 TSX, and Python Flask routes.',
     defaults: {
       isExpanded: false,
       style: { bgColor: 'bg-white/5', borderRadius: 'rounded-xl', padding: 'p-0' },
@@ -893,12 +893,12 @@ export const WEB_STUDIO_BLOCK_TEMPLATES: WebStudioBlockTemplate[] = [
     name: 'Object & JSON Parser',
     siName: 'JSON / Object සැකසුම',
     defaultContent: 'Parse JSON / Get Property [name]',
-    defaultSubtitle: '{"name":"SL Builder","plan":"Pro","active":true}',
+    defaultSubtitle: '{"name":"BlockCraft Studio","plan":"Pro","active":true}',
     defaults: {
       logicConfig: {
         objectOp: 'get-prop',
         objectKey: 'name',
-        varValue: '{"name":"SL Builder","plan":"Pro","active":true}',
+        varValue: '{"name":"BlockCraft Studio","plan":"Pro","active":true}',
       },
       style: { bgColor: 'bg-amber-950/25', borderRadius: 'rounded-xl', padding: 'p-4' },
     },
@@ -951,7 +951,7 @@ export const WEB_STUDIO_BLOCK_TEMPLATES: WebStudioBlockTemplate[] = [
     defaultContent: 'Save / Load / Remove [user_prefs]',
     defaultSubtitle: 'Persists data directly in browser LocalStorage',
     defaults: {
-      logicConfig: { storageKey: 'sl_user_data', storageOp: 'save', varValue: 'Saved from SL Builder!' },
+      logicConfig: { storageKey: 'sl_user_data', storageOp: 'save', varValue: 'Saved from BlockCraft Studio!' },
       style: { bgColor: 'bg-emerald-950/30', borderRadius: 'rounded-xl', padding: 'p-4' },
     },
   },
@@ -983,7 +983,7 @@ export const WEB_STUDIO_BLOCK_TEMPLATES: WebStudioBlockTemplate[] = [
     defaultContent: 'Email & Password Auth Flow',
     defaultSubtitle: 'Sign Up, Login, Logout & Get Current User',
     defaults: {
-      logicConfig: { authOp: 'login', varValue: 'creator@slbuilder.app' },
+      logicConfig: { authOp: 'login', varValue: 'creator@blockcraft.app' },
       style: { bgColor: 'bg-emerald-950/30', borderRadius: 'rounded-xl', padding: 'p-4' },
     },
   },

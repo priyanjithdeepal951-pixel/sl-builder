@@ -48,7 +48,7 @@ export const BentoGridShowcase: React.FC<BentoGridShowcaseProps> = ({ onLaunchSt
     setAiLoading(true);
     setTimeout(() => {
       if (promptText.includes('punchy')) {
-        setAiHeadline('Ship 10x Faster with SL Studio');
+        setAiHeadline('Ship 10x Faster with BlockCraft Studio');
       } else if (promptText.includes('enterprise')) {
         setAiHeadline('Enterprise Distributed Cloud Architecture');
       } else {
@@ -59,7 +59,7 @@ export const BentoGridShowcase: React.FC<BentoGridShowcaseProps> = ({ onLaunchSt
   };
 
   const codeSnippets = {
-    html: `<!-- SL Builder Export -->
+    html: `<!-- BlockCraft Studio Export -->
 <div class="p-6 bg-slate-950 rounded-2xl border border-slate-800">
   <h1 class="text-2xl font-bold text-white">Quantum App</h1>
   <button id="btn" class="px-5 py-2 rounded-xl bg-indigo-600 text-white">Trigger</button>
@@ -291,7 +291,7 @@ def increment():
                 } flex flex-col justify-between`}
               >
                 <div className="flex items-center justify-between border-b border-white/10 pb-1 text-[9px] font-mono text-slate-400">
-                  <span>SL Studio</span>
+                  <span>BlockCraft Studio</span>
                   <span className="text-emerald-400">
                     {activeViewport === 'desktop' ? '1440px' : activeViewport === 'tablet' ? '768px' : '375px'}
                   </span>
@@ -400,7 +400,7 @@ def increment():
             </div>
             <h3 className="text-xl font-bold text-white">Your designs never vanish. Every stroke auto-saved.</h3>
             <p className="text-xs text-slate-400 leading-relaxed">
-              SL Builder works entirely in your browser with zero latency. Drafts are locally synced, simulation events stream in real-time, and you can export anytime without dependencies.
+              BlockCraft Studio works entirely in your browser with zero latency. Drafts are locally synced, simulation events stream in real-time, and you can export anytime without dependencies.
             </p>
           </div>
 

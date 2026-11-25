@@ -1,10 +1,23 @@
-import React, { useState } from 'react';
-import { Sparkles, FolderKanban, LogOut, Code2, Menu, X, ArrowUpRight, ShieldCheck } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import {
+  FolderKanban,
+  LogOut,
+  Code2,
+  Menu,
+  X,
+  ArrowUpRight,
+  ShieldCheck,
+  Sun,
+  Moon,
+  Sparkles,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { UserProfile, SiteSettingsConfig } from '../types/builder';
 import { DEFAULT_SITE_SETTINGS } from '../data/siteSettingsDefaults';
 import { ThemeSwitcher } from './ThemeSwitcher';
 import { PWAInstallButton } from './PWAInstallButton';
 import { useTheme } from '../context/ThemeContext';
+import { STUDIO_IMAGES } from '../assets/studioAssets';
 
 type AppPage = 'welcome' | 'auth' | 'projects' | 'editor' | 'admin';
 
@@ -36,9 +49,24 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [settingsDropdownOpen, setSettingsDropdownOpen] = useState(false);
-  const { themeConfig } = useTheme();
+  const { themeConfig, colorMode, toggleColorMode } = useTheme();
+  const settingsRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
-  if (currentPage === 'editor' || currentPage === 'admin') {
+  useEffect(() => {
+    const handleOutside = (e: MouseEvent) => {
+      if (settingsRef.current && !settingsRef.current.contains(e.target as Node)) {
+        setSettingsDropdownOpen(false);
+      }
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleOutside);
+    return () => document.removeEventListener('mousedown', handleOutside);
+  }, []);
+
+  if (currentPage === 'editor' || currentPage === 'admin' || currentPage === 'projects') {
     return null;
   }
 
@@ -48,51 +76,36 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   return (
-    <header className="sticky top-3 z-40 px-4 sm:px-6 transition-all duration-200 space-y-2">
+    <header className="sticky top-0 z-40 border-b border-stone-200/90 dark:border-zinc-800/80 bg-[#f5f5f2]/90 dark:bg-[#0b0c0f]/90 backdrop-blur-md">
       {siteSettings.announcementEnabled && siteSettings.announcementText && (
         <div
-          className="max-w-6xl mx-auto rounded-xl px-4 py-1.5 text-[11px] font-medium text-center text-white border border-white/15 shadow-lg backdrop-blur-xl flex items-center justify-center gap-2"
-          style={{
-            backgroundColor: `${themeConfig.accentHex}26`,
-            borderColor: `${themeConfig.accentHex}55`,
-          }}
+          className="px-4 py-1.5 text-xs font-medium text-center text-white"
+          style={{ backgroundColor: themeConfig.accentHex }}
         >
-          <Sparkles className="w-3.5 h-3.5 shrink-0" style={{ color: themeConfig.accentHex }} />
-          <span>{siteSettings.announcementText}</span>
+          {siteSettings.announcementText}
         </div>
       )}
 
-      <div className="max-w-6xl mx-auto studio-glass rounded-2xl px-5 py-3 shadow-2xl flex items-center justify-between gap-6 border border-white/10">
-        {/* Zone 1: Brand Wordmark */}
-        <div
+      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between gap-8">
+        {/* Zone 1: Single-line Brand Wordmark */}
+        <button
+          type="button"
           onClick={() => handleNavClick('welcome')}
-          className="flex items-center gap-2.5 cursor-pointer select-none group shrink-0"
+          className="font-display text-lg font-bold tracking-tight text-stone-900 dark:text-white whitespace-nowrap shrink-0 cursor-pointer"
         >
-          <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center transition-transform group-hover:scale-105"
-            style={{
-              backgroundColor: `${themeConfig.accentHex}20`,
-              border: `1px solid ${themeConfig.accentHex}40`,
-              color: themeConfig.accentHex,
-            }}
-          >
-            <Sparkles className="w-4 h-4" />
-          </div>
-          <span className="text-base font-bold tracking-tight text-white whitespace-nowrap">
-            {siteSettings.brandName || 'SL Builder'}
-          </span>
-        </div>
+          {siteSettings.brandName || 'BlockCraft Studio'}
+        </button>
 
-        {/* Zone 2: Navigation Links */}
-        <nav className="hidden md:flex items-center gap-7 text-xs font-medium text-slate-300">
+        {/* Zone 2: Clean single-line text navigation links */}
+        <nav className="hidden md:flex items-center gap-7 text-sm font-medium text-stone-600 dark:text-zinc-400">
           <button
+            type="button"
             onClick={() => handleNavClick('welcome')}
-            className={`transition-colors hover:text-white whitespace-nowrap ${
-              currentPage === 'welcome' ? 'text-white font-semibold' : ''
+            className={`whitespace-nowrap shrink-0 transition-colors hover:text-stone-900 dark:hover:text-white cursor-pointer ${
+              currentPage === 'welcome' ? 'text-stone-900 dark:text-white font-semibold' : ''
             }`}
-            style={{ color: currentPage === 'welcome' ? themeConfig.accentHex : undefined }}
           >
-            Home
+            Showcase
           </button>
           <a
             href="#features-section"
@@ -105,9 +118,9 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }, 100);
               }
             }}
-            className="hover:text-white transition-colors whitespace-nowrap"
+            className="whitespace-nowrap shrink-0 hover:text-stone-900 dark:hover:text-white transition-colors"
           >
-            Studio Architecture
+            Live Engine
           </a>
           <a
             href="#templates-section"
@@ -120,200 +133,191 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }, 100);
               }
             }}
-            className="hover:text-white transition-colors whitespace-nowrap"
+            className="whitespace-nowrap shrink-0 hover:text-stone-900 dark:hover:text-white transition-colors"
           >
             Blueprints
           </a>
           <button
+            type="button"
             onClick={() => handleNavClick('projects')}
-            className={`transition-colors hover:text-white whitespace-nowrap flex items-center gap-1.5 ${
-              currentPage === 'projects' ? 'font-semibold' : ''
-            }`}
-            style={{ color: currentPage === 'projects' ? themeConfig.accentHex : undefined }}
+            className="whitespace-nowrap shrink-0 transition-colors hover:text-stone-900 dark:hover:text-white cursor-pointer"
           >
-            <FolderKanban className="w-3.5 h-3.5" />
-            <span>Projects Hub</span>
+            Projects
           </button>
         </nav>
 
-        {/* Zone 3: Actions & Auth */}
+        {/* Zone 3: Primary Action + Compact Preferences */}
         <div className="flex items-center gap-2.5 shrink-0">
-          {/* PWA Install Button for PC & Mobile */}
-          <PWAInstallButton variant="topbar" />
-
-          {/* SETTINGS / MENU BUTTON '≡' (Housing: උල්කාපාත, Theme Switcher, Resume Studio) */}
-          <div className="relative">
+          <div className="relative" ref={settingsRef}>
             <button
+              type="button"
               onClick={() => setSettingsDropdownOpen((prev) => !prev)}
-              className={`p-2 rounded-xl border transition-colors flex items-center justify-center ${
-                settingsDropdownOpen
-                  ? 'bg-white/20 border-white/30 text-white shadow-lg'
-                  : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300 hover:text-white'
-              }`}
-              title="Settings & Workspace Preferences"
+              className="p-2 rounded-lg border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-stone-600 dark:text-zinc-300 hover:text-stone-900 dark:hover:text-white transition-colors cursor-pointer"
+              title="Appearance & Studio Preferences"
+              aria-label="Appearance & Studio Preferences"
             >
-              <Menu className="w-4 h-4" />
+              <SlidersHorizontal className="w-4 h-4" />
             </button>
 
-            {/* SETTINGS POPUP MENU (Containing exact options from user photo) */}
             {settingsDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-[#0c101b] border border-white/10 p-3 shadow-2xl z-50 text-xs backdrop-blur-2xl space-y-3 animate-in fade-in zoom-in-95 duration-150">
-                <div className="flex items-center justify-between pb-2 border-b border-white/10">
-                  <span className="text-[10px] font-mono tracking-wider uppercase text-slate-400 font-semibold">
-                    SETTINGS & CONTROLS
+              <div className="absolute right-0 mt-2 w-72 rounded-xl bg-white dark:bg-[#12141a] border border-stone-200 dark:border-zinc-800 p-3.5 shadow-xl z-50 space-y-3 text-xs">
+                <div className="flex items-center justify-between pb-2 border-b border-stone-100 dark:border-zinc-800">
+                  <span className="font-semibold text-stone-900 dark:text-white">
+                    Studio Preferences
                   </span>
                   <button
+                    type="button"
                     onClick={() => setSettingsDropdownOpen(false)}
-                    className="p-1 rounded-lg text-slate-400 hover:text-white"
+                    className="p-1 rounded text-stone-400 hover:text-stone-900 dark:hover:text-white cursor-pointer"
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
-                {/* THE EXACT 3 BUTTONS CROPPED IN USER PHOTO: උල්කාපාත, Cosmic Indigo, Resume Studio */}
-                <div className="p-3 rounded-2xl bg-[#080b13] border border-white/10 space-y-2.5">
-                  <div className="flex items-center justify-between text-[10px] font-mono text-slate-400 uppercase font-semibold">
-                    <span>Active Controls</span>
-                    <span className="text-indigo-400 font-mono">Quick Access</span>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {/* 1. උල්කාපාත (Meteors) Button */}
-                    <button
-                      onClick={() => {
-                        if (onToggleMeteorShower) onToggleMeteorShower();
-                      }}
-                      className={`rounded-full px-3.5 py-1.5 border text-xs font-semibold flex items-center gap-2 transition-all shadow-sm ${
-                        isMeteorShower
-                          ? 'bg-amber-500/20 border-amber-500/50 text-amber-300 shadow-amber-500/20'
-                          : 'bg-[#111625] hover:bg-[#182035] border-white/15 hover:border-white/30 text-slate-200 hover:text-white'
-                      }`}
-                      title="Toggle Live Meteor Shower (උල්කාපාත වර්ෂාව)"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-400 fill-amber-400/20" />
-                      <span>උල්කාපාත</span>
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          isMeteorShower ? 'bg-amber-400 animate-pulse ring-2 ring-amber-400/40' : 'bg-slate-500'
-                        }`}
-                      />
-                    </button>
-
-                    {/* 2. Theme Switcher (Cosmic Indigo ⌄) */}
-                    <ThemeSwitcher pill />
-
-                    {/* 3. Resume Studio Button */}
-                    {hasActiveProject && onOpenActiveEditor && (
-                      <button
-                        onClick={() => {
-                          setSettingsDropdownOpen(false);
-                          onOpenActiveEditor();
-                        }}
-                        className="rounded-full px-3.5 py-1.5 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm cursor-pointer"
-                        style={{ backgroundColor: themeConfig.accentHex }}
-                      >
-                        <Code2 className="w-3.5 h-3.5" />
-                        <span>Resume Studio</span>
-                      </button>
+                {/* Light / Dark Mode Switch */}
+                <div className="flex items-center justify-between">
+                  <span className="text-stone-600 dark:text-zinc-400 font-medium">Appearance</span>
+                  <button
+                    type="button"
+                    onClick={toggleColorMode}
+                    className="px-3 py-1.5 rounded-lg border border-stone-200 dark:border-zinc-800 bg-stone-100 dark:bg-zinc-900 text-stone-800 dark:text-zinc-200 font-medium flex items-center gap-1.5 hover:bg-stone-200/70 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                  >
+                    {colorMode === 'light' ? (
+                      <>
+                        <Moon className="w-3.5 h-3.5" />
+                        <span>Dark Mode</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sun className="w-3.5 h-3.5" />
+                        <span>Light Mode</span>
+                      </>
                     )}
-                  </div>
+                  </button>
                 </div>
 
-                {/* Quick Navigation Links */}
-                <div className="space-y-1 pt-1">
+                {/* Accent Palette */}
+                <div className="space-y-1.5">
+                  <span className="block text-stone-600 dark:text-zinc-400 font-medium">
+                    Accent Palette
+                  </span>
+                  <ThemeSwitcher pill />
+                </div>
+
+                {/* Live Meteor Streaks Toggle */}
+                {onToggleMeteorShower && (
                   <button
+                    type="button"
+                    onClick={onToggleMeteorShower}
+                    className={`w-full px-3 py-2 rounded-lg border text-left flex items-center justify-between transition-colors cursor-pointer ${
+                      isMeteorShower
+                        ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700/50 text-amber-800 dark:text-amber-300'
+                        : 'bg-stone-50 dark:bg-zinc-900 border-stone-200 dark:border-zinc-800 text-stone-700 dark:text-zinc-300'
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 font-medium">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Meteor Trails (උල්කාපාත)</span>
+                    </span>
+                    <span className="font-mono text-[11px]">{isMeteorShower ? 'On' : 'Off'}</span>
+                  </button>
+                )}
+
+                {hasActiveProject && onOpenActiveEditor && (
+                  <button
+                    type="button"
                     onClick={() => {
                       setSettingsDropdownOpen(false);
-                      onNavigate('projects');
+                      onOpenActiveEditor();
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-slate-300 hover:text-white flex items-center gap-2"
+                    className="w-full px-3 py-2 rounded-lg text-white font-semibold flex items-center justify-center gap-2 cursor-pointer"
+                    style={{ backgroundColor: themeConfig.accentHex }}
                   >
-                    <FolderKanban className="w-3.5 h-3.5 text-indigo-400" />
-                    <span>Projects Mission Control</span>
+                    <Code2 className="w-3.5 h-3.5" />
+                    <span>Resume Studio</span>
                   </button>
+                )}
 
-                  {hasActiveProject && onOpenActiveEditor && (
-                    <button
-                      onClick={() => {
-                        setSettingsDropdownOpen(false);
-                        onOpenActiveEditor();
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-indigo-300 hover:text-white flex items-center gap-2"
-                    >
-                      <Code2 className="w-3.5 h-3.5 text-indigo-400" />
-                      <span>Open WebStudio</span>
-                    </button>
-                  )}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettingsDropdownOpen(false);
+                      onNavigate('admin');
+                    }}
+                    className="w-full text-left px-3 py-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-300 flex items-center gap-2 font-medium cursor-pointer"
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>Admin Console</span>
+                  </button>
+                )}
 
-                  {isAdmin && (
-                    <button
-                      onClick={() => {
-                        setSettingsDropdownOpen(false);
-                        onNavigate('admin');
-                      }}
-                      className="w-full text-left px-3 py-2 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 hover:text-emerald-200 flex items-center gap-2 border border-emerald-500/20"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Admin Command Center</span>
-                    </button>
-                  )}
-
-                  <div className="pt-1.5 border-t border-white/10">
-                    <PWAInstallButton variant="menu-item" />
-                  </div>
+                <div className="pt-1 border-t border-stone-100 dark:border-zinc-800">
+                  <PWAInstallButton variant="menu-item" />
                 </div>
               </div>
             )}
           </div>
 
           {currentUser ? (
-            <div className="relative">
+            <div className="relative" ref={userMenuRef}>
               <button
+                type="button"
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:border-white/20 text-white transition-all text-xs"
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white dark:bg-zinc-900 border border-stone-200 dark:border-zinc-800 hover:border-stone-300 dark:hover:border-zinc-700 text-stone-900 dark:text-white transition-colors text-xs cursor-pointer"
               >
                 <img
-                  src={currentUser.avatar}
+                  src={currentUser.avatar || STUDIO_IMAGES.creatorAvatar}
                   alt={currentUser.name}
+                  referrerPolicy="no-referrer"
                   className="w-5 h-5 rounded-full object-cover"
                 />
-                <span className="font-medium hidden sm:inline text-xs">{currentUser.name}</span>
+                <span className="font-medium hidden sm:inline whitespace-nowrap">
+                  {currentUser.name}
+                </span>
               </button>
 
               {userMenuOpen && (
-                <div className="absolute right-0 mt-2 w-48 rounded-xl bg-[#0c101b] border border-white/10 p-1.5 shadow-2xl z-50 text-xs backdrop-blur-2xl">
-                  <div className="px-3 py-2 border-b border-white/5 mb-1">
-                    <p className="font-semibold text-white truncate">{currentUser.name}</p>
-                    <p className="text-[11px] text-slate-400 truncate">{currentUser.email}</p>
+                <div className="absolute right-0 mt-2 w-48 rounded-xl bg-white dark:bg-[#12141a] border border-stone-200 dark:border-zinc-800 p-1.5 shadow-xl z-50 text-xs">
+                  <div className="px-3 py-2 border-b border-stone-100 dark:border-zinc-800 mb-1">
+                    <p className="font-semibold text-stone-900 dark:text-white truncate">
+                      {currentUser.name}
+                    </p>
+                    <p className="text-[11px] text-stone-500 dark:text-zinc-400 truncate">
+                      {currentUser.email}
+                    </p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => {
                       setUserMenuOpen(false);
                       onNavigate('projects');
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-slate-300 hover:text-white flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-stone-100 dark:hover:bg-zinc-800 text-stone-700 dark:text-zinc-200 flex items-center gap-2 cursor-pointer"
                   >
                     <FolderKanban className="w-3.5 h-3.5" style={{ color: themeConfig.accentHex }} />
                     <span>Projects</span>
                   </button>
                   {isAdmin && (
                     <button
+                      type="button"
                       onClick={() => {
                         setUserMenuOpen(false);
                         onNavigate('admin');
                       }}
-                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-emerald-500/15 text-emerald-300 hover:text-emerald-200 flex items-center gap-2"
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-emerald-50 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 flex items-center gap-2 cursor-pointer"
                     >
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                      <ShieldCheck className="w-3.5 h-3.5" />
                       <span>Admin Panel</span>
                     </button>
                   )}
                   <button
+                    type="button"
                     onClick={() => {
                       setUserMenuOpen(false);
                       onLogout();
                     }}
-                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-rose-500/10 text-rose-300 flex items-center gap-2"
+                    className="w-full text-left px-3 py-2 rounded-lg hover:bg-rose-50 dark:hover:bg-rose-950/30 text-rose-600 dark:text-rose-400 flex items-center gap-2 cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                     <span>Log out</span>
@@ -322,80 +326,74 @@ export const Navbar: React.FC<NavbarProps> = ({
               )}
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => handleNavClick('auth')}
-                className="text-xs font-semibold text-slate-300 hover:text-white px-3 py-1.5 rounded-lg hover:bg-white/5 transition-colors hidden sm:block whitespace-nowrap"
-              >
-                Log in
-              </button>
-              <button
-                onClick={() => handleNavClick('auth')}
-                className="px-4 py-2 rounded-xl text-white font-semibold text-xs shadow-lg transition-all flex items-center gap-1.5 whitespace-nowrap hover:opacity-90 active:scale-95"
-                style={{
-                  backgroundColor: themeConfig.accentHex,
-                  boxShadow: `0 8px 24px -4px ${themeConfig.accentHex}40`,
-                }}
-              >
-                <span>Get Started</span>
-                <ArrowUpRight className="w-3.5 h-3.5" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => handleNavClick('auth')}
+              className="px-4 py-2 rounded-lg text-white font-semibold text-xs transition-opacity hover:opacity-90 flex items-center gap-1.5 whitespace-nowrap shrink-0 cursor-pointer"
+              style={{ backgroundColor: themeConfig.accentHex }}
+            >
+              <span>Open Studio</span>
+              <ArrowUpRight className="w-3.5 h-3.5" />
+            </button>
           )}
 
-          {/* Mobile hamburger menu */}
+          {/* Mobile menu toggle */}
           <button
+            type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="md:hidden p-1.5 rounded-lg bg-white/5 text-slate-400 hover:text-white"
+            className="md:hidden p-2 rounded-lg border border-stone-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-stone-700 dark:text-zinc-300"
+            aria-label="Toggle menu"
           >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {mobileMenuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
           </button>
         </div>
       </div>
 
       {/* Mobile Drawer */}
       {mobileMenuOpen && (
-        <div className="md:hidden max-w-6xl mx-auto mt-2 studio-glass rounded-2xl p-4 border border-white/10 space-y-2 text-xs font-medium">
+        <div className="md:hidden border-t border-stone-200 dark:border-zinc-800 bg-white dark:bg-[#12141a] px-6 py-4 space-y-2 text-sm font-medium">
           <button
+            type="button"
             onClick={() => handleNavClick('welcome')}
-            className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-slate-200"
+            className="w-full text-left py-2 text-stone-800 dark:text-zinc-200"
           >
-            Home
+            Showcase
           </button>
           <button
+            type="button"
             onClick={() => handleNavClick('projects')}
-            className="w-full text-left px-3 py-2 rounded-lg hover:bg-white/5 text-slate-200 flex items-center justify-between"
+            className="w-full text-left py-2 text-stone-800 dark:text-zinc-200"
           >
-            <span>Projects Hub</span>
-            <FolderKanban className="w-4 h-4 text-indigo-400" />
+            Projects
           </button>
           {isAdmin && (
             <button
+              type="button"
               onClick={() => handleNavClick('admin')}
-              className="w-full text-left px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 flex items-center justify-between"
+              className="w-full text-left py-2 text-emerald-700 dark:text-emerald-400"
             >
-              <span>Admin Panel</span>
-              <ShieldCheck className="w-4 h-4 text-emerald-400" />
+              Admin Panel
             </button>
           )}
           {!currentUser ? (
             <button
+              type="button"
               onClick={() => handleNavClick('auth')}
-              className="w-full text-left px-3 py-2 rounded-lg bg-indigo-600/20 text-indigo-300 flex items-center justify-between"
+              className="w-full text-left py-2 font-semibold"
+              style={{ color: themeConfig.accentHex }}
             >
-              <span>Log in / Sign up</span>
-              <ArrowUpRight className="w-4 h-4" />
+              Log in / Sign up
             </button>
           ) : (
             <button
+              type="button"
               onClick={() => {
                 setMobileMenuOpen(false);
                 onLogout();
               }}
-              className="w-full text-left px-3 py-2 rounded-lg text-rose-300 hover:bg-rose-500/10 flex items-center gap-2"
+              className="w-full text-left py-2 text-rose-600 dark:text-rose-400"
             >
-              <LogOut className="w-4 h-4" />
-              <span>Log out</span>
+              Log out
             </button>
           )}
         </div>

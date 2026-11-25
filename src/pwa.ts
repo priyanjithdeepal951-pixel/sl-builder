@@ -4,24 +4,34 @@
 
 export function registerServiceWorker() {
   if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+    // In dev mode, unregister stale service workers so live edits always appear immediately
+    if (import.meta.env.DEV) {
+      navigator.serviceWorker.getRegistrations().then((registrations) => {
+        registrations.forEach((reg) => {
+          reg.unregister().catch(() => {});
+        });
+      });
+      if ('caches' in window) {
+        caches.keys().then((keys) => {
+          keys.forEach((key) => {
+            caches.delete(key).catch(() => {});
+          });
+        });
+      }
+      return;
+    }
+
     window.addEventListener('load', () => {
-      // Register custom sw.js from /sw.js
       navigator.serviceWorker
         .register('/sw.js', { scope: '/' })
         .then((registration) => {
-          console.log('[PWA] Service Worker registered successfully with scope:', registration.scope);
-
-          // Handle incoming service worker updates
+          registration.update().catch(() => {});
           registration.onupdatefound = () => {
             const installingWorker = registration.installing;
             if (installingWorker) {
               installingWorker.onstatechange = () => {
-                if (installingWorker.state === 'installed') {
-                  if (navigator.serviceWorker.controller) {
-                    console.log('[PWA] New version available! Ready to reload on next visit.');
-                  } else {
-                    console.log('[PWA] App ready for offline installation on PC/Mobile.');
-                  }
+                if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                  installingWorker.postMessage({ type: 'SKIP_WAITING' });
                 }
               };
             }

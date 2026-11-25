@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "SL Builder — Visual Drag & Drop Studio",
-  "short_name": "SL Builder",
+  "name": "BlockCraft Studio — Visual Drag & Drop Studio",
+  "short_name": "BlockCraft Studio",
   "description": "Visual drag & drop website builder with interactive logic wiring, live multi-language code export, and cosmic developer aesthetics.",
   "start_url": "/",
   "scope": "/",
