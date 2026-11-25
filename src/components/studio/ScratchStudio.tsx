@@ -46,6 +46,14 @@ import {
   EyeOff,
   GripVertical,
   Image as ImageIcon,
+  Settings,
+  Bot,
+  Crown,
+  ChevronDown,
+  Layers,
+  LayoutGrid,
+  Folder,
+  Move,
 } from 'lucide-react';
 import {
   BlockActionType,
@@ -211,6 +219,9 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   );
   const [htmlViewMode, setHtmlViewMode] = useState<'visual' | 'code'>('visual');
   const [activeCategory, setActiveCategory] = useState<WebStudioCategoryId>('layout');
+  const [activeRailItem, setActiveRailItem] = useState<string>('widget-palette');
+  const [layoutElementsOpen, setLayoutElementsOpen] = useState<boolean>(true);
+  const [moreWidgetsOpen, setMoreWidgetsOpen] = useState<boolean>(false);
   const [viewport, setViewport] = useState<ViewportMode>('desktop');
   const [stageSize, setStageSize] = useState<'small' | 'normal' | 'fullscreen'>('normal');
   const [zoomLevel, setZoomLevel] = useState<number>(1);
@@ -2003,152 +2014,6 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         </div>
       </header>
 
-      {/* ================= 2. SUB-HEADER: HTML / CSS / JAVASCRIPT TABS + VIEWPORT & STAGE CONTROLS ================= */}
-      <div className="h-11 bg-[#0D1017] px-2 pt-1.5 flex items-end justify-between border-b border-white/10 shrink-0">
-        {/* Left 3 Core Web Tabs: HTML, CSS, JavaScript */}
-        <div className="flex items-end gap-0.5">
-          <button
-            type="button"
-            onClick={() => setActiveTab('html')}
-            className={`px-4 py-2 rounded-t-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'html'
-                ? 'bg-[#161B26] text-orange-400 border-t border-l border-r border-white/15 -mb-[1px] pb-[9px]'
-                : 'bg-[#0F131B] text-slate-400 hover:text-slate-100 border border-transparent'
-            }`}
-          >
-            <FileCode2 className="w-3.5 h-3.5 text-orange-400" />
-            <span>HTML</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('css')}
-            className={`px-4 py-2 rounded-t-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'css'
-                ? 'bg-[#161B26] text-sky-400 border-t border-l border-r border-white/15 -mb-[1px] pb-[9px]'
-                : 'bg-[#0F131B] text-slate-400 hover:text-slate-100 border border-transparent'
-            }`}
-          >
-            <Palette className="w-3.5 h-3.5 text-sky-400" />
-            <span>CSS</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('js')}
-            className={`px-4 py-2 rounded-t-xl text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer whitespace-nowrap ${
-              activeTab === 'js'
-                ? 'bg-[#161B26] text-amber-300 border-t border-l border-r border-white/15 -mb-[1px] pb-[9px]'
-                : 'bg-[#0F131B] text-slate-400 hover:text-slate-100 border border-transparent'
-            }`}
-          >
-            <Braces className="w-3.5 h-3.5 text-amber-300" />
-            <span>JavaScript</span>
-          </button>
-        </div>
-
-        {/* Right Controls above Preview Stage: Run, Reset, Viewports & Stage Size */}
-        <div
-          className={`flex items-center justify-between pb-1.5 pl-2 ${
-            stageSize === 'fullscreen' ? 'gap-6' : stageWidthClass
-          }`}
-        >
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={handleRunSimulation}
-              title="Run Reactive Simulation"
-              className="p-1.5 rounded-lg hover:bg-white/10 text-emerald-400 cursor-pointer flex items-center gap-1 text-[11px] font-semibold"
-            >
-              <Play className="w-3.5 h-3.5 fill-emerald-400" />
-              <span className="hidden sm:inline">Run</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleResetSimulation}
-              title="Reset Preview State"
-              className="p-1.5 rounded-lg hover:bg-white/10 text-slate-300 cursor-pointer"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-1.5">
-            {/* Responsive Viewport Selector */}
-            <div className="flex items-center bg-[#161B26] border border-white/15 rounded-lg overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setViewport('desktop')}
-                title="Desktop Preview"
-                className={`p-1.5 cursor-pointer ${
-                  viewport === 'desktop' ? 'bg-[#232C3F] text-[#60A5FA]' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Monitor className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewport('tablet')}
-                title="Tablet Preview (768px)"
-                className={`p-1.5 border-l border-r border-white/10 cursor-pointer ${
-                  viewport === 'tablet' ? 'bg-[#232C3F] text-[#60A5FA]' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Tablet className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setViewport('mobile')}
-                title="Mobile Preview (375px)"
-                className={`p-1.5 cursor-pointer ${
-                  viewport === 'mobile' ? 'bg-[#232C3F] text-[#60A5FA]' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Smartphone className="w-3.5 h-3.5" />
-              </button>
-            </div>
-
-            {/* Stage Split Layout Toggles */}
-            <div className="flex items-center bg-[#161B26] border border-white/15 rounded-lg overflow-hidden">
-              <button
-                type="button"
-                onClick={() => setStageSize('small')}
-                title="Compact Preview"
-                className={`p-1.5 cursor-pointer ${
-                  stageSize === 'small' ? 'bg-[#232C3F] text-[#60A5FA]' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <Columns2 className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageSize('normal')}
-                title="Normal Preview"
-                className={`p-1.5 border-l border-r border-white/10 cursor-pointer ${
-                  stageSize === 'normal' ? 'bg-[#232C3F] text-[#60A5FA]' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                <LayoutPanelLeft className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setStageSize((s) => (s === 'fullscreen' ? 'normal' : 'fullscreen'))
-                }
-                title="Fullscreen Preview"
-                className={`p-1.5 cursor-pointer ${
-                  stageSize === 'fullscreen' ? 'bg-[#232C3F] text-[#60A5FA]' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {stageSize === 'fullscreen' ? (
-                  <Minimize2 className="w-3.5 h-3.5" />
-                ) : (
-                  <Maximize2 className="w-3.5 h-3.5" />
-                )}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* ================= 3. MAIN WORKSPACE AREA ================= */}
       <div className="flex-1 min-h-0 flex overflow-hidden">
         {/* LEFT EDITOR PANEL (Hidden only when Preview Stage is Fullscreen) */}
@@ -2157,147 +2022,720 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
             {/* TAB 1: HTML (DOM Blocks & Visual Canvas + HTML Markup) */}
             {activeTab === 'html' && (
               <>
-                {/* 3a. Far-Left Category Rail */}
-                <aside className="w-[68px] bg-[#0E121A] border-r border-white/10 flex flex-col justify-between shrink-0 overflow-y-auto">
-                  <div className="py-1.5 flex flex-col items-center gap-0.5">
-                    {WEB_STUDIO_CATEGORIES.map((cat) => {
-                      const active = activeCategory === cat.id;
-                      return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={() => setActiveCategory(cat.id)}
-                          className={`w-full py-2.5 px-1 flex flex-col items-center gap-1 text-center transition-colors cursor-pointer ${
-                            active
-                              ? 'bg-[#1A2233] text-white font-bold'
-                              : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                          }`}
-                        >
-                          <span
-                            className="w-5 h-5 rounded-full border shadow-xs"
-                            style={{
-                              backgroundColor: cat.color,
-                              borderColor: cat.borderColor,
-                            }}
-                          />
-                          <span className="text-[10px] leading-tight truncate w-full">
-                            {lang === 'si' ? cat.siLabel : cat.label}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
+                {/* 3a. Far-Left Studio Navigation Rail */}
+                <aside className="w-[54px] bg-[#14161b] border-r border-white/[0.08] flex flex-col shrink-0 overflow-y-auto select-none">
+                  <div className="flex-1 min-h-full py-2.5 flex flex-col items-center justify-between">
+                    {/* Top & Middle Tool Icons */}
+                    <div className="flex flex-col items-center gap-1.5 w-full">
+                      {/* Top Group */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('widget-palette')}
+                        title="UI Builder"
+                        aria-label="UI Builder"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'widget-palette'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
+                          <path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" />
+                          <path d="M18 3v6" />
+                          <path d="M15 6h6" />
+                          <circle cx="9" cy="9.5" r="1.2" fill="currentColor" stroke="none" />
+                          <circle cx="9" cy="14.5" r="1.2" fill="currentColor" stroke="none" />
+                        </svg>
+                      </button>
 
-                  {/* Bottom-Left Blue + Add Section Kit Button */}
-                  <button
-                    type="button"
-                    onClick={() => setShowSectionModal(true)}
-                    title="Add Prebuilt Section Bundle"
-                    className="w-full h-11 bg-[#2563EB] hover:bg-[#3B82F6] text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
-                  >
-                    <Plus className="w-5 h-5 stroke-[2.5]" />
-                  </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('page-selector')}
+                        title="Page Selector"
+                        aria-label="Page Selector"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'page-selector'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
+                          <rect x="4" y="4" width="12" height="14" rx="2" />
+                          <path d="M8 8h4" />
+                          <path d="M8 11.5h4" />
+                          <path d="M8 15h2.5" />
+                          <path d="M16 7h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-1" />
+                        </svg>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('widget-tree')}
+                        title="Widget Tree"
+                        aria-label="Widget Tree"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'widget-tree'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
+                          <circle cx="5.5" cy="7" r="1.4" />
+                          <circle cx="5.5" cy="12" r="1.4" />
+                          <circle cx="5.5" cy="17" r="1.4" />
+                          <path d="M10 7h9" />
+                          <path d="M10 12h9" />
+                          <path d="M10 17h9" />
+                        </svg>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('search')}
+                        title="Search"
+                        aria-label="Search"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'search'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <Search className="w-[18px] h-[18px] stroke-[1.8]" />
+                      </button>
+
+                      {/* Divider */}
+                      <div className="w-5 h-px bg-white/[0.1] my-1" />
+
+                      {/* Middle Group */}
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('storyboard')}
+                        title="Storyboard"
+                        aria-label="Storyboard"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'storyboard'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
+                          <rect x="4" y="4.5" width="7" height="10" rx="1.5" />
+                          <rect x="13" y="9.5" width="7" height="10" rx="1.5" />
+                          <path d="M11 8.5c2 0 3.5 1.5 3.5 3.5" />
+                          <path d="M13 15.5c-2 0-3.5-1.5-3.5-3.5" />
+                        </svg>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('actions')}
+                        title="Action Flow"
+                        aria-label="Action Flow"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'actions'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <Zap className="w-[18px] h-[18px] fill-current stroke-[1.5]" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('database')}
+                        title="Database"
+                        aria-label="Database"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'database'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
+                          <rect x="4" y="4" width="16" height="4.5" rx="1" />
+                          <rect x="4" y="9.75" width="16" height="4.5" rx="1" />
+                          <rect x="4" y="15.5" width="16" height="4.5" rx="1" />
+                          <circle cx="7" cy="6.25" r="0.6" fill="currentColor" />
+                          <circle cx="7" cy="12" r="0.6" fill="currentColor" />
+                          <circle cx="7" cy="17.75" r="0.6" fill="currentColor" />
+                        </svg>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('api-calls')}
+                        title="API Calls"
+                        aria-label="API Calls"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'api-calls'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
+                          <rect x="4" y="5" width="7.5" height="14" rx="1.5" />
+                          <circle cx="7.75" cy="12" r="1" fill="currentColor" stroke="none" />
+                          <path d="M14.5 7h5.5" />
+                          <path d="M14.5 12h5.5" />
+                          <path d="M14.5 17h5.5" />
+                        </svg>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('app-state')}
+                        title="App State"
+                        aria-label="App State"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'app-state'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
+                          <rect x="6" y="3.5" width="12" height="17" rx="2.2" />
+                          <path d="M8.5 10.5a1 1 0 0 1 1-1h1.5l1 1h2.5a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-5a1 1 0 0 1-1-1v-4z" />
+                        </svg>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('components')}
+                        title="Components"
+                        aria-label="Components"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'components'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
+                          <polygon points="12,4 15.5,6 15.5,10 12,12 8.5,10 8.5,6" />
+                          <polygon points="7.5,12 11,14 11,18 7.5,20 4,18 4,14" />
+                          <polygon points="16.5,12 20,14 20,18 16.5,20 13,18 13,14" />
+                        </svg>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('media-assets')}
+                        title="Media Assets"
+                        aria-label="Media Assets"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'media-assets'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <ImageIcon className="w-[18px] h-[18px] stroke-[1.75]" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('cloud-sync')}
+                        title="Cloud Sync"
+                        aria-label="Cloud Sync"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'cloud-sync'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
+                          <path d="M6.5 18h11a4 4 0 0 0 .8-7.92A5.5 5.5 0 0 0 7.7 8.5 4.2 4.2 0 0 0 6.5 18Z" />
+                          <path d="m9.8 13.5 1.8 1.8 3.2-3.4" />
+                        </svg>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('project-checks')}
+                        title="Automated Tests"
+                        aria-label="Automated Tests"
+                        className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'project-checks'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]">
+                          <path d="M12 4.5a7.5 7.5 0 1 0 0 15" />
+                          <path d="m8.8 12.2 2.2 2.2 4.2-4.4" />
+                          <path d="M17.5 14v5" />
+                          <path d="M15 16.5h5" />
+                        </svg>
+                        <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-[#5B4DFF] flex items-center justify-center ring-2 ring-[#14161b]">
+                          <Crown className="w-2 h-2 text-white fill-white" />
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('ai-assistant')}
+                        title="AI Assistant"
+                        aria-label="AI Assistant"
+                        className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'ai-assistant'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <Bot className="w-[18px] h-[18px] stroke-[1.75]" />
+                        <span className="absolute top-0.5 right-0.5 w-3.5 h-3.5 rounded-full bg-[#5B4DFF] flex items-center justify-center ring-2 ring-[#14161b]">
+                          <Crown className="w-2 h-2 text-white fill-white" />
+                        </span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('triggers')}
+                        title="Quick Triggers"
+                        aria-label="Quick Triggers"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'triggers'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <Zap className="w-[18px] h-[18px] fill-current stroke-[1.5]" />
+                      </button>
+                    </div>
+
+                    {/* Bottom Group */}
+                    <div className="pt-4 pb-1 flex flex-col items-center gap-2 w-full">
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('theme-palette')}
+                        title="Theme Settings"
+                        aria-label="Theme Settings"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'theme-palette'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <Palette className="w-[18px] h-[18px] stroke-[1.75]" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('settings')}
+                        title="Settings"
+                        aria-label="Settings"
+                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                          activeRailItem === 'settings'
+                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
+                        }`}
+                      >
+                        <Settings className="w-[18px] h-[18px] stroke-[1.75]" />
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setActiveRailItem('profile')}
+                        title="Account"
+                        aria-label="Account"
+                        className="mt-0.5 w-8 h-8 rounded-full bg-[#8c5a44] hover:bg-[#9c664e] text-white text-[12px] font-bold tracking-tight flex items-center justify-center transition-colors cursor-pointer"
+                      >
+                        DP
+                      </button>
+                    </div>
+                  </div>
                 </aside>
 
                 {/* 3b. Block Toolbox Palette */}
-                <aside className="w-[235px] lg:w-[260px] bg-[#11151E] border-r border-white/10 overflow-y-auto px-3 py-3 shrink-0 space-y-2.5">
-                  <div className="flex items-center justify-between pb-1">
-                    <span className="text-xs font-bold text-slate-200">
-                      {lang === 'si'
-                        ? WEB_STUDIO_CATEGORIES.find((c) => c.id === activeCategory)?.siLabel
-                        : WEB_STUDIO_CATEGORIES.find((c) => c.id === activeCategory)?.label}
-                    </span>
-                    <span className="text-[10px] text-slate-500">
-                      {lang === 'si' ? 'ක්ලික් / අදින්න' : 'Click or drag'}
-                    </span>
-                  </div>
+                <aside className="w-[264px] lg:w-[278px] bg-[#181a1f] border-r border-white/[0.08] overflow-y-auto px-3 py-3 shrink-0 space-y-3 select-none">
+                  {activeRailItem === 'widget-palette' ? (
+                    <>
+                      {/* LAYOUT ELEMENTS Section (matches reference screenshot) */}
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setLayoutElementsOpen((o) => !o)}
+                          className="w-full flex items-center justify-between py-1 text-left cursor-pointer group"
+                        >
+                          <span className="text-[11px] font-medium tracking-[0.08em] text-[#9aa3b2] group-hover:text-white uppercase transition-colors">
+                            LAYOUT ELEMENTS
+                          </span>
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 text-[#8b949e] transition-transform duration-150 ${
+                              layoutElementsOpen ? 'rotate-0' : '-rotate-90'
+                            }`}
+                          />
+                        </button>
 
-                  {/* Quick Block Search Input */}
-                  <div className="relative">
-                    <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={paletteSearch}
-                      onChange={(e) => setPaletteSearch(e.target.value)}
-                      placeholder={lang === 'si' ? 'බ්ලොක් සොයන්න...' : 'Search all blocks...'}
-                      className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-[#090B10] border border-white/10 focus:border-[#4D97FF] text-[11px] text-white placeholder-slate-500 outline-none"
-                    />
-                    {paletteSearch && (
-                      <button
-                        type="button"
-                        onClick={() => setPaletteSearch('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
-                      >
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </div>
+                        {layoutElementsOpen && (
+                          <div className="grid grid-cols-3 gap-2 pt-2">
+                            {(
+                              [
+                                {
+                                  id: 'Container',
+                                  tplId: 'tpl-section',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="w-[20px] h-[20px]">
+                                      <rect x="4.5" y="4.5" width="15" height="15" rx="2" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Row',
+                                  tplId: 'tpl-row',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <path d="M5 6h14" />
+                                      <rect x="4.5" y="9.5" width="4" height="5" rx="0.8" />
+                                      <rect x="10" y="9.5" width="4" height="5" rx="0.8" />
+                                      <rect x="15.5" y="9.5" width="4" height="5" rx="0.8" />
+                                      <path d="M5 18h14" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Column',
+                                  tplId: 'tpl-column',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <path d="M6 5v14" />
+                                      <rect x="9.5" y="4.5" width="5" height="4" rx="0.8" />
+                                      <rect x="9.5" y="10" width="5" height="4" rx="0.8" />
+                                      <rect x="9.5" y="15.5" width="5" height="4" rx="0.8" />
+                                      <path d="M18 5v14" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Stack',
+                                  tplId: 'tpl-column',
+                                  icon: <Layers className="w-[20px] h-[20px] stroke-[1.75]" />,
+                                },
+                                {
+                                  id: 'Card',
+                                  tplId: 'tpl-card',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <rect x="4" y="5.5" width="16" height="13" rx="2" />
+                                      <path d="M7.5 9.5h5" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'ListView',
+                                  tplId: 'tpl-sidebar',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <path d="M5 7h14" />
+                                      <path d="M5 12h14" />
+                                      <path d="M5 17h14" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'GridView',
+                                  tplId: 'tpl-grid',
+                                  icon: <LayoutGrid className="w-[20px] h-[20px] stroke-[1.75]" />,
+                                },
+                                {
+                                  id: 'Spacer',
+                                  tplId: 'tpl-section',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <path d="M5 5h14" />
+                                      <path d="M12 8v8" />
+                                      <path d="m9.5 10.5 2.5-2.5 2.5 2.5" />
+                                      <path d="m9.5 13.5 2.5 2.5 2.5-2.5" />
+                                      <path d="M5 19h14" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Divider',
+                                  tplId: 'tpl-footer',
+                                  icon: <Minus className="w-[20px] h-[20px] stroke-[2]" />,
+                                },
+                                {
+                                  id: 'VerticalDivider',
+                                  tplId: 'tpl-sidebar',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <path d="M12 5v14" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'TabBar',
+                                  tplId: 'tpl-tabbar',
+                                  icon: <Folder className="w-[20px] h-[20px] stroke-[1.75]" />,
+                                },
+                                {
+                                  id: 'PageView',
+                                  tplId: 'tpl-image',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="5" y="4" width="14" height="12" rx="2" />
+                                      <circle cx="9.5" cy="8.5" r="1.1" />
+                                      <path d="m6.5 14 3.5-3.2 2.8 2.4 2.2-1.8 2.5 2.6" />
+                                      <path d="m7 19-1.5-1 1.5-1" />
+                                      <path d="m17 19 1.5-1-1.5-1" />
+                                      <circle cx="10" cy="18" r="0.6" fill="currentColor" stroke="none" />
+                                      <circle cx="12" cy="18" r="0.6" fill="currentColor" stroke="none" />
+                                      <circle cx="14" cy="18" r="0.6" fill="currentColor" stroke="none" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Carousel',
+                                  tplId: 'tpl-testimonial',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="7" y="6" width="10" height="12" rx="1.5" />
+                                      <path d="M4 8v8" />
+                                      <path d="M20 8v8" />
+                                      <path d="m9 15 2.2-2.2 1.8 1.5 2-2 1.8 2.7" />
+                                      <circle cx="10.2" cy="9.5" r="0.9" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Expandable',
+                                  tplId: 'tpl-accordion',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <path d="M15 5h4v4" />
+                                      <path d="M19 5l-5.5 5.5" />
+                                      <path d="M9 19H5v-4" />
+                                      <path d="M5 19l5.5-5.5" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Wrap',
+                                  tplId: 'tpl-row',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="4" y="6" width="6" height="4.5" rx="0.8" />
+                                      <rect x="12" y="6" width="6" height="4.5" rx="0.8" />
+                                      <rect x="4" y="13.5" width="6" height="4.5" rx="0.8" />
+                                      <path d="M18 11.5v2.5a2 2 0 0 1-2 2h-3.5" />
+                                      <path d="m14.5 14-2 2 2 2" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Form Validation',
+                                  tplId: 'tpl-text-input',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <path d="M5 6.5h14" />
+                                      <path d="M5 10h14" />
+                                      <path d="M5 13.5h14" />
+                                      <path d="M5 17h6" />
+                                      <rect x="13" y="15.5" width="6" height="3" rx="1.5" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'StaggeredView',
+                                  tplId: 'tpl-grid',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="5" y="4.5" width="6" height="8" rx="1" />
+                                      <rect x="13" y="4.5" width="6" height="5" rx="1" />
+                                      <rect x="5" y="14.5" width="6" height="5" rx="1" />
+                                      <rect x="13" y="11.5" width="6" height="8" rx="1" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'FlippableCard',
+                                  tplId: 'tpl-card',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="6" y="4.5" width="12" height="9.5" rx="1.5" />
+                                      <path d="M8.5 8h4" />
+                                      <path d="M6.5 16.5c-1.5 1.2-1 3 1.5 3.3h8c2.5-.3 3-2.1 1.5-3.3" />
+                                      <path d="m14.5 18 2 1.8-2 1.8" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'SwipeableStack',
+                                  tplId: 'tpl-card',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="5" y="7" width="8.5" height="10.5" rx="1.2" transform="rotate(-12 9 12)" />
+                                      <rect x="9.5" y="5.5" width="8.5" height="10.5" rx="1.2" transform="rotate(8 13 11)" />
+                                      <path d="M12.5 18.5c2.2 0 4-1.3 4.5-3.2" />
+                                      <path d="m15 16 2-1.2 1.2 2" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'DataTable',
+                                  tplId: 'tpl-pricing',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="4" y="5" width="16" height="14" rx="1.8" />
+                                      <path d="M4 9.5h16" />
+                                      <path d="M4 14h16" />
+                                      <path d="M9.5 5v14" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Flex',
+                                  tplId: 'tpl-row',
+                                  icon: <Move className="w-[20px] h-[20px] stroke-[1.75]" />,
+                                },
+                              ] as const
+                            ).map((item) => {
+                              const tpl =
+                                WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === item.tplId) ||
+                                WEB_STUDIO_BLOCK_TEMPLATES[0];
+                              return (
+                                <button
+                                  key={item.id}
+                                  type="button"
+                                  draggable
+                                  onDragStart={(e) => handlePaletteDragStart(e, tpl)}
+                                  onClick={() => handleAddTemplateBlock(tpl)}
+                                  title={`Add ${item.id}`}
+                                  className="h-[74px] rounded-[8px] bg-[#1e2127] hover:bg-[#262a33] border border-white/[0.07] hover:border-white/[0.16] px-1.5 flex flex-col items-center justify-center gap-1.5 text-center transition-colors cursor-grab active:cursor-grabbing"
+                                >
+                                  <span className="text-[#c9d1d9] flex items-center justify-center">
+                                    {item.icon}
+                                  </span>
+                                  <span className="text-[11px] font-normal text-[#9aa3b2] truncate w-full leading-tight">
+                                    {item.id}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
 
-                  <div className="flex flex-col gap-2 pb-6">
-                    {(() => {
-                      const query = paletteSearch.trim().toLowerCase();
-                      const filtered = query
-                        ? WEB_STUDIO_BLOCK_TEMPLATES.filter(
-                            (t) =>
-                              t.name.toLowerCase().includes(query) ||
-                              t.siName.toLowerCase().includes(query) ||
-                              t.group.toLowerCase().includes(query) ||
-                              t.type.toLowerCase().includes(query)
-                          )
-                        : categoryTemplates;
+                      {/* Collapsible section for remaining blocks & logic */}
+                      <div className="pt-2 border-t border-white/[0.06]">
+                        <button
+                          type="button"
+                          onClick={() => setMoreWidgetsOpen((o) => !o)}
+                          className="w-full flex items-center justify-between py-1 text-left cursor-pointer group"
+                        >
+                          <span className="text-[11px] font-medium tracking-[0.08em] text-[#8b949e] group-hover:text-white uppercase transition-colors">
+                            ALL BLOCKS & LOGIC
+                          </span>
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 text-[#8b949e] transition-transform duration-150 ${
+                              moreWidgetsOpen ? 'rotate-0' : '-rotate-90'
+                            }`}
+                          />
+                        </button>
+                      </div>
+                    </>
+                  ) : null}
 
-                      if (filtered.length === 0) {
-                        return (
-                          <p className="text-[11px] text-slate-500 text-center py-6">
-                            No blocks match &ldquo;{paletteSearch}&rdquo;
-                          </p>
-                        );
-                      }
+                  {(activeRailItem !== 'widget-palette' || moreWidgetsOpen) && (
+                    <>
+                      <div className="flex items-center justify-between pb-1">
+                        <span className="text-xs font-bold text-slate-200">
+                          {lang === 'si'
+                            ? WEB_STUDIO_CATEGORIES.find((c) => c.id === activeCategory)?.siLabel
+                            : WEB_STUDIO_CATEGORIES.find((c) => c.id === activeCategory)?.label}
+                        </span>
+                        <span className="text-[10px] text-slate-500">
+                          {lang === 'si' ? 'ක්ලික් / අදින්න' : 'Click or drag'}
+                        </span>
+                      </div>
 
-                      let lastGroup = '';
-                      return filtered.map((tpl) => {
-                        const catMeta = WEB_STUDIO_CATEGORIES.find(
-                          (c) => c.id === tpl.studioCategory
-                        )!;
-                        const groupLabel = lang === 'si' ? tpl.siGroup : tpl.group;
-                        const showGroupHeader = groupLabel !== lastGroup;
-                        lastGroup = groupLabel;
-                        return (
-                          <React.Fragment key={tpl.id}>
-                            {showGroupHeader && (
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pt-1.5 pb-0.5 block">
-                                {groupLabel}
-                              </span>
-                            )}
-                            <div
-                              draggable
-                              onDragStart={(e) => handlePaletteDragStart(e, tpl)}
-                              onClick={() => handleAddTemplateBlock(tpl)}
-                              style={{
-                                backgroundColor: catMeta.color,
-                                borderColor: catMeta.borderColor,
-                              }}
-                              className={`relative px-3 py-2 border shadow-sm cursor-grab active:cursor-grabbing hover:brightness-105 transition-all select-none ${
-                                tpl.isHatBlock
-                                  ? 'rounded-b-lg rounded-tr-lg rounded-tl-2xl border-t-4 border-t-white/40'
-                                  : 'rounded-lg'
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-xs font-bold text-white truncate">
-                                  {lang === 'si' ? tpl.siName : tpl.name}
-                                </span>
-                                <Plus className="w-3.5 h-3.5 text-white/80 shrink-0" />
-                              </div>
-                              <p className="text-[10px] text-white/85 truncate mt-0.5">
-                                {tpl.defaultContent}
+                      {/* Quick Block Search Input */}
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                          type="text"
+                          value={paletteSearch}
+                          onChange={(e) => setPaletteSearch(e.target.value)}
+                          placeholder={lang === 'si' ? 'බ්ලොක් සොයන්න...' : 'Search all blocks...'}
+                          className="w-full pl-8 pr-7 py-1.5 rounded-lg bg-[#090B10] border border-white/10 focus:border-[#4D97FF] text-[11px] text-white placeholder-slate-500 outline-none"
+                        />
+                        {paletteSearch && (
+                          <button
+                            type="button"
+                            onClick={() => setPaletteSearch('')}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white cursor-pointer"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+
+                      <div className="flex flex-col gap-2 pb-6">
+                        {(() => {
+                          const query = paletteSearch.trim().toLowerCase();
+                          const filtered = query
+                            ? WEB_STUDIO_BLOCK_TEMPLATES.filter(
+                                (t) =>
+                                  t.name.toLowerCase().includes(query) ||
+                                  t.siName.toLowerCase().includes(query) ||
+                                  t.group.toLowerCase().includes(query) ||
+                                  t.type.toLowerCase().includes(query)
+                              )
+                            : categoryTemplates;
+
+                          if (filtered.length === 0) {
+                            return (
+                              <p className="text-[11px] text-slate-500 text-center py-6">
+                                No blocks match &ldquo;{paletteSearch}&rdquo;
                               </p>
-                            </div>
-                          </React.Fragment>
-                        );
-                      });
-                    })()}
-                  </div>
+                            );
+                          }
+
+                          let lastGroup = '';
+                          return filtered.map((tpl) => {
+                            const catMeta = WEB_STUDIO_CATEGORIES.find(
+                              (c) => c.id === tpl.studioCategory
+                            )!;
+                            const groupLabel = lang === 'si' ? tpl.siGroup : tpl.group;
+                            const showGroupHeader = groupLabel !== lastGroup;
+                            lastGroup = groupLabel;
+                            return (
+                              <React.Fragment key={tpl.id}>
+                                {showGroupHeader && (
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 pt-1.5 pb-0.5 block">
+                                    {groupLabel}
+                                  </span>
+                                )}
+                                <div
+                                  draggable
+                                  onDragStart={(e) => handlePaletteDragStart(e, tpl)}
+                                  onClick={() => handleAddTemplateBlock(tpl)}
+                                  style={{
+                                    backgroundColor: catMeta.color,
+                                    borderColor: catMeta.borderColor,
+                                  }}
+                                  className={`relative px-3 py-2 border shadow-sm cursor-grab active:cursor-grabbing hover:brightness-105 transition-all select-none ${
+                                    tpl.isHatBlock
+                                      ? 'rounded-b-lg rounded-tr-lg rounded-tl-2xl border-t-4 border-t-white/40'
+                                      : 'rounded-lg'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between gap-2">
+                                    <span className="text-xs font-bold text-white truncate">
+                                      {lang === 'si' ? tpl.siName : tpl.name}
+                                    </span>
+                                    <Plus className="w-3.5 h-3.5 text-white/80 shrink-0" />
+                                  </div>
+                                  <p className="text-[10px] text-white/85 truncate mt-0.5">
+                                    {tpl.defaultContent}
+                                  </p>
+                                </div>
+                              </React.Fragment>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </>
+                  )}
                 </aside>
 
                 {/* 3c. Center Dotted Visual Blueprint Stack Canvas + HTML Toggle */}
