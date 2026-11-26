@@ -254,6 +254,13 @@ function mapGeminiError(err: unknown): { status: number; message: string } {
       message: `Requested Gemini model (${GEMINI_MODEL}) was not found or is unavailable.`,
     };
   }
+  if (lower.includes('504') || lower.includes('timeout')) {
+    return {
+      status: 504,
+      message:
+        'Gemini AI response timed out due to heavy load. Please click Retry or switch models.',
+    };
+  }
   if (isTransientHighDemandError(err)) {
     return {
       status: 503,
@@ -324,8 +331,8 @@ async function startServer() {
 
       const systemInstruction = buildSystemInstruction(mode, studioContext);
 
-      const attemptGenerate = async (modelName: string) => {
-        return ai.models.generateContent({
+      const attemptGenerate = async (modelName: string, timeoutMs: number) => {
+        const genPromise = ai.models.generateContent({
           model: modelName,
           contents,
           config: {
@@ -337,23 +344,33 @@ async function startServer() {
               : {}),
           },
         });
+        let timerId: ReturnType<typeof setTimeout> | undefined;
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          timerId = setTimeout(() => {
+            reject(new Error(`504 Gateway Timeout: ${modelName} took too long to respond.`));
+          }, timeoutMs);
+        });
+        try {
+          return await Promise.race([genPromise, timeoutPromise]);
+        } finally {
+          if (timerId) clearTimeout(timerId);
+        }
+      };
+
+      const shouldFallback = (err: unknown) => {
+        const msg = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+        return isTransientHighDemandError(err) || msg.includes('timeout') || msg.includes('504');
       };
 
       let usedModel = primaryModel;
       let response;
       try {
-        response = await attemptGenerate(primaryModel);
+        response = await attemptGenerate(primaryModel, 14000);
       } catch (firstErr) {
-        if (!isTransientHighDemandError(firstErr)) throw firstErr;
-        await sleep(700);
-        try {
-          response = await attemptGenerate(primaryModel);
-        } catch (secondErr) {
-          if (!isTransientHighDemandError(secondErr)) throw secondErr;
-          await sleep(500);
-          usedModel = fallbackModel;
-          response = await attemptGenerate(fallbackModel);
-        }
+        if (!shouldFallback(firstErr)) throw firstErr;
+        await sleep(300);
+        usedModel = fallbackModel;
+        response = await attemptGenerate(fallbackModel, 14000);
       }
 
       const rawText = response.text?.trim() || '';

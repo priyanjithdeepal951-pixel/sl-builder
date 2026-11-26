@@ -179,52 +179,70 @@ export const GeminiCodingAgentPanel: React.FC<GeminiCodingAgentPanelProps> = ({
     setIsLoading(true);
 
     try {
-      const res = await fetch('/api/gemini/agent', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode: effectiveMode,
-          model: selectedModel,
-          messages: nextHistory
-            .filter((m) => !m.error)
-            .map((m) => ({ role: m.role, text: m.text })),
-          studioContext: {
-            projectName,
-            activePageName: activePage?.name || 'Home',
-            activePageSlug: activePage?.slug || 'index',
-            activeTab,
-            selectedBlock: selectedBlock
-              ? {
-                  id: selectedBlock.id,
-                  type: selectedBlock.type,
-                  name: selectedBlock.name,
-                  content: selectedBlock.content,
-                  subtitle: selectedBlock.subtitle,
-                  action: selectedBlock.action,
-                  apiEndpoint: selectedBlock.apiEndpoint,
-                  style: selectedBlock.style as Record<string, unknown>,
-                }
-              : null,
-            blocks: blocks.slice(0, 35).map((b) => ({
-              id: b.id,
-              type: b.type,
-              name: b.name,
-              content: b.content,
-              subtitle: b.subtitle,
-              action: b.action,
-              apiEndpoint: b.apiEndpoint,
-            })),
-            codeSnippet: getActiveCodeExcerpt(),
-          },
-        }),
-      });
+      const controller = new AbortController();
+      const timeoutHandle = window.setTimeout(() => controller.abort(), 32000);
+      let res: Response;
+      try {
+        res = await fetch('/api/gemini/agent', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            mode: effectiveMode,
+            model: selectedModel,
+            messages: nextHistory
+              .filter((m) => !m.error)
+              .map((m) => ({ role: m.role, text: m.text })),
+            studioContext: {
+              projectName,
+              activePageName: activePage?.name || 'Home',
+              activePageSlug: activePage?.slug || 'index',
+              activeTab,
+              selectedBlock: selectedBlock
+                ? {
+                    id: selectedBlock.id,
+                    type: selectedBlock.type,
+                    name: selectedBlock.name,
+                    content: selectedBlock.content,
+                    subtitle: selectedBlock.subtitle,
+                    action: selectedBlock.action,
+                    apiEndpoint: selectedBlock.apiEndpoint,
+                    style: selectedBlock.style as Record<string, unknown>,
+                  }
+                : null,
+              blocks: blocks.slice(0, 35).map((b) => ({
+                id: b.id,
+                type: b.type,
+                name: b.name,
+                content: b.content,
+                subtitle: b.subtitle,
+                action: b.action,
+                apiEndpoint: b.apiEndpoint,
+              })),
+              codeSnippet: getActiveCodeExcerpt(),
+            },
+          }),
+        });
+      } finally {
+        window.clearTimeout(timeoutHandle);
+      }
 
-      const data = (await res.json()) as {
+      const rawBody = await res.text();
+      let data: {
         reply?: string;
         codeSnippet?: AgentCodeSnippet | null;
         actions?: GeminiAgentAction[];
         error?: string;
-      };
+      } = {};
+      try {
+        data = JSON.parse(rawBody) as typeof data;
+      } catch {
+        throw new Error(
+          lang === 'si'
+            ? `Server ප්‍රතිචාරය ප්‍රමාද විය හෝ reconnect වෙමින් පවතී (HTTP ${res.status}). කරුණාකර Retry click කරන්න (හෝ Flash Lite model එක තෝරන්න).`
+            : `Gateway timeout or server restart (HTTP ${res.status}). Please click Retry or switch to Flash Lite.`
+        );
+      }
 
       if (!res.ok) {
         throw new Error(data.error || `Request failed (${res.status})`);
