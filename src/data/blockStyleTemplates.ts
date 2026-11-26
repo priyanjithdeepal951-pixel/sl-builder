@@ -421,14 +421,98 @@ export const BLOCK_STYLE_TEMPLATES: BlockStyleTemplate[] = [
   },
 ];
 
+export const FONT_OPTIONS: {
+  id: NonNullable<BlockStyle['fontFamily']>;
+  label: string;
+  sample: string;
+  css: string;
+}[] = [
+  { id: 'sans', label: 'Sans', sample: 'Clean', css: 'Inter, system-ui, -apple-system, sans-serif' },
+  { id: 'display', label: 'Display', sample: 'Modern', css: "'Space Grotesk', 'Plus Jakarta Sans', system-ui, sans-serif" },
+  { id: 'condensed', label: 'Poster', sample: 'BOLD', css: "'Oswald', 'Bebas Neue', Impact, 'Arial Narrow', sans-serif" },
+  { id: 'rounded', label: 'Rounded', sample: 'Soft', css: "'Nunito', 'Quicksand', 'Segoe UI', system-ui, sans-serif" },
+  { id: 'serif', label: 'Serif', sample: 'Classic', css: "Georgia, Cambria, 'Times New Roman', serif" },
+  { id: 'mono', label: 'Mono', sample: 'Code', css: "'JetBrains Mono', ui-monospace, SFMono-Regular, monospace" },
+  { id: 'script', label: 'Script', sample: 'Signature', css: "'Pacifico', 'Brush Script MT', 'Segoe Script', cursive" },
+];
+
+export const TEXT_GRADIENT_PRESETS: { id: string; label: string; value?: string; preview: string }[] = [
+  { id: 'none', label: 'Solid', value: undefined, preview: 'linear-gradient(135deg, #ffffff, #cbd5e1)' },
+  { id: 'sunset', label: 'Sunset', value: 'linear-gradient(135deg, #fb7185 0%, #f59e0b 52%, #fde047 100%)', preview: 'linear-gradient(135deg, #fb7185, #f59e0b, #fde047)' },
+  { id: 'aurora', label: 'Aurora', value: 'linear-gradient(135deg, #38bdf8 0%, #818cf8 50%, #f472b6 100%)', preview: 'linear-gradient(135deg, #38bdf8, #818cf8, #f472b6)' },
+  { id: 'gold', label: 'VIP Gold', value: 'linear-gradient(135deg, #fef08a 0%, #eab308 55%, #ca8a04 100%)', preview: 'linear-gradient(135deg, #fef08a, #eab308, #ca8a04)' },
+  { id: 'candy', label: 'Candy', value: 'linear-gradient(135deg, #f472b6 0%, #c084fc 55%, #60a5fa 100%)', preview: 'linear-gradient(135deg, #f472b6, #c084fc, #60a5fa)' },
+  { id: 'ice', label: 'Ice', value: 'linear-gradient(135deg, #ffffff 0%, #bae6fd 50%, #38bdf8 100%)', preview: 'linear-gradient(135deg, #ffffff, #bae6fd, #38bdf8)' },
+  { id: 'emerald', label: 'Mint', value: 'linear-gradient(135deg, #a7f3d0 0%, #34d399 55%, #06b6d4 100%)', preview: 'linear-gradient(135deg, #a7f3d0, #34d399, #06b6d4)' },
+  { id: 'fire', label: 'Flame', value: 'linear-gradient(135deg, #fde047 0%, #f97316 55%, #ef4444 100%)', preview: 'linear-gradient(135deg, #fde047, #f97316, #ef4444)' },
+];
+
+export const TEXT_SHADOW_PRESETS: { id: string; label: string; value?: string }[] = [
+  { id: 'none', label: 'None', value: undefined },
+  { id: 'soft', label: 'Soft Drop', value: '0 3px 10px rgba(0,0,0,0.65)' },
+  { id: 'noir', label: 'Deep Noir', value: '0 6px 20px rgba(0,0,0,0.9)' },
+  { id: 'hard', label: 'Hard Offset', value: '2px 2px 0px rgba(0,0,0,0.95)' },
+  { id: 'cyan', label: 'Cyan Glow', value: '0 0 12px rgba(34,211,238,0.9), 0 0 26px rgba(59,130,246,0.55)' },
+  { id: 'rose', label: 'Rose Neon', value: '0 0 14px rgba(244,63,94,0.95), 0 0 28px rgba(236,72,153,0.55)' },
+  { id: 'gold', label: 'Gold Halo', value: '0 0 14px rgba(250,204,21,0.8), 0 4px 14px rgba(202,138,4,0.45)' },
+  { id: 'retro', label: '3D Retro', value: '2px 2px 0px #ec4899, 4px 4px 0px #4f46e5' },
+  { id: 'mint', label: 'Mint Glow', value: '0 0 14px rgba(16,185,129,0.85)' },
+];
+
+export const TEXT_STROKE_PRESETS: { id: string; label: string; value?: string }[] = [
+  { id: 'none', label: 'None', value: undefined },
+  { id: 'dark-thin', label: 'Dark 1px', value: '1px #090b10' },
+  { id: 'dark-bold', label: 'Dark 1.5px', value: '1.5px #000000' },
+  { id: 'white-thin', label: 'White 1px', value: '1px rgba(255,255,255,0.85)' },
+  { id: 'cyan', label: 'Cyan Edge', value: '1px #22d3ee' },
+  { id: 'rose', label: 'Rose Edge', value: '1px #fb7185' },
+  { id: 'gold', label: 'Gold Edge', value: '1px #facc15' },
+];
+
+export const BG_GRADIENT_PRESETS: { id: string; label: string; value?: string; fallbackHex?: string }[] = [
+  { id: 'none', label: 'Solid / Default', value: undefined },
+  { id: 'cyan-blue', label: 'Neon Cyan', value: 'linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%)', fallbackHex: '#0284c7' },
+  { id: 'sunset', label: 'Sunset Pop', value: 'linear-gradient(135deg, #f43f5e 0%, #f59e0b 100%)', fallbackHex: '#f43f5e' },
+  { id: 'royal-violet', label: 'Royal Violet', value: 'linear-gradient(135deg, #8b5cf6 0%, #4f46e5 100%)', fallbackHex: '#6366f1' },
+  { id: 'emerald', label: 'Emerald Mint', value: 'linear-gradient(135deg, #10b981 0%, #0d9488 100%)', fallbackHex: '#10b981' },
+  { id: 'vip-gold', label: 'VIP Gold', value: 'linear-gradient(135deg, #fde047 0%, #ca8a04 100%)', fallbackHex: '#eab308' },
+  { id: 'midnight', label: 'Midnight Glass', value: 'linear-gradient(135deg, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.04) 100%)', fallbackHex: '#1e293b' },
+];
+
+export const BOX_SHADOW_PRESETS: { id: string; label: string; value?: string }[] = [
+  { id: 'none', label: 'Flat', value: undefined },
+  { id: 'soft', label: 'Soft Card', value: '0 8px 20px rgba(0,0,0,0.35)' },
+  { id: 'elevated', label: 'Deep Pop', value: '0 14px 34px rgba(0,0,0,0.6)' },
+  { id: 'neon-cyan', label: 'Cyan Glow', value: '0 0 22px rgba(6,182,212,0.55)' },
+  { id: 'neon-rose', label: 'Rose Glow', value: '0 0 22px rgba(244,63,94,0.5)' },
+  { id: 'neon-gold', label: 'Gold Glow', value: '0 8px 24px rgba(234,179,8,0.45)' },
+  { id: 'arcade', label: '3D Press', value: '0 4px 0 #1e1b4b, 0 10px 22px rgba(79,70,229,0.45)' },
+];
+
 export function getTemplatesForBlockType(type: BlockType): BlockStyleTemplate[] {
-  if (type === 'ui-button' || type === 'logic-click') {
+  if (
+    type === 'ui-button' ||
+    type === 'ui-fab' ||
+    type === 'ui-icon-button' ||
+    type === 'ui-counter-button' ||
+    type === 'ui-choice-chips' ||
+    type === 'ui-toggle-icon' ||
+    type === 'ui-tabbar' ||
+    type === 'ui-link' ||
+    type === 'logic-click'
+  ) {
     return [
       ...BLOCK_STYLE_TEMPLATES.filter((t) => t.category === 'button'),
       ...BLOCK_STYLE_TEMPLATES.filter((t) => t.category === 'text-fx'),
     ];
   }
-  if (type === 'ui-heading' || type === 'ui-paragraph' || type === 'ui-badge') {
+  if (
+    type === 'ui-heading' ||
+    type === 'ui-paragraph' ||
+    type === 'ui-richtext' ||
+    type === 'ui-badge' ||
+    type === 'ui-stat'
+  ) {
     return [
       ...BLOCK_STYLE_TEMPLATES.filter((t) => t.category === 'text-fx'),
       ...BLOCK_STYLE_TEMPLATES.filter((t) => t.category === 'surface'),
@@ -437,5 +521,6 @@ export function getTemplatesForBlockType(type: BlockType): BlockStyleTemplate[] 
   return [
     ...BLOCK_STYLE_TEMPLATES.filter((t) => t.category === 'surface'),
     ...BLOCK_STYLE_TEMPLATES.filter((t) => t.category === 'text-fx'),
+    ...BLOCK_STYLE_TEMPLATES.filter((t) => t.category === 'button'),
   ];
 }

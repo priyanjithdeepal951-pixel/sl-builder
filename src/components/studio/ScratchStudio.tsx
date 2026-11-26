@@ -58,6 +58,7 @@ import {
 import {
   BlockActionType,
   BlockLogicConfig,
+  BlockStyle,
   CanvasBlock,
   NavbarLinkAction,
   NavbarLinkItem,
@@ -76,6 +77,8 @@ import {
   getCategoryMetaForBlockType,
 } from '../../data/webStudioBlocks';
 import { PreviewConfirmDialog, WebPreviewRenderer, renderVectorIcon } from './WebPreviewRenderer';
+import { ThemeStyleStudioPanel } from './ThemeStyleStudioPanel';
+import { GeminiCodingAgentPanel, GeminiAgentAction } from './GeminiCodingAgentPanel';
 import { ICON_LIBRARY } from '../../utils/mediaHelpers';
 import {
   generateHtmlExport,
@@ -89,12 +92,7 @@ import {
   PAGE_THEME_PRESETS,
   resolvePageBackgroundCss,
 } from '../../utils/pageStylePresets';
-import {
-  BLOCK_STYLE_TEMPLATES,
-  BlockStyleTemplate,
-  TemplateCategory,
-  getTemplatesForBlockType,
-} from '../../data/blockStyleTemplates';
+import { FONT_OPTIONS } from '../../data/blockStyleTemplates';
 import { getEffectiveNavLinks } from '../../utils/navLinkHelpers';
 import {
   INITIAL_RUNTIME_STATE,
@@ -225,7 +223,6 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   const [baseElementsOpen, setBaseElementsOpen] = useState<boolean>(true);
   const [pageElementsOpen, setPageElementsOpen] = useState<boolean>(true);
   const [formElementsOpen, setFormElementsOpen] = useState<boolean>(true);
-  const [moreWidgetsOpen, setMoreWidgetsOpen] = useState<boolean>(false);
   const [viewport, setViewport] = useState<ViewportMode>('desktop');
   const [stageSize, setStageSize] = useState<'small' | 'normal' | 'fullscreen'>('normal');
   const [zoomLevel, setZoomLevel] = useState<number>(1);
@@ -241,8 +238,6 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   const [newPageName, setNewPageName] = useState('');
   const [showExportModal, setShowExportModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
-  const [inspectorMode, setInspectorMode] = useState<'templates' | 'properties'>('templates');
-  const [templateFilter, setTemplateFilter] = useState<'recommended' | TemplateCategory>('recommended');
   const [paletteSearch, setPaletteSearch] = useState('');
   const [runtimeState, setRuntimeState] = useState<StudioRuntimeState>(() => INITIAL_RUNTIME_STATE);
   const [formInputs, setFormInputs] = useState<Record<string, string>>({});
@@ -656,6 +651,159 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     commitBlocks((prev) => [...prev, copy]);
     setSelectedBlockId(copy.id);
   };
+
+  const handleApplyGeminiActions = useCallback(
+    (actions: GeminiAgentAction[]): number => {
+      if (!Array.isArray(actions) || actions.length === 0) return 0;
+      let applied = 0;
+      let nextSelectedId: string | null = null;
+
+      const hasBlockOps = actions.some((a) =>
+        ['add-block', 'update-block', 'delete-block', 'move-block'].includes(a.type)
+      );
+
+      if (hasBlockOps) {
+        commitBlocks((prev) => {
+          let next = [...prev];
+          for (const act of actions) {
+            if (act.type === 'add-block') {
+              const tpl =
+                (act.templateId
+                  ? WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === act.templateId)
+                  : undefined) ||
+                (act.blockType
+                  ? WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.type === act.blockType)
+                  : undefined) ||
+                WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === 'tpl-card');
+              if (!tpl) continue;
+              const created = createCanvasBlockFromTemplate(tpl);
+              if (act.name) created.name = act.name;
+              if (act.content !== undefined) created.content = act.content;
+              if (act.subtitle !== undefined) created.subtitle = act.subtitle;
+              if (act.optionsCsv) {
+                const parsed = act.optionsCsv
+                  .split(/[,|]+/)
+                  .map((s) => s.trim())
+                  .filter(Boolean);
+                if (parsed.length > 0) created.options = parsed;
+              }
+              if (act.imageUrl) created.imageUrl = act.imageUrl;
+              if (act.videoUrl) created.videoUrl = act.videoUrl;
+              if (act.actionType) {
+                created.action = act.actionType as BlockActionType;
+              }
+              if (act.actionPayload !== undefined) created.actionPayload = act.actionPayload;
+              if (act.apiEndpoint !== undefined) created.apiEndpoint = act.apiEndpoint;
+              if (
+                act.httpMethod === 'GET' ||
+                act.httpMethod === 'POST' ||
+                act.httpMethod === 'PUT' ||
+                act.httpMethod === 'DELETE'
+              ) {
+                created.httpMethod = act.httpMethod;
+              }
+              if (act.stylePatch) {
+                created.style = { ...created.style, ...act.stylePatch };
+              }
+              if (
+                typeof act.positionIndex === 'number' &&
+                act.positionIndex >= 0 &&
+                act.positionIndex <= next.length
+              ) {
+                next.splice(act.positionIndex, 0, created);
+              } else {
+                next.push(created);
+              }
+              nextSelectedId = created.id;
+              applied++;
+            } else if (act.type === 'update-block') {
+              const targetId = act.targetBlockId || selectedBlockId || next[0]?.id;
+              if (!targetId) continue;
+              let matched = false;
+              next = next.map((b) => {
+                if (b.id !== targetId) return b;
+                matched = true;
+                const updated: CanvasBlock = {
+                  ...b,
+                  ...(act.name ? { name: act.name } : {}),
+                  ...(act.content !== undefined ? { content: act.content } : {}),
+                  ...(act.subtitle !== undefined ? { subtitle: act.subtitle } : {}),
+                  ...(act.imageUrl ? { imageUrl: act.imageUrl } : {}),
+                  ...(act.videoUrl ? { videoUrl: act.videoUrl } : {}),
+                  ...(act.actionType ? { action: act.actionType as BlockActionType } : {}),
+                  ...(act.actionPayload !== undefined ? { actionPayload: act.actionPayload } : {}),
+                  ...(act.apiEndpoint !== undefined ? { apiEndpoint: act.apiEndpoint } : {}),
+                  ...(act.httpMethod === 'GET' ||
+                  act.httpMethod === 'POST' ||
+                  act.httpMethod === 'PUT' ||
+                  act.httpMethod === 'DELETE'
+                    ? { httpMethod: act.httpMethod }
+                    : {}),
+                  style: act.stylePatch ? { ...b.style, ...act.stylePatch } : b.style,
+                };
+                if (act.optionsCsv) {
+                  const parsed = act.optionsCsv
+                    .split(/[,|]+/)
+                    .map((s) => s.trim())
+                    .filter(Boolean);
+                  if (parsed.length > 0) updated.options = parsed;
+                }
+                nextSelectedId = updated.id;
+                return updated;
+              });
+              if (matched) applied++;
+            } else if (act.type === 'delete-block') {
+              const targetId = act.targetBlockId || selectedBlockId;
+              if (!targetId) continue;
+              const beforeLen = next.length;
+              next = next.filter((b) => b.id !== targetId);
+              if (next.length < beforeLen) {
+                applied++;
+                nextSelectedId = next[0]?.id || null;
+              }
+            } else if (act.type === 'move-block') {
+              const targetId = act.targetBlockId || selectedBlockId;
+              if (!targetId || typeof act.positionIndex !== 'number') continue;
+              const idx = next.findIndex((b) => b.id === targetId);
+              if (idx < 0) continue;
+              const clamped = Math.max(0, Math.min(next.length - 1, act.positionIndex));
+              const [item] = next.splice(idx, 1);
+              next.splice(clamped, 0, item);
+              nextSelectedId = item.id;
+              applied++;
+            }
+          }
+          return next;
+        });
+      }
+
+      for (const act of actions) {
+        if (act.type === 'select-block' && act.targetBlockId) {
+          nextSelectedId = act.targetBlockId;
+          applied++;
+        } else if (act.type === 'update-page-style' && act.pageStylePatch) {
+          handleUpdatePageStyle(act.pageStylePatch);
+          applied++;
+        } else if (act.type === 'create-page' && act.pageName) {
+          handleCreatePage(act.pageName, 'blank');
+          applied++;
+        } else if (
+          act.type === 'switch-code-tab' &&
+          (act.codeTab === 'html' || act.codeTab === 'css' || act.codeTab === 'js')
+        ) {
+          setActiveTab(act.codeTab);
+          applied++;
+        }
+      }
+
+      if (nextSelectedId) {
+        setSelectedBlockId(nextSelectedId);
+      }
+
+      return applied;
+    },
+    [commitBlocks, handleCreatePage, handleUpdatePageStyle, selectedBlockId]
+  );
 
   const handleFormInputChange = (blockId: string, value: string, fireInputEvent = true) => {
     const updatedInputs = { ...formInputs, [blockId]: value };
@@ -2408,8 +2556,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                       <button
                         type="button"
                         onClick={() => setActiveRailItem('theme-palette')}
-                        title="Theme Settings"
-                        aria-label="Theme Settings"
+                        title="Text, Font, Color & Shade Studio"
+                        aria-label="Text, Font, Color & Shade Studio"
                         className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                           activeRailItem === 'theme-palette'
                             ? 'bg-white/[0.07] border border-white/[0.14] text-white'
@@ -3733,27 +3881,61 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         )}
                       </div>
 
-                      {/* Collapsible section for remaining blocks & logic */}
-                      <div className="pt-2 border-t border-white/[0.06]">
-                        <button
-                          type="button"
-                          onClick={() => setMoreWidgetsOpen((o) => !o)}
-                          className="w-full flex items-center justify-between py-1 text-left cursor-pointer group"
-                        >
-                          <span className="text-[11px] font-medium tracking-[0.08em] text-[#8b949e] group-hover:text-white uppercase transition-colors">
-                            ALL BLOCKS & LOGIC
-                          </span>
-                          <ChevronDown
-                            className={`w-3.5 h-3.5 text-[#8b949e] transition-transform duration-150 ${
-                              moreWidgetsOpen ? 'rotate-0' : '-rotate-90'
-                            }`}
-                          />
-                        </button>
-                      </div>
                     </>
                   ) : null}
 
-                  {(activeRailItem !== 'widget-palette' || moreWidgetsOpen) && (
+                  {activeRailItem === 'theme-palette' && (
+                    <ThemeStyleStudioPanel
+                      blocks={blocks}
+                      selectedBlock={selectedBlock}
+                      onSelectBlock={(id) => setSelectedBlockId(id)}
+                      onUpdateBlock={handleUpdateBlock}
+                      onBulkApplyStyle={(stylePatch: Partial<BlockStyle>) => {
+                        commitBlocks((prev) =>
+                          prev.map((b) => ({
+                            ...b,
+                            style: { ...b.style, ...stylePatch },
+                            children: b.children?.map((ch) => ({
+                              ...ch,
+                              style: { ...ch.style, ...stylePatch },
+                            })),
+                          }))
+                        );
+                      }}
+                      onResetStyle={(blockId: string) => {
+                        commitBlocks((prev) =>
+                          prev.map((b) =>
+                            b.id === blockId
+                              ? {
+                                  ...b,
+                                  style: {
+                                    ...b.style,
+                                    templateId: undefined,
+                                    fontFamily: undefined,
+                                    fontWeight: undefined,
+                                    fontSize: undefined,
+                                    textAlign: undefined,
+                                    customTextHex: undefined,
+                                    subtitleColorHex: undefined,
+                                    textGradient: undefined,
+                                    textShadow: undefined,
+                                    textStroke: undefined,
+                                    customBgHex: undefined,
+                                    bgGradient: undefined,
+                                    borderColor: undefined,
+                                    boxShadow: undefined,
+                                    borderRadius: undefined,
+                                  },
+                                }
+                              : b
+                          )
+                        );
+                      }}
+                      onToast={onToast}
+                    />
+                  )}
+
+                  {activeRailItem !== 'widget-palette' && activeRailItem !== 'theme-palette' && (
                     <>
                       <div className="flex items-center justify-between pb-1">
                         <span className="text-xs font-bold text-slate-200">
@@ -4951,15 +5133,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         <div className="space-y-1.5">
                           <label className="text-slate-400 font-semibold">Font Family</label>
                           <div className="flex flex-wrap gap-1">
-                            {(
-                              [
-                                { id: 'sans', label: 'Sans' },
-                                { id: 'serif', label: 'Serif' },
-                                { id: 'mono', label: 'Mono' },
-                                { id: 'display', label: 'Display' },
-                                { id: 'rounded', label: 'Rounded' },
-                              ] as const
-                            ).map((ff) => (
+                            {FONT_OPTIONS.map((ff) => (
                               <button
                                 key={ff.id}
                                 type="button"
@@ -7158,1624 +7332,23 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
           {/* 4b. BOTTOM BLOCK INSPECTOR + PAGE LAYERS COLUMN */}
           {stageSize !== 'fullscreen' && (
             <div className="flex-1 min-h-0 flex gap-2 mt-2">
-              {/* Selected Block Quick Inspector (Matches Scratch Sprite Properties box) */}
+              {/* Gemini AI Coding Agent Panel */}
               <div className="flex-1 bg-[#11151E] rounded-xl border border-white/10 flex flex-col overflow-hidden">
-                {selectedBlock ? (
-                  <>
-                    <div className="p-2.5 border-b border-white/10 bg-[#141923] space-y-2 text-[11px]">
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-slate-400">Block</span>
-                        <input
-                          type="text"
-                          value={selectedBlock.name}
-                          onChange={(e) =>
-                            handleUpdateBlock({ ...selectedBlock, name: e.target.value })
-                          }
-                          className="flex-1 min-w-0 px-2.5 py-1 rounded-full bg-[#0A0D13] border border-white/15 text-slate-100 font-semibold outline-none focus:border-[#4C97FF]"
-                        />
-                        <div className="inline-flex rounded-full border border-white/15 overflow-hidden shrink-0">
-                          {(['left', 'center', 'right'] as const).map((al) => (
-                            <button
-                              key={al}
-                              type="button"
-                              onClick={() =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  style: { ...selectedBlock.style, textAlign: al },
-                                })
-                              }
-                              className={`px-2 py-1 cursor-pointer ${
-                                selectedBlock.style?.textAlign === al
-                                  ? 'bg-[#1E2B45] text-[#60A5FA]'
-                                  : 'bg-[#0A0D13] text-slate-400'
-                              }`}
-                            >
-                              {al === 'left' ? (
-                                <AlignLeft className="w-3 h-3" />
-                              ) : al === 'center' ? (
-                                <AlignCenter className="w-3 h-3" />
-                              ) : (
-                                <AlignRight className="w-3 h-3" />
-                              )}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-slate-400 w-9 shrink-0">Text</span>
-                        <input
-                          type="text"
-                          value={
-                            selectedBlock.type === 'ui-stat'
-                              ? (selectedBlock.statValue ?? selectedBlock.content)
-                              : selectedBlock.content
-                          }
-                          onChange={(e) =>
-                            handleUpdateBlock(
-                              selectedBlock.type === 'ui-stat'
-                                ? {
-                                    ...selectedBlock,
-                                    content: e.target.value,
-                                    statValue: e.target.value,
-                                  }
-                                : { ...selectedBlock, content: e.target.value }
-                            )
-                          }
-                          className="flex-1 min-w-0 px-2.5 py-1 rounded-full bg-[#0A0D13] border border-white/15 text-slate-100 outline-none focus:border-[#4C97FF]"
-                        />
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-slate-400 w-9 shrink-0">Sub</span>
-                        <input
-                          type="text"
-                          value={
-                            selectedBlock.type === 'ui-stat'
-                              ? (selectedBlock.statLabel ?? selectedBlock.subtitle ?? '')
-                              : selectedBlock.subtitle || ''
-                          }
-                          placeholder={
-                            selectedBlock.type === 'ui-tabbar'
-                              ? 'Panel text (separate tabs with |)...'
-                              : 'Subtitle / label...'
-                          }
-                          onChange={(e) =>
-                            handleUpdateBlock(
-                              selectedBlock.type === 'ui-stat'
-                                ? {
-                                    ...selectedBlock,
-                                    subtitle: e.target.value,
-                                    statLabel: e.target.value,
-                                  }
-                                : { ...selectedBlock, subtitle: e.target.value }
-                            )
-                          }
-                          className="flex-1 min-w-0 px-2.5 py-1 rounded-full bg-[#0A0D13] border border-white/10 text-slate-300 placeholder-slate-600 outline-none focus:border-[#4C97FF]"
-                        />
-                      </div>
-
-                      {(selectedBlock.type === 'ui-sidebar' ||
-                        selectedBlock.type === 'ui-tabbar' ||
-                        selectedBlock.type === 'ui-row' ||
-                        selectedBlock.type === 'ui-column' ||
-                        selectedBlock.type === 'ui-listview' ||
-                        selectedBlock.type === 'ui-grid' ||
-                        selectedBlock.type === 'ui-pageview' ||
-                        selectedBlock.type === 'ui-carousel' ||
-                        selectedBlock.type === 'ui-wrap' ||
-                        selectedBlock.type === 'ui-staggered' ||
-                        selectedBlock.type === 'ui-swipeable-stack' ||
-                        selectedBlock.type === 'ui-flex' ||
-                        selectedBlock.type === 'ui-vertical-divider' ||
-                        selectedBlock.type === 'ui-select' ||
-                        selectedBlock.type === 'ui-calendar' ||
-                        selectedBlock.type === 'ui-rive' ||
-                        selectedBlock.type === 'ui-language-selector' ||
-                        selectedBlock.type === 'ui-chart' ||
-                        selectedBlock.type === 'ui-choice-chips' ||
-                        selectedBlock.type === 'ui-place-picker' ||
-                        selectedBlock.type === 'ui-checkbox-group' ||
-                        (selectedBlock.type === 'ui-checkbox' &&
-                          selectedBlock.controlVariant === 'radio')) && (
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-sky-400 w-9 shrink-0">Items</span>
-                          <input
-                            type="text"
-                            value={
-                              Array.isArray(selectedBlock.options) && selectedBlock.options.length > 0
-                                ? selectedBlock.options.join(', ')
-                                : selectedBlock.content
-                            }
-                            placeholder="Comma separated items..."
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              const parsed = raw
-                                .split(/[,|]+/)
-                                .map((s) => s.trim())
-                                .filter(Boolean);
-                              const keepContent =
-                                selectedBlock.type === 'ui-calendar' ||
-                                selectedBlock.type === 'ui-rive' ||
-                                selectedBlock.type === 'ui-language-selector' ||
-                                selectedBlock.type === 'ui-chart' ||
-                                selectedBlock.type === 'ui-choice-chips' ||
-                                selectedBlock.type === 'ui-place-picker' ||
-                                selectedBlock.type === 'ui-checkbox-group';
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                options: parsed,
-                                ...(keepContent ? {} : { content: parsed.join(' | ') }),
-                              });
-                            }}
-                            className="flex-1 min-w-0 px-2.5 py-1 rounded-full bg-[#0A0D13] border border-sky-500/30 text-sky-200 outline-none focus:border-[#4C97FF]"
-                          />
-                        </div>
-                      )}
-
-                      {/* Inspector Mode Switcher: CapCut Templates vs Custom Properties */}
-                      <div className="flex items-center gap-1 bg-[#0A0D13] p-0.5 rounded-lg border border-white/10">
-                        <button
-                          type="button"
-                          onClick={() => setInspectorMode('templates')}
-                          className={`flex-1 py-1 px-2 rounded-md font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                            inspectorMode === 'templates'
-                              ? 'bg-[#2563EB] text-white shadow-xs'
-                              : 'text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <Sparkles className="w-3 h-3" />
-                          <span>{lang === 'si' ? 'ටෙම්ප්ලේට් (Templates)' : 'Style Templates'}</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setInspectorMode('properties')}
-                          className={`flex-1 py-1 px-2 rounded-md font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                            inspectorMode === 'properties'
-                              ? 'bg-[#1E2B45] text-sky-300 border border-sky-400/30'
-                              : 'text-slate-400 hover:text-white'
-                          }`}
-                        >
-                          <Wand2 className="w-3 h-3" />
-                          <span>{lang === 'si' ? 'වෙනස් කරන්න (Edit)' : 'Customize'}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    {inspectorMode === 'templates' ? (
-                      <div className="flex-1 p-2.5 bg-[#0C0F16] overflow-y-auto flex flex-col gap-2 text-[11px]">
-                        {/* Filter Pills + Reset */}
-                        <div className="flex items-center justify-between gap-1.5 flex-wrap">
-                          <div className="flex items-center gap-1">
-                            {(
-                              [
-                                { id: 'recommended', label: 'For Block' },
-                                { id: 'text-fx', label: 'Text FX' },
-                                { id: 'surface', label: 'Box FX' },
-                                { id: 'button', label: 'Buttons' },
-                              ] as const
-                            ).map((tab) => (
-                              <button
-                                key={tab.id}
-                                type="button"
-                                onClick={() => setTemplateFilter(tab.id)}
-                                className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-colors cursor-pointer ${
-                                  templateFilter === tab.id
-                                    ? 'bg-sky-500/20 text-sky-300 border border-sky-400/40'
-                                    : 'bg-white/5 text-slate-400 hover:text-white border border-transparent'
-                                }`}
-                              >
-                                {tab.label}
-                              </button>
-                            ))}
-                          </div>
-                          {selectedBlock.style?.templateId && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  style: {
-                                    textAlign: selectedBlock.style?.textAlign,
-                                    fontSize: selectedBlock.style?.fontSize,
-                                  },
-                                })
-                              }
-                              className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-white/5 hover:bg-white/10 text-slate-300 flex items-center gap-1 cursor-pointer"
-                              title="Reset Template Style"
-                            >
-                              <RotateCcw className="w-2.5 h-2.5" />
-                              <span>Reset</span>
-                            </button>
-                          )}
-                        </div>
-
-                        {/* CapCut-Style Visual Template Cards Grid */}
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                          {(templateFilter === 'recommended'
-                            ? getTemplatesForBlockType(selectedBlock.type)
-                            : BLOCK_STYLE_TEMPLATES.filter((t) => t.category === templateFilter)
-                          ).map((tpl: BlockStyleTemplate) => {
-                            const isActive = selectedBlock.style?.templateId === tpl.id;
-                            const previewFont =
-                              tpl.style.fontFamily === 'serif'
-                                ? "Georgia, Cambria, 'Times New Roman', serif"
-                                : tpl.style.fontFamily === 'mono'
-                                ? "'JetBrains Mono', ui-monospace, monospace"
-                                : tpl.style.fontFamily === 'display'
-                                ? "'Space Grotesk', system-ui, sans-serif"
-                                : tpl.style.fontFamily === 'rounded'
-                                ? "'Nunito', 'Quicksand', system-ui, sans-serif"
-                                : 'Inter, system-ui, sans-serif';
-
-                            const applyTemplate = () => {
-                              if (tpl.category === 'text-fx') {
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  style: {
-                                    ...selectedBlock.style,
-                                    templateId: tpl.id,
-                                    fontFamily: tpl.style.fontFamily,
-                                    fontWeight: tpl.style.fontWeight,
-                                    customTextHex: tpl.style.customTextHex,
-                                    subtitleColorHex: tpl.style.subtitleColorHex,
-                                    textGradient: tpl.style.textGradient,
-                                    textShadow: tpl.style.textShadow,
-                                    textStroke: tpl.style.textStroke,
-                                  },
-                                });
-                              } else {
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  style: {
-                                    ...selectedBlock.style,
-                                    templateId: tpl.id,
-                                    fontFamily: tpl.style.fontFamily || selectedBlock.style?.fontFamily,
-                                    fontWeight: tpl.style.fontWeight || selectedBlock.style?.fontWeight,
-                                    customTextHex: tpl.style.customTextHex,
-                                    subtitleColorHex: tpl.style.subtitleColorHex,
-                                    textGradient: undefined,
-                                    textShadow: undefined,
-                                    textStroke: undefined,
-                                    customBgHex: tpl.style.customBgHex,
-                                    bgGradient: tpl.style.bgGradient,
-                                    borderColor: tpl.style.borderColor,
-                                    boxShadow: tpl.style.boxShadow,
-                                    borderRadius: tpl.style.borderRadius,
-                                  },
-                                });
-                              }
-                            };
-
-                            return (
-                              <button
-                                key={tpl.id}
-                                type="button"
-                                onClick={applyTemplate}
-                                className={`group relative rounded-xl p-1.5 border text-left transition-all cursor-pointer overflow-hidden ${
-                                  isActive
-                                    ? 'border-[#4C97FF] ring-2 ring-[#4C97FF]/40 bg-[#182236]'
-                                    : 'border-white/10 bg-[#141923] hover:border-white/30 hover:bg-[#19202e]'
-                                }`}
-                              >
-                                <div
-                                  className="h-11 rounded-lg flex items-center justify-center px-2 relative overflow-hidden border border-white/10"
-                                  style={{
-                                    background: tpl.style.bgGradient || tpl.previewBg,
-                                    borderColor: tpl.style.borderColor || 'rgba(255,255,255,0.1)',
-                                    boxShadow: tpl.style.boxShadow,
-                                  }}
-                                >
-                                  {tpl.badge && (
-                                    <span className="absolute top-1 left-1 text-[8px] font-mono font-bold px-1 rounded bg-black/50 text-slate-300">
-                                      {tpl.badge}
-                                    </span>
-                                  )}
-                                  {isActive && (
-                                    <span className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full bg-[#4C97FF] text-white flex items-center justify-center">
-                                      <Check className="w-2.5 h-2.5" />
-                                    </span>
-                                  )}
-                                  {tpl.category === 'button' ? (
-                                    <span
-                                      className={`px-2.5 py-0.5 text-[10px] font-bold ${
-                                        tpl.style.borderRadius || 'rounded-lg'
-                                      }`}
-                                      style={{
-                                        background: tpl.style.bgGradient,
-                                        color: tpl.style.customTextHex || '#ffffff',
-                                        border: tpl.style.borderColor
-                                          ? `1px solid ${tpl.style.borderColor}`
-                                          : undefined,
-                                        boxShadow: tpl.style.boxShadow,
-                                        fontFamily: previewFont,
-                                      }}
-                                    >
-                                      {(selectedBlock.content || 'Click').slice(0, 8)}
-                                    </span>
-                                  ) : (
-                                    <span
-                                      className="text-sm font-extrabold tracking-tight truncate max-w-full"
-                                      style={{
-                                        fontFamily: previewFont,
-                                        color: tpl.style.customTextHex || '#ffffff',
-                                        textShadow: tpl.style.textShadow,
-                                        WebkitTextStroke: tpl.style.textStroke,
-                                        ...(tpl.style.textGradient
-                                          ? {
-                                              backgroundImage: tpl.style.textGradient,
-                                              WebkitBackgroundClip: 'text',
-                                              backgroundClip: 'text',
-                                              WebkitTextFillColor: 'transparent',
-                                              color: 'transparent',
-                                            }
-                                          : {}),
-                                      }}
-                                    >
-                                      Aa{' '}
-                                      {selectedBlock.content
-                                        ? selectedBlock.content.slice(0, 7)
-                                        : 'Style'}
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="mt-1 flex items-center justify-between px-0.5">
-                                  <span className="text-[10px] font-semibold text-slate-200 truncate">
-                                    {tpl.name}
-                                  </span>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-
-                        <div className="flex items-center justify-between pt-1 mt-auto border-t border-white/10">
-                          <div className="flex items-center gap-3">
-                            <button
-                              type="button"
-                              onClick={() => setInspectorMode('properties')}
-                              className="text-[10px] font-semibold text-slate-300 hover:text-white cursor-pointer"
-                            >
-                              Customize &rarr;
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setCssSection('element');
-                                setActiveTab('css');
-                              }}
-                              className="text-[10px] font-semibold text-sky-400 hover:underline cursor-pointer"
-                            >
-                              More CSS &rarr;
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setActiveTab('js')}
-                              className="text-[10px] font-semibold text-amber-300 hover:underline cursor-pointer"
-                            >
-                              Edit JS &rarr;
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteBlock(selectedBlock.id)}
-                            className="text-[10px] font-semibold text-rose-400 hover:text-rose-300 cursor-pointer"
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex-1 p-3 bg-[#0C0F16] overflow-y-auto space-y-2.5 text-[11px]">
-                      <div className="space-y-1">
-                        <span className="font-semibold text-slate-400 block">
-                          {selectedBlock.type === 'ui-stat'
-                            ? 'KPI Label'
-                            : selectedBlock.type === 'ui-testimonial'
-                            ? 'Author Name'
-                            : 'Subtitle / Helper Text'}
-                        </span>
-                        <input
-                          type="text"
-                          value={
-                            selectedBlock.type === 'ui-stat'
-                              ? (selectedBlock.statLabel ?? selectedBlock.subtitle ?? '')
-                              : selectedBlock.subtitle || ''
-                          }
-                          onChange={(e) =>
-                            handleUpdateBlock(
-                              selectedBlock.type === 'ui-stat'
-                                ? {
-                                    ...selectedBlock,
-                                    subtitle: e.target.value,
-                                    statLabel: e.target.value,
-                                  }
-                                : { ...selectedBlock, subtitle: e.target.value }
-                            )
-                          }
-                          placeholder="Edit subtitle, links, or secondary text..."
-                          className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
-                        />
-                      </div>
-
-                      {/* Block-specific extra editable text fields */}
-                      {selectedBlock.type === 'ui-testimonial' && (
-                        <div className="space-y-1">
-                          <span className="font-semibold text-slate-400 block">Author Role</span>
-                          <input
-                            type="text"
-                            value={selectedBlock.authorRole || ''}
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, authorRole: e.target.value })
-                            }
-                            placeholder="e.g. Lead Architect"
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
-                          />
-                        </div>
-                      )}
-
-                      {(selectedBlock.type === 'ui-navbar' ||
-                        selectedBlock.type === 'ui-pricing' ||
-                        selectedBlock.type === 'ui-modal' ||
-                        selectedBlock.type === 'ui-section' ||
-                        selectedBlock.type === 'ui-stack' ||
-                        selectedBlock.type === 'ui-card' ||
-                        selectedBlock.type === 'ui-form' ||
-                        selectedBlock.type === 'ui-flippable-card' ||
-                        selectedBlock.type === 'ui-list-tile' ||
-                        selectedBlock.type === 'ui-ad-banner' ||
-                        selectedBlock.type === 'ui-notification-badge' ||
-                        selectedBlock.type === 'ui-mux-broadcast' ||
-                        selectedBlock.type === 'ui-draggable' ||
-                        selectedBlock.type === 'logic-click' ||
-                        selectedBlock.type === 'logic-if') && (
-                        <div className="space-y-1">
-                          <span className="font-semibold text-slate-400 block">
-                            Badge / Button / Kicker Text
-                          </span>
-                          <input
-                            type="text"
-                            value={
-                              selectedBlock.badgeText ??
-                              (selectedBlock.type === 'ui-navbar'
-                                ? 'BC'
-                                : selectedBlock.type === 'ui-pricing'
-                                ? 'PRO'
-                                : selectedBlock.type === 'ui-modal'
-                                ? 'Open Dialog'
-                                : selectedBlock.type === 'ui-section'
-                                ? 'Container'
-                                : selectedBlock.type === 'ui-stack'
-                                ? 'LIVE'
-                                : selectedBlock.type === 'ui-form'
-                                ? 'Validate & Submit'
-                                : selectedBlock.type === 'ui-flippable-card'
-                                ? 'Click to Flip'
-                                : selectedBlock.type === 'ui-ad-banner'
-                                ? 'AD'
-                                : selectedBlock.type === 'ui-mux-broadcast'
-                                ? 'STANDBY'
-                                : selectedBlock.type === 'logic-if'
-                                ? 'Eval'
-                                : 'New')
-                            }
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, badgeText: e.target.value })
-                            }
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
-                          />
-                        </div>
-                      )}
-
-                      {(selectedBlock.type === 'ui-image' ||
-                        selectedBlock.type === 'ui-avatar' ||
-                        selectedBlock.type === 'ui-card' ||
-                        selectedBlock.type === 'ui-stack' ||
-                        selectedBlock.type === 'ui-media-display' ||
-                        selectedBlock.type === 'ui-aspect-ratio' ||
-                        selectedBlock.type === 'ui-blur') && (
-                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-sky-500/20">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold text-sky-300 flex items-center gap-1">
-                              <ImageIcon className="w-3 h-3" />
-                              Photo / Image
-                            </span>
-                            <div className="flex items-center gap-1.5">
-                              <label className="px-2 py-1 rounded bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer">
-                                <Upload className="w-3 h-3" />
-                                <span>Upload Photo</span>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  className="hidden"
-                                  onChange={async (e) => {
-                                    const file = e.target.files?.[0];
-                                    e.target.value = '';
-                                    if (!file) return;
-                                    try {
-                                      const dataUrl = await readAndCompressImageFile(file);
-                                      handleUpdateBlock({ ...selectedBlock, imageUrl: dataUrl });
-                                      onToast(`Uploaded photo "${file.name}"`, 'success');
-                                    } catch (err) {
-                                      onToast(
-                                        err instanceof Error ? err.message : 'Failed to load image',
-                                        'error'
-                                      );
-                                    }
-                                  }}
-                                />
-                              </label>
-                              {selectedBlock.imageUrl && (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleUpdateBlock({ ...selectedBlock, imageUrl: '' })
-                                  }
-                                  className="px-2 py-1 rounded bg-white/10 hover:bg-rose-500/30 text-[10px] text-slate-300 cursor-pointer"
-                                >
-                                  Clear
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          {selectedBlock.imageUrl && (
-                            <img
-                              src={selectedBlock.imageUrl}
-                              alt={selectedBlock.name}
-                              className="w-full h-20 object-cover rounded border border-white/10"
-                            />
-                          )}
-                          <input
-                            type="text"
-                            value={selectedBlock.imageUrl || ''}
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, imageUrl: e.target.value })
-                            }
-                            placeholder="Or paste Image URL (https://...)"
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#0A0D13] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
-                          />
-                        </div>
-                      )}
-
-                      {(selectedBlock.type === 'ui-video' ||
-                        selectedBlock.type === 'ui-media-display' ||
-                        selectedBlock.type === 'ui-audio-player' ||
-                        selectedBlock.type === 'ui-pdf-viewer') && (
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold text-slate-400">
-                              {selectedBlock.type === 'ui-audio-player'
-                                ? 'MP3 / Audio URL'
-                                : selectedBlock.type === 'ui-pdf-viewer'
-                                ? 'PDF File URL (optional)'
-                                : 'YouTube / Video URL'}
-                            </span>
-                            {selectedBlock.type === 'ui-video' && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleUpdateBlock({
-                                    ...selectedBlock,
-                                    videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-                                  })
-                                }
-                                className="text-[10px] text-sky-400 hover:underline cursor-pointer"
-                              >
-                                Sample YouTube
-                              </button>
-                            )}
-                          </div>
-                          <input
-                            type="text"
-                            value={selectedBlock.videoUrl || ''}
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, videoUrl: e.target.value })
-                            }
-                            placeholder={
-                              selectedBlock.type === 'ui-audio-player'
-                                ? 'https://.../audio.mp3'
-                                : selectedBlock.type === 'ui-pdf-viewer'
-                                ? 'https://.../document.pdf'
-                                : 'https://youtube.com/watch?v=... or MP4 URL'
-                            }
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
-                          />
-                        </div>
-                      )}
-
-                      {(selectedBlock.type === 'ui-icon' ||
-                        selectedBlock.type === 'ui-icon-button' ||
-                        selectedBlock.type === 'ui-list-tile' ||
-                        selectedBlock.type === 'ui-slidable-tile' ||
-                        selectedBlock.type === 'ui-toggle-icon' ||
-                        selectedBlock.type === 'ui-notification-badge') && (
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-slate-400">Real Vector Icon</span>
-                            <span className="text-[10px] font-mono text-sky-400">
-                              {selectedBlock.iconName || 'sparkles'}
-                            </span>
-                          </div>
-                          <div className="grid grid-cols-6 gap-1 max-h-32 overflow-y-auto p-1 rounded-lg bg-[#0B0E15] border border-white/10">
-                            {ICON_LIBRARY.map((ic) => {
-                              const active = (selectedBlock.iconName || 'sparkles') === ic.id;
-                              return (
-                                <button
-                                  key={ic.id}
-                                  type="button"
-                                  onClick={() =>
-                                    handleUpdateBlock({ ...selectedBlock, iconName: ic.id })
-                                  }
-                                  title={ic.label}
-                                  className={`p-1.5 rounded border flex items-center justify-center cursor-pointer transition-colors ${
-                                    active
-                                      ? 'bg-sky-500/25 border-sky-400 text-sky-200'
-                                      : 'bg-[#141923] border-white/10 text-slate-300 hover:text-white'
-                                  }`}
-                                >
-                                  {renderVectorIcon(ic.id, 'w-3.5 h-3.5')}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-input' && (
-                        <div className="space-y-1">
-                          <span className="font-semibold text-slate-400 block">Input Field Type</span>
-                          <select
-                            value={selectedBlock.inputType || 'text'}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                inputType: e.target.value as CanvasBlock['inputType'],
-                              })
-                            }
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                          >
-                            <option value="text">Text</option>
-                            <option value="email">Email</option>
-                            <option value="password">Password</option>
-                            <option value="number">Number</option>
-                            <option value="date">Date</option>
-                          </select>
-                        </div>
-                      )}
-
-                      {(selectedBlock.type === 'ui-grid' || selectedBlock.type === 'ui-staggered') && (
-                        <div className="space-y-1">
-                          <span className="font-semibold text-slate-400 block">Grid Columns</span>
-                          <select
-                            value={selectedBlock.gridColumns ?? 2}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                gridColumns: Number(e.target.value) === 3 ? 3 : 2,
-                              })
-                            }
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                          >
-                            <option value={2}>2 Columns</option>
-                            <option value={3}>3 Columns</option>
-                          </select>
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-spacer' && (
-                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-white/10">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-slate-300">Spacer Gap (px)</span>
-                            <span className="font-mono text-sky-400">{selectedBlock.spacerSize ?? 32}px</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={4}
-                            max={160}
-                            step={4}
-                            value={selectedBlock.spacerSize ?? 32}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                spacerSize: Number(e.target.value),
-                                content: `${Number(e.target.value)}px Empty Space`,
-                              })
-                            }
-                            className="w-full accent-[#4C97FF] cursor-pointer"
-                          />
-                        </div>
-                      )}
-
-                      {(selectedBlock.type === 'ui-divider' ||
-                        selectedBlock.type === 'ui-vertical-divider') && (
-                        <div className="grid grid-cols-2 gap-1.5 p-2 rounded-lg bg-[#141923] border border-white/10">
-                          <label className="flex items-center justify-between px-2 py-1 rounded bg-[#0A0D13] border border-white/10 cursor-pointer">
-                            <span className="text-slate-400">Line Color</span>
-                            <input
-                              type="color"
-                              value={
-                                selectedBlock.style?.borderColor?.startsWith('#')
-                                  ? selectedBlock.style.borderColor
-                                  : '#334155'
-                              }
-                              onChange={(e) =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  style: { ...selectedBlock.style, borderColor: e.target.value },
-                                })
-                              }
-                              className="w-5 h-4 bg-transparent border-0 cursor-pointer p-0"
-                            />
-                          </label>
-                          <select
-                            value={selectedBlock.style?.borderWidth || '1px'}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                style: { ...selectedBlock.style, borderWidth: e.target.value },
-                              })
-                            }
-                            className="px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                          >
-                            <option value="1px">Thickness: 1px</option>
-                            <option value="2px">Thickness: 2px</option>
-                            <option value="3px">Thickness: 3px</option>
-                            <option value="4px">Thickness: 4px</option>
-                          </select>
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-listview' && (
-                        <div className="space-y-1">
-                          <span className="font-semibold text-slate-400 block">Scroll Direction</span>
-                          <select
-                            value={selectedBlock.direction || 'vertical'}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                direction: e.target.value as 'vertical' | 'horizontal',
-                              })
-                            }
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                          >
-                            <option value="vertical">Vertical Scroll</option>
-                            <option value="horizontal">Horizontal Scroll</option>
-                          </select>
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-flex' && (
-                        <div className="grid grid-cols-2 gap-1.5 p-2 rounded-lg bg-[#141923] border border-white/10">
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-semibold text-slate-400 block">Direction</span>
-                            <select
-                              value={selectedBlock.direction || 'row'}
-                              onChange={(e) =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  direction: e.target.value as 'row' | 'column',
-                                })
-                              }
-                              className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                            >
-                              <option value="row">Row (Horizontal)</option>
-                              <option value="column">Column (Vertical)</option>
-                            </select>
-                          </div>
-                          <div className="space-y-1">
-                            <span className="text-[10px] font-semibold text-slate-400 block">Flex Ratios</span>
-                            <input
-                              type="text"
-                              value={selectedBlock.flexRatios || '1:2:1'}
-                              onChange={(e) =>
-                                handleUpdateBlock({ ...selectedBlock, flexRatios: e.target.value })
-                              }
-                              placeholder="1:2:1"
-                              className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-sky-300 font-mono outline-none focus:border-[#4C97FF]"
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-flippable-card' && (
-                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-indigo-400/20">
-                          <span className="font-semibold text-indigo-300 block">Back Side Content</span>
-                          <input
-                            type="text"
-                            value={selectedBlock.backTitle || ''}
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, backTitle: e.target.value })
-                            }
-                            placeholder="Back title..."
-                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
-                          />
-                          <input
-                            type="text"
-                            value={selectedBlock.backSubtitle || ''}
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, backSubtitle: e.target.value })
-                            }
-                            placeholder="Back description..."
-                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-300 outline-none focus:border-[#4C97FF]"
-                          />
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-datatable' && (
-                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-sky-500/20">
-                          <span className="font-semibold text-sky-300 block">Table Columns (use |)</span>
-                          <input
-                            type="text"
-                            value={selectedBlock.columnsHeader || 'Name | Role | Status'}
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, columnsHeader: e.target.value })
-                            }
-                            placeholder="Name | Role | Status"
-                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 font-mono outline-none focus:border-[#4C97FF]"
-                          />
-                          <span className="font-semibold text-slate-400 block">Rows (one row per line, use | for cells)</span>
-                          <textarea
-                            rows={3}
-                            value={(selectedBlock.options || []).join('\n')}
-                            onChange={(e) => {
-                              const rows = e.target.value
-                                .split('\n')
-                                .map((r) => r.trim())
-                                .filter(Boolean);
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                options: rows,
-                                content: rows[0] || selectedBlock.content,
-                              });
-                            }}
-                            placeholder="Deepal P. | Architect | Active"
-                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 font-mono text-[10px] outline-none focus:border-[#4C97FF]"
-                          />
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-richtext' && (
-                        <div className="p-2 rounded-lg bg-[#141923] border border-sky-500/20 text-[10px] text-slate-300 space-y-1">
-                          <span className="font-semibold text-sky-300 block">RichText Formatting Syntax</span>
-                          <p className="font-mono text-slate-400">
-                            **bold** · *italic* · __underline__ · #38bdf8|color · `code`
-                          </p>
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-markdown' && (
-                        <div className="space-y-1 p-2 rounded-lg bg-[#141923] border border-sky-500/20">
-                          <span className="font-semibold text-sky-300 block">Markdown Content</span>
-                          <textarea
-                            rows={4}
-                            value={selectedBlock.content}
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, content: e.target.value })
-                            }
-                            className="w-full px-2 py-1.5 rounded bg-[#0A0D13] border border-white/10 text-slate-200 font-mono text-[10px] outline-none focus:border-[#4C97FF]"
-                          />
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-blur' && (
-                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-white/10">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-slate-300">Blur Intensity (px)</span>
-                            <span className="font-mono text-sky-400">{selectedBlock.blurAmount ?? 12}px</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={0}
-                            max={32}
-                            step={2}
-                            value={selectedBlock.blurAmount ?? 12}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                blurAmount: Number(e.target.value),
-                              })
-                            }
-                            className="w-full accent-[#4C97FF] cursor-pointer"
-                          />
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-aspect-ratio' && (
-                        <div className="space-y-1">
-                          <span className="font-semibold text-slate-400 block">Aspect Ratio</span>
-                          <select
-                            value={selectedBlock.aspectRatio || '16/9'}
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, aspectRatio: e.target.value })
-                            }
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                          >
-                            <option value="16/9">16:9 (Widescreen)</option>
-                            <option value="4/3">4:3 (Classic)</option>
-                            <option value="1/1">1:1 (Square)</option>
-                            <option value="9/16">9:16 (Portrait / Story)</option>
-                            <option value="21/9">21:9 (Ultrawide)</option>
-                          </select>
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-progress-bar' && (
-                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-white/10">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-slate-300">Progress (%)</span>
-                            <span className="font-mono text-sky-400">{selectedBlock.progressValue ?? 75}%</span>
-                          </div>
-                          <input
-                            type="range"
-                            min={0}
-                            max={100}
-                            step={5}
-                            value={selectedBlock.progressValue ?? 75}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                progressValue: Number(e.target.value),
-                              })
-                            }
-                            className="w-full accent-[#4C97FF] cursor-pointer"
-                          />
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-chart' && (
-                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-sky-500/20">
-                          <span className="font-semibold text-sky-300 block">Chart Style & Data</span>
-                          <select
-                            value={selectedBlock.chartType || 'line'}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                chartType: e.target.value as 'line' | 'bar',
-                              })
-                            }
-                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                          >
-                            <option value="line">Line Chart</option>
-                            <option value="bar">Bar Chart</option>
-                          </select>
-                          <input
-                            type="text"
-                            value={(selectedBlock.options || []).join(', ')}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                options: e.target.value
-                                  .split(',')
-                                  .map((s) => s.trim())
-                                  .filter(Boolean),
-                              })
-                            }
-                            placeholder="Jan:32, Feb:54, Mar:82"
-                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 font-mono text-[10px] outline-none"
-                          />
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-barcode' && (
-                        <div className="space-y-1">
-                          <span className="font-semibold text-slate-400 block">Code Mode</span>
-                          <select
-                            value={selectedBlock.barcodeMode || 'barcode'}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                barcodeMode: e.target.value as 'barcode' | 'qr',
-                              })
-                            }
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                          >
-                            <option value="barcode">Code-128 Barcode</option>
-                            <option value="qr">QR Code Matrix</option>
-                          </select>
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-transform' && (
-                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-indigo-400/20">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-indigo-300">2D Transform</span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  transformRotate: 0,
-                                  transformScale: 100,
-                                  transformTranslateX: 0,
-                                  transformTranslateY: 0,
-                                })
-                              }
-                              className="text-[10px] text-sky-400 hover:underline cursor-pointer"
-                            >
-                              Reset
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-2 gap-2 text-[10px]">
-                            <label className="space-y-0.5">
-                              <span className="text-slate-400">Rotate ({selectedBlock.transformRotate ?? -4}°)</span>
-                              <input
-                                type="range"
-                                min={-180}
-                                max={180}
-                                value={selectedBlock.transformRotate ?? -4}
-                                onChange={(e) =>
-                                  handleUpdateBlock({
-                                    ...selectedBlock,
-                                    transformRotate: Number(e.target.value),
-                                  })
-                                }
-                                className="w-full accent-[#4C97FF]"
-                              />
-                            </label>
-                            <label className="space-y-0.5">
-                              <span className="text-slate-400">Scale ({selectedBlock.transformScale ?? 100}%)</span>
-                              <input
-                                type="range"
-                                min={50}
-                                max={150}
-                                value={selectedBlock.transformScale ?? 100}
-                                onChange={(e) =>
-                                  handleUpdateBlock({
-                                    ...selectedBlock,
-                                    transformScale: Number(e.target.value),
-                                  })
-                                }
-                                className="w-full accent-[#4C97FF]"
-                              />
-                            </label>
-                          </div>
-                        </div>
-                      )}
-
-                      {(selectedBlock.type === 'ui-lottie' ||
-                        selectedBlock.type === 'ui-shader-wrap' ||
-                        selectedBlock.type === 'ui-shader-fill') && (
-                        <div className="space-y-1">
-                          <span className="font-semibold text-slate-400 block">Effect Preset</span>
-                          <select
-                            value={selectedBlock.shaderPreset || 'orbit'}
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, shaderPreset: e.target.value })
-                            }
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                          >
-                            {selectedBlock.type === 'ui-lottie' ? (
-                              <>
-                                <option value="orbit">Orbit Ring</option>
-                                <option value="pulse">Pulse Glow</option>
-                                <option value="check">Success Check</option>
-                              </>
-                            ) : selectedBlock.type === 'ui-shader-wrap' ? (
-                              <>
-                                <option value="hologram">Hologram</option>
-                                <option value="neon-wave">Neon Wave</option>
-                                <option value="prism">Prism Shimmer</option>
-                                <option value="scanline">CRT Scanline</option>
-                              </>
-                            ) : (
-                              <>
-                                <option value="plasma">Plasma Gradient</option>
-                                <option value="aurora">Aurora Mesh</option>
-                                <option value="liquid-cyan">Liquid Cyan</option>
-                              </>
-                            )}
-                          </select>
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-tooltip' && (
-                        <div className="space-y-1">
-                          <span className="font-semibold text-slate-400 block">Tooltip Placement</span>
-                          <select
-                            value={selectedBlock.tooltipPosition || 'top'}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                tooltipPosition: e.target.value as CanvasBlock['tooltipPosition'],
-                              })
-                            }
-                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                          >
-                            <option value="top">Top</option>
-                            <option value="bottom">Bottom</option>
-                            <option value="left">Left</option>
-                            <option value="right">Right</option>
-                          </select>
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-conditional-builder' && (
-                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-amber-400/20">
-                          <div className="flex items-center justify-between">
-                            <span className="font-semibold text-amber-300">Condition Branches</span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  isExpanded: !(selectedBlock.isExpanded !== false),
-                                })
-                              }
-                              className="px-2 py-0.5 rounded bg-white/10 text-[10px] font-bold text-white cursor-pointer"
-                            >
-                              State: {selectedBlock.isExpanded !== false ? 'TRUE' : 'FALSE'}
-                            </button>
-                          </div>
-                          <input
-                            type="text"
-                            value={selectedBlock.conditionTrueText || ''}
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, conditionTrueText: e.target.value })
-                            }
-                            placeholder="TRUE branch content..."
-                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-emerald-200 outline-none"
-                          />
-                          <input
-                            type="text"
-                            value={selectedBlock.conditionFalseText || ''}
-                            onChange={(e) =>
-                              handleUpdateBlock({ ...selectedBlock, conditionFalseText: e.target.value })
-                            }
-                            placeholder="FALSE branch content..."
-                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-300 outline-none"
-                          />
-                        </div>
-                      )}
-
-                      {(selectedBlock.type === 'ui-sticky-header' ||
-                        selectedBlock.type === 'ui-pdf-viewer' ||
-                        selectedBlock.type === 'ui-google-map' ||
-                        selectedBlock.type === 'ui-genui-chat') && (
-                        <div className="space-y-1 p-2 rounded-lg bg-[#141923] border border-white/10">
-                          <span className="font-semibold text-slate-300 block">
-                            {selectedBlock.type === 'ui-sticky-header'
-                              ? 'Section Groups (Header|item1|item2 per line)'
-                              : selectedBlock.type === 'ui-google-map'
-                              ? 'Map Pins (Name | X% | Y% per line)'
-                              : 'Entries (one per line)'}
-                          </span>
-                          <textarea
-                            rows={3}
-                            value={(selectedBlock.options || []).join('\n')}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                options: e.target.value
-                                  .split('\n')
-                                  .map((r) => r.trim())
-                                  .filter(Boolean),
-                              })
-                            }
-                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 font-mono text-[10px] outline-none"
-                          />
-                        </div>
-                      )}
-
-                      {(selectedBlock.type === 'ui-section' ||
-                        selectedBlock.type === 'ui-card' ||
-                        selectedBlock.type === 'ui-row' ||
-                        selectedBlock.type === 'ui-column' ||
-                        selectedBlock.type === 'ui-stack' ||
-                        selectedBlock.type === 'ui-wrap' ||
-                        selectedBlock.type === 'ui-flex' ||
-                        selectedBlock.type === 'ui-blur' ||
-                        selectedBlock.type === 'ui-aspect-ratio' ||
-                        selectedBlock.type === 'ui-shader-wrap' ||
-                        selectedBlock.type === 'ui-transform') && (
-                        <div className="space-y-2 p-2 rounded-lg bg-[#141923] border border-white/10">
-                          <span className="font-semibold text-slate-300 block">
-                            Box Styles (BG, Border, Shadow &amp; Size)
-                          </span>
-                          <div className="grid grid-cols-2 gap-1.5">
-                            <label className="flex items-center justify-between px-2 py-1 rounded bg-[#0A0D13] border border-white/10 cursor-pointer">
-                              <span className="text-slate-400">Bg</span>
-                              <input
-                                type="color"
-                                value={selectedBlock.style?.customBgHex || '#151924'}
-                                onChange={(e) =>
-                                  handleUpdateBlock({
-                                    ...selectedBlock,
-                                    style: {
-                                      ...selectedBlock.style,
-                                      customBgHex: e.target.value,
-                                      bgGradient: undefined,
-                                    },
-                                  })
-                                }
-                                className="w-5 h-4 bg-transparent border-0 cursor-pointer p-0"
-                              />
-                            </label>
-                            <label className="flex items-center justify-between px-2 py-1 rounded bg-[#0A0D13] border border-white/10 cursor-pointer">
-                              <span className="text-slate-400">Border</span>
-                              <input
-                                type="color"
-                                value={
-                                  selectedBlock.style?.borderColor?.startsWith('#')
-                                    ? selectedBlock.style.borderColor
-                                    : '#334155'
-                                }
-                                onChange={(e) =>
-                                  handleUpdateBlock({
-                                    ...selectedBlock,
-                                    style: { ...selectedBlock.style, borderColor: e.target.value },
-                                  })
-                                }
-                                className="w-5 h-4 bg-transparent border-0 cursor-pointer p-0"
-                              />
-                            </label>
-                            <select
-                              value={selectedBlock.style?.borderWidth || '1px'}
-                              onChange={(e) =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  style: { ...selectedBlock.style, borderWidth: e.target.value },
-                                })
-                              }
-                              className="px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                            >
-                              <option value="0px">Border: 0px</option>
-                              <option value="1px">Border: 1px</option>
-                              <option value="2px">Border: 2px</option>
-                              <option value="4px">Border: 4px</option>
-                            </select>
-                            <select
-                              value={selectedBlock.style?.boxShadow || ''}
-                              onChange={(e) =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  style: {
-                                    ...selectedBlock.style,
-                                    boxShadow: e.target.value || undefined,
-                                  },
-                                })
-                              }
-                              className="px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                            >
-                              <option value="">Shadow: None</option>
-                              <option value="0 6px 18px rgba(0,0,0,0.35)">Shadow: Soft</option>
-                              <option value="0 14px 35px rgba(0,0,0,0.55)">Shadow: Elevated</option>
-                              <option value="0 0 24px rgba(77,151,255,0.35)">Shadow: Glow</option>
-                            </select>
-                            <select
-                              value={selectedBlock.style?.width || '100%'}
-                              onChange={(e) =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  style: { ...selectedBlock.style, width: e.target.value },
-                                })
-                              }
-                              className="px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                            >
-                              <option value="100%">Width: 100%</option>
-                              <option value="85%">Width: 85%</option>
-                              <option value="65%">Width: 65%</option>
-                              <option value="auto">Width: Auto</option>
-                            </select>
-                            <select
-                              value={selectedBlock.style?.height || 'auto'}
-                              onChange={(e) =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  style: { ...selectedBlock.style, height: e.target.value },
-                                })
-                              }
-                              className="px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                            >
-                              <option value="auto">Height: Auto</option>
-                              <option value="140px">Height: 140px</option>
-                              <option value="200px">Height: 200px</option>
-                              <option value="280px">Height: 280px</option>
-                            </select>
-                          </div>
-
-                          <div className="pt-1 border-t border-white/10 space-y-1.5">
-                            <div className="flex items-center justify-between">
-                              <span className="font-semibold text-sky-300">
-                                Child Widgets ({selectedBlock.children?.length || 0})
-                              </span>
-                              <span className="text-[9px] text-slate-500">or drag onto preview</span>
-                            </div>
-                            {selectedBlock.children && selectedBlock.children.length > 0 && (
-                              <div className="space-y-1 max-h-28 overflow-y-auto">
-                                {selectedBlock.children.map((ch, idx) => (
-                                  <div
-                                    key={ch.id || idx}
-                                    className="flex items-center gap-1 bg-[#0A0D13] border border-white/10 rounded px-2 py-1"
-                                  >
-                                    <span className="text-[9px] font-mono text-sky-400 shrink-0">
-                                      {ch.type.replace('ui-', '')}
-                                    </span>
-                                    <input
-                                      type="text"
-                                      value={ch.content}
-                                      onChange={(e) => {
-                                        const nextChildren = (selectedBlock.children || []).map(
-                                          (item, i) =>
-                                            i === idx ? { ...item, content: e.target.value } : item
-                                        );
-                                        handleUpdateBlock({
-                                          ...selectedBlock,
-                                          children: nextChildren,
-                                        });
-                                      }}
-                                      className="flex-1 min-w-0 bg-transparent text-[10px] text-white outline-none"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const nextChildren = (selectedBlock.children || []).filter(
-                                          (_, i) => i !== idx
-                                        );
-                                        handleUpdateBlock({
-                                          ...selectedBlock,
-                                          children: nextChildren,
-                                        });
-                                      }}
-                                      className="text-rose-400 hover:text-rose-300 text-[10px] px-1 cursor-pointer"
-                                    >
-                                      ×
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                            <div className="flex flex-wrap gap-1">
-                              {[
-                                { label: '+ Text', tplId: 'tpl-paragraph' },
-                                { label: '+ Button', tplId: 'tpl-button' },
-                                { label: '+ Image', tplId: 'tpl-image' },
-                                { label: '+ Badge', tplId: 'tpl-badge' },
-                                { label: '+ Icon', tplId: 'tpl-icon' },
-                                { label: '+ Spacer', tplId: 'tpl-spacer' },
-                                { label: '+ Divider', tplId: 'tpl-divider' },
-                                { label: '+ V-Line', tplId: 'tpl-vertical-divider' },
-                              ].map((btn) => (
-                                <button
-                                  key={btn.tplId}
-                                  type="button"
-                                  onClick={() => handleAddChildWidget(selectedBlock.id, btn.tplId)}
-                                  className="px-1.5 py-0.5 rounded bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/30 text-[9px] font-semibold text-sky-200 cursor-pointer"
-                                >
-                                  {btn.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Quick Font, Size & Font Color Strip */}
-                      <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-                        <select
-                          value={selectedBlock.style?.fontFamily || 'sans'}
-                          onChange={(e) =>
-                            handleUpdateBlock({
-                              ...selectedBlock,
-                              style: {
-                                ...selectedBlock.style,
-                                fontFamily: e.target.value as 'sans' | 'serif' | 'mono' | 'display' | 'rounded',
-                              },
-                            })
-                          }
-                          title="Font Family"
-                          className="px-2 py-1 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                        >
-                          <option value="sans">Font: Sans</option>
-                          <option value="serif">Font: Serif</option>
-                          <option value="mono">Font: Mono</option>
-                          <option value="display">Font: Display</option>
-                          <option value="rounded">Font: Rounded</option>
-                        </select>
-
-                        <select
-                          value={selectedBlock.style?.fontSize || 'base'}
-                          onChange={(e) =>
-                            handleUpdateBlock({
-                              ...selectedBlock,
-                              style: {
-                                ...selectedBlock.style,
-                                fontSize: e.target.value as 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl',
-                              },
-                            })
-                          }
-                          title="Font Size"
-                          className="px-2 py-1 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
-                        >
-                          <option value="xs">Size: XS</option>
-                          <option value="sm">Size: SM</option>
-                          <option value="base">Size: Base</option>
-                          <option value="lg">Size: LG</option>
-                          <option value="xl">Size: XL</option>
-                          <option value="2xl">Size: 2XL</option>
-                          <option value="3xl">Size: 3XL</option>
-                          <option value="4xl">Size: 4XL</option>
-                        </select>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <label className="flex-1 flex items-center justify-between px-2 py-1 rounded-lg bg-[#141923] border border-white/10 cursor-pointer">
-                          <span className="text-slate-400">Font Color</span>
-                          <input
-                            type="color"
-                            value={selectedBlock.style?.customTextHex || '#ffffff'}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                style: {
-                                  ...selectedBlock.style,
-                                  customTextHex: e.target.value,
-                                  textGradient: undefined,
-                                },
-                              })
-                            }
-                            className="w-5 h-4 bg-transparent border-0 cursor-pointer p-0"
-                          />
-                        </label>
-                        <label className="flex-1 flex items-center justify-between px-2 py-1 rounded-lg bg-[#141923] border border-white/10 cursor-pointer">
-                          <span className="text-slate-400">Sub Color</span>
-                          <input
-                            type="color"
-                            value={selectedBlock.style?.subtitleColorHex || '#94a3b8'}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                style: { ...selectedBlock.style, subtitleColorHex: e.target.value },
-                              })
-                            }
-                            className="w-5 h-4 bg-transparent border-0 cursor-pointer p-0"
-                          />
-                        </label>
-                      </div>
-
-                      {/* Quick Button Click Wiring / Navbar Shortcut */}
-                      {(selectedBlock.type === 'ui-button' ||
-                        selectedBlock.type === 'ui-icon-button' ||
-                        selectedBlock.type === 'ui-list-tile' ||
-                        selectedBlock.type === 'ui-ad-banner' ||
-                        selectedBlock.type === 'logic-click') && (
-                        <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-400/25 space-y-1.5">
-                          <span className="font-semibold text-amber-300 flex items-center gap-1">
-                            <MousePointerClick className="w-3 h-3" /> When Clicked (Action)
-                          </span>
-                          <select
-                            value={selectedBlock.action || ''}
-                            onChange={(e) =>
-                              handleUpdateBlock({
-                                ...selectedBlock,
-                                action: (e.target.value || undefined) as CanvasBlock['action'],
-                              })
-                            }
-                            className="w-full px-2 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-slate-100 outline-none cursor-pointer"
-                          >
-                            <option value="">Auto / Default</option>
-                            <option value="submit-form">Submit Form Inputs</option>
-                            <option value="navigate-page">Go to Page</option>
-                            <option value="scroll-to-block">Scroll to Section</option>
-                            <option value="open-url">Open URL / Link</option>
-                            <option value="increment-counter">Increment Counter (+1)</option>
-                            <option value="toggle-visibility">Toggle State / FAQ</option>
-                            <option value="call-api">Fetch API Endpoint</option>
-                            <option value="alert">Show Toast Message</option>
-                          </select>
-                          {selectedBlock.action === 'navigate-page' && (
-                            <select
-                              value={selectedBlock.targetPageId || ''}
-                              onChange={(e) =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  targetPageId: e.target.value,
-                                })
-                              }
-                              className="w-full px-2 py-1 rounded-lg bg-[#090B10] border border-white/15 text-slate-100 outline-none cursor-pointer"
-                            >
-                              <option value="">Pick target page...</option>
-                              {pages.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                  {p.name}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                          {selectedBlock.action === 'scroll-to-block' && (
-                            <select
-                              value={selectedBlock.targetId || ''}
-                              onChange={(e) =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  targetId: e.target.value,
-                                })
-                              }
-                              className="w-full px-2 py-1 rounded-lg bg-[#090B10] border border-white/15 text-slate-100 outline-none cursor-pointer"
-                            >
-                              <option value="">Pick section to scroll to...</option>
-                              {blocks
-                                .filter((b) => b.id !== selectedBlock.id)
-                                .map((b) => (
-                                  <option key={b.id} value={b.id}>
-                                    {b.name}
-                                  </option>
-                                ))}
-                            </select>
-                          )}
-                          {(selectedBlock.action === 'open-url' ||
-                            selectedBlock.action === 'submit-form' ||
-                            selectedBlock.action === 'alert') && (
-                            <input
-                              type="text"
-                              value={selectedBlock.actionPayload || ''}
-                              onChange={(e) =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  actionPayload: e.target.value,
-                                })
-                              }
-                              placeholder={
-                                selectedBlock.action === 'open-url'
-                                  ? 'https://...'
-                                  : 'Confirmation message...'
-                              }
-                              className="w-full px-2 py-1 rounded-lg bg-[#090B10] border border-white/15 text-amber-200 outline-none"
-                            />
-                          )}
-                        </div>
-                      )}
-
-                      {selectedBlock.type === 'ui-navbar' && (
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('js')}
-                          className="w-full py-1.5 px-2.5 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/30 text-sky-300 font-semibold flex items-center justify-between cursor-pointer"
-                        >
-                          <span className="flex items-center gap-1.5">
-                            <Link2 className="w-3.5 h-3.5" />
-                            Configure Navbar Buttons (
-                            {getEffectiveNavLinks(selectedBlock, pages, blocks).length})
-                          </span>
-                          <span>&rarr;</span>
-                        </button>
-                      )}
-
-                      <div className="flex items-center justify-between pt-1">
-                        <div className="flex items-center gap-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setCssSection('element');
-                              setActiveTab('css');
-                            }}
-                            className="text-[11px] font-semibold text-sky-400 hover:underline cursor-pointer"
-                          >
-                            More CSS &rarr;
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab('js')}
-                            className="text-[11px] font-semibold text-amber-300 hover:underline cursor-pointer"
-                          >
-                            Edit JS &rarr;
-                          </button>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteBlock(selectedBlock.id)}
-                          className="text-[11px] font-semibold text-rose-400 hover:text-rose-300 cursor-pointer"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="flex-1 flex items-center justify-center text-xs text-slate-500 p-4">
-                    Select any block on the canvas or preview
-                  </div>
-                )}
+                <GeminiCodingAgentPanel
+                  lang={lang}
+                  projectName={projectName}
+                  activePage={activePage}
+                  blocks={blocks}
+                  selectedBlock={selectedBlock}
+                  activeTab={activeTab}
+                  htmlCode={htmlCode}
+                  cssCode={cssCode}
+                  jsCode={jsCode}
+                  reactCode={reactCode}
+                  flaskCode={flaskCode}
+                  onApplyAgentActions={handleApplyGeminiActions}
+                  onToast={onToast}
+                />
               </div>
 
               {/* Right Narrow Pages Column (Multi-Page Website Manager) */}

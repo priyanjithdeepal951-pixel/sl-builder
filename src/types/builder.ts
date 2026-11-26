@@ -137,7 +137,7 @@ export interface BlockStyle {
   borderWidth?: string;
   boxShadow?: string;
   templateId?: string;
-  fontFamily?: 'sans' | 'serif' | 'mono' | 'display' | 'rounded';
+  fontFamily?: 'sans' | 'serif' | 'mono' | 'display' | 'rounded' | 'condensed' | 'script';
   fontWeight?: 'normal' | 'medium' | 'semibold' | 'bold' | 'extrabold';
   fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
   textAlign?: 'left' | 'center' | 'right';

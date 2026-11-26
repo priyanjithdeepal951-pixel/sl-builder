@@ -49,6 +49,10 @@ function getCssFontFamily(fontFamily?: string): string {
       return "'Space Grotesk', 'Plus Jakarta Sans', system-ui, sans-serif";
     case 'rounded':
       return "'Nunito', 'Quicksand', system-ui, sans-serif";
+    case 'condensed':
+      return "'Oswald', 'Bebas Neue', Impact, 'Arial Narrow', sans-serif";
+    case 'script':
+      return "'Pacifico', 'Brush Script MT', 'Segoe Script', cursive";
     default:
       return 'Inter, system-ui, -apple-system, sans-serif';
   }

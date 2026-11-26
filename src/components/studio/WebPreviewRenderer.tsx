@@ -167,6 +167,8 @@ const FONT_FAMILY_CSS: Record<string, string> = {
   mono: "'JetBrains Mono', ui-monospace, SFMono-Regular, monospace",
   display: "'Space Grotesk', 'Plus Jakarta Sans', system-ui, sans-serif",
   rounded: "'Nunito', 'Quicksand', 'Segoe UI', system-ui, sans-serif",
+  condensed: "'Oswald', 'Bebas Neue', Impact, 'Arial Narrow', sans-serif",
+  script: "'Pacifico', 'Brush Script MT', 'Segoe Script', cursive",
 };
 
 const TEXT_COLOR_MAP: Record<string, string> = {
@@ -796,6 +798,36 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
   ): React.ReactNode => {
     const childBg = child.style?.customBgHex || (child.style?.bgColor === 'bg-transparent' ? 'transparent' : undefined);
     const childColor = child.style?.customTextHex;
+    const cFontSize = child.style?.fontSize ? FONT_SIZE_MAP[child.style.fontSize] || '' : '';
+    const cFontWeight = child.style?.fontWeight ? FONT_WEIGHT_MAP[child.style.fontWeight] || '' : '';
+    const cTextColor = !childColor && child.style?.textColor ? TEXT_COLOR_MAP[child.style.textColor] || '' : '';
+    const cRadius = child.style?.borderRadius ? RADIUS_MAP[child.style.borderRadius] || 'rounded-lg' : 'rounded-lg';
+    const cFontFamily = child.style?.fontFamily ? FONT_FAMILY_CSS[child.style.fontFamily] : undefined;
+    const cTextStyle: React.CSSProperties = {
+      ...(cFontFamily ? { fontFamily: cFontFamily } : {}),
+      ...(childColor ? { color: childColor } : {}),
+      ...(child.style?.textShadow ? { textShadow: child.style.textShadow } : {}),
+      ...(child.style?.textStroke ? { WebkitTextStroke: child.style.textStroke } : {}),
+      ...(child.style?.textGradient
+        ? {
+            backgroundImage: child.style.textGradient,
+            WebkitBackgroundClip: 'text',
+            backgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            color: 'transparent',
+          }
+        : {}),
+    };
+    const cSurfaceStyle: React.CSSProperties = {
+      ...(cFontFamily ? { fontFamily: cFontFamily } : {}),
+      ...(child.style?.bgGradient
+        ? { background: child.style.bgGradient }
+        : childBg
+        ? { backgroundColor: childBg }
+        : {}),
+      ...(child.style?.borderColor ? { borderColor: child.style.borderColor } : {}),
+      ...(child.style?.boxShadow ? { boxShadow: child.style.boxShadow } : {}),
+    };
     const removeChild = (e: React.MouseEvent) => {
       e.stopPropagation();
       const nextChildren = (parentBlock.children || []).filter((c) => c.id !== child.id);
@@ -805,13 +837,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
     return (
       <div
         key={child.id || `child_${childIdx}`}
-        style={{
-          backgroundColor: childBg,
-          color: childColor,
-          borderColor: child.style?.borderColor,
-          boxShadow: child.style?.boxShadow,
-          ...extraStyle,
-        }}
+        style={extraStyle}
         className="group/child relative min-w-0"
       >
         {onDropAtStageIndex && (
@@ -858,10 +884,13 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
               e.stopPropagation();
               onTriggerAction(child, formInputs);
             }}
-            style={{ backgroundColor: child.style?.customBgHex || resolvedAccent }}
-            className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white shadow cursor-pointer hover:opacity-90 transition-opacity"
+            style={{
+              backgroundColor: child.style?.customBgHex || resolvedAccent,
+              ...cSurfaceStyle,
+            }}
+            className={`px-3.5 py-1.5 ${cRadius} ${cFontSize || 'text-xs'} ${cFontWeight || 'font-semibold'} ${cTextColor || 'text-white'} border border-white/10 shadow cursor-pointer hover:opacity-90 transition-opacity`}
           >
-            {child.content || 'Button'}
+            <span style={cTextStyle}>{child.content || 'Button'}</span>
           </button>
         ) : child.type === 'ui-image' ? (
           <div className="rounded-lg overflow-hidden border border-white/10 bg-[#090B10]">
@@ -870,26 +899,53 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
             ) : (
               <div className="h-20 flex items-center justify-center gap-1.5 text-[11px] text-sky-300 bg-gradient-to-br from-slate-800/80 to-indigo-950/60">
                 <ImageIcon className="w-4 h-4" />
-                <span>{child.content || 'Image'}</span>
+                <span style={cTextStyle}>{child.content || 'Image'}</span>
               </div>
             )}
           </div>
         ) : child.type === 'ui-icon' ? (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sky-300 text-xs">
+          <div
+            style={cSurfaceStyle}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 ${cRadius} bg-white/5 border border-white/10 ${cTextColor || 'text-sky-300'} ${cFontSize || 'text-xs'} ${cFontWeight}`}
+          >
             {renderVectorIcon(child.iconName, 'w-4 h-4')}
-            <span>{child.content}</span>
+            <span style={cTextStyle}>{child.content}</span>
           </div>
         ) : child.type === 'ui-badge' ? (
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 border border-indigo-400/30 text-indigo-300">
+          <span
+            style={{ ...cSurfaceStyle, ...cTextStyle }}
+            className={`inline-flex items-center px-2.5 py-0.5 rounded-full ${cFontSize || 'text-[10px]'} ${cFontWeight || 'font-bold'} bg-indigo-500/20 border border-indigo-400/30 ${cTextColor || 'text-indigo-300'}`}
+          >
             {child.content}
           </span>
         ) : child.type === 'ui-heading' ? (
-          <h4 className="text-sm font-bold text-white">{child.content}</h4>
+          <h4
+            style={cTextStyle}
+            className={`${cFontSize || 'text-sm'} ${cFontWeight || 'font-bold'} ${cTextColor || 'text-white'}`}
+          >
+            {child.content}
+          </h4>
         ) : (
-          <div className="px-3 py-2 rounded-lg bg-[#090B10]/90 border border-white/10 text-xs text-slate-200">
-            <p className="font-semibold text-white truncate">{child.content}</p>
+          <div
+            style={cSurfaceStyle}
+            className={`px-3 py-2 ${cRadius} bg-[#090B10]/90 border border-white/10 ${cFontSize || 'text-xs'} text-slate-200`}
+          >
+            <p
+              style={cTextStyle}
+              className={`${cFontWeight || 'font-semibold'} ${cTextColor || 'text-white'} truncate`}
+            >
+              {child.content}
+            </p>
             {child.subtitle && (
-              <p className="text-[10px] text-slate-400 truncate mt-0.5">{child.subtitle}</p>
+              <p
+                style={{
+                  ...(cFontFamily ? { fontFamily: cFontFamily } : {}),
+                  ...(child.style?.subtitleColorHex ? { color: child.style.subtitleColorHex } : {}),
+                }}
+                className="text-[10px] text-slate-400 truncate mt-0.5"
+              >
+                {child.subtitle}
+              </p>
             )}
           </div>
         )}
@@ -1221,7 +1277,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           ) : (
                             <PanelLeft className="w-3.5 h-3.5 text-sky-400" />
                           )}
-                          <span style={primaryStyle}>{displayContent}</span>
+                          <span
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${customTextColor || 'text-white'}`}
+                          >
+                            {displayContent}
+                          </span>
                           {block.badgeText && (
                             <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-[9px] font-mono text-sky-300">
                               {block.badgeText}
@@ -1260,13 +1321,17 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                                   setSidebarActiveIdx((prev) => ({ ...prev, [block.id]: idx }));
                                   onTriggerAction(block, { ...formInputs, [block.id]: item });
                                 }}
-                                className={`text-left px-2.5 py-1.5 rounded-lg text-[11px] font-medium flex items-center justify-between cursor-pointer transition-colors ${
+                                style={{
+                                  ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}),
+                                  ...(active ? primaryStyle : {}),
+                                }}
+                                className={`text-left px-2.5 py-1.5 rounded-lg ${customFont || 'text-[11px]'} ${customWeight || 'font-medium'} flex items-center justify-between cursor-pointer transition-colors ${
                                   active
                                     ? 'bg-indigo-600/30 text-white border border-indigo-400/40'
-                                    : 'text-slate-300 hover:bg-white/5'
+                                    : `${customTextColor || 'text-slate-300'} hover:bg-white/5`
                                 }`}
                               >
-                                <span>{item}</span>
+                                <span style={active ? primaryStyle : undefined}>{item}</span>
                                 {active && <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />}
                               </button>
                             );
@@ -1297,8 +1362,15 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       onTriggerAction(block, formInputs);
                     }}
                     title={displayContent}
-                    style={{ backgroundColor: block.style?.customBgHex || resolvedAccent }}
-                    className="group inline-flex items-center gap-2 h-12 px-4 rounded-full text-white font-semibold text-xs shadow-[0_8px_24px_rgba(79,70,229,0.45)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                    style={{
+                      backgroundColor: block.style?.customBgHex || resolvedAccent,
+                      ...surfaceStyle,
+                    }}
+                    className={`group inline-flex items-center gap-2 h-12 px-4 ${
+                      block.style?.borderRadius ? customRadius : 'rounded-full'
+                    } ${customTextColor || 'text-white'} ${customWeight || 'font-semibold'} ${
+                      customFont || 'text-xs'
+                    } border border-white/15 shadow-[0_8px_24px_rgba(79,70,229,0.45)] hover:scale-105 active:scale-95 transition-all cursor-pointer`}
                   >
                     <span className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center">
                       {renderVectorIcon(block.iconName || 'plus', 'w-4 h-4')}
@@ -1329,13 +1401,23 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                                 e.stopPropagation();
                                 onUpdateBlock({ ...block, counterValue: idx });
                               }}
-                              className={`flex-1 min-w-[70px] py-1.5 px-2.5 rounded-md text-[11px] font-semibold cursor-pointer transition-colors ${
+                              style={{
+                                ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}),
+                                ...(isTabActive && block.style?.bgGradient
+                                  ? { background: block.style.bgGradient }
+                                  : isTabActive && block.style?.customBgHex
+                                  ? { backgroundColor: block.style.customBgHex }
+                                  : {}),
+                              }}
+                              className={`flex-1 min-w-[70px] py-1.5 px-2.5 rounded-md ${
+                                customFont || 'text-[11px]'
+                              } ${customWeight || 'font-semibold'} cursor-pointer transition-colors ${
                                 isTabActive
-                                  ? 'bg-indigo-600 text-white shadow-xs'
+                                  ? `bg-indigo-600 ${customTextColor || 'text-white'} shadow-xs`
                                   : 'text-slate-400 hover:text-white'
                               }`}
                             >
-                              {tabLabel}
+                              <span style={isTabActive ? primaryStyle : undefined}>{tabLabel}</span>
                             </button>
                           );
                         }
@@ -2005,9 +2087,16 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         } border border-white/15 space-y-2.5`}
                       >
                         <div>
-                          <h4 className="text-xs font-bold text-white">{displayContent}</h4>
+                          <h4
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${customTextColor || 'text-white'}`}
+                          >
+                            {displayContent}
+                          </h4>
                           {block.subtitle && (
-                            <p className="text-[10px] text-slate-400">{block.subtitle}</p>
+                            <p style={subtitleStyle} className="text-[10px] text-slate-400">
+                              {block.subtitle}
+                            </p>
                           )}
                         </div>
                         <div className="space-y-1">
@@ -2062,10 +2151,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         )}
                         <button
                           type="submit"
-                          style={{ backgroundColor: resolvedAccent }}
-                          className="w-full py-2 rounded-lg text-xs font-bold text-white cursor-pointer hover:opacity-90 transition-opacity"
+                          style={{
+                            backgroundColor: resolvedAccent,
+                            ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}),
+                            ...(block.style?.boxShadow ? { boxShadow: block.style.boxShadow } : {}),
+                          }}
+                          className={`w-full py-2 ${customRadius} ${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${customTextColor || 'text-white'} cursor-pointer hover:opacity-90 transition-opacity`}
                         >
-                          {block.badgeText || 'Validate & Submit'}
+                          <span style={primaryStyle}>{block.badgeText || 'Validate & Submit'}</span>
                         </button>
                       </form>
                     );
@@ -2154,9 +2247,16 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                               </span>
                             </div>
                             <div>
-                              <h4 className="text-sm font-bold text-white">{displayContent}</h4>
+                              <h4
+                                style={primaryStyle}
+                                className={`${customFont || 'text-sm'} ${customWeight || 'font-bold'} ${customTextColor || 'text-white'}`}
+                              >
+                                {displayContent}
+                              </h4>
                               {block.subtitle && (
-                                <p className="text-[11px] text-slate-400 mt-1">{block.subtitle}</p>
+                                <p style={subtitleStyle} className="text-[11px] text-slate-400 mt-1">
+                                  {block.subtitle}
+                                </p>
                               )}
                             </div>
                           </div>
@@ -2427,7 +2527,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                                 <div
                                   key={`${item}_${idx}`}
                                   style={{ ...primaryStyle, flex: `${ratios[idx] ?? 1} 1 0%` }}
-                                  className="min-w-0 p-2.5 rounded-lg bg-[#090B10] border border-white/10 text-[11px] font-semibold text-white text-center truncate"
+                                  className={`min-w-0 p-2.5 rounded-lg bg-[#090B10] border border-white/10 ${customFont || 'text-[11px]'} ${customWeight || 'font-semibold'} ${customTextColor || 'text-white'} text-center truncate`}
                                 >
                                   {item}
                                 </div>
@@ -2449,8 +2549,13 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     } border border-indigo-400/30 flex items-center justify-between gap-2`}
                   >
                     <div className="min-w-0">
-                      <p className="text-xs font-bold text-white truncate">{displayContent}</p>
-                      <p className="text-[10px] text-indigo-300 truncate">
+                      <p
+                        style={primaryStyle}
+                        className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${customTextColor || 'text-white'} truncate`}
+                      >
+                        {displayContent}
+                      </p>
+                      <p style={subtitleStyle} className="text-[10px] text-indigo-300 truncate">
                         Modal State:{' '}
                         {(runtimeState.openModals?.[block.id] ?? block.isExpanded)
                           ? 'OPEN'
@@ -2473,11 +2578,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           formInputs
                         );
                       }}
+                      style={{ ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}) }}
                       className="px-2.5 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] font-bold cursor-pointer shrink-0"
                     >
-                      {(runtimeState.openModals?.[block.id] ?? block.isExpanded)
-                        ? 'Close Modal'
-                        : block.badgeText || 'Open Dialog'}
+                      <span style={primaryStyle}>
+                        {(runtimeState.openModals?.[block.id] ?? block.isExpanded)
+                          ? 'Close Modal'
+                          : block.badgeText || 'Open Dialog'}
+                      </span>
                     </button>
                   </div>
 
@@ -2487,7 +2595,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       className="mt-2 p-4 rounded-xl bg-[#111827] border border-indigo-400/50 shadow-2xl space-y-2"
                     >
                       <div className="flex items-center justify-between">
-                        <h4 className="text-xs font-bold text-white">{displayContent}</h4>
+                        <h4
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${customTextColor || 'text-white'}`}
+                        >
+                          {displayContent}
+                        </h4>
                         <button
                           type="button"
                           onClick={() =>
@@ -2945,7 +3058,9 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     {block.controlVariant === 'radio' ? (
                       <div className="space-y-1.5">
                         {block.subtitle && (
-                          <p className="text-[10px] font-semibold text-slate-400">{block.subtitle}</p>
+                          <p style={subtitleStyle} className="text-[10px] font-semibold text-slate-400">
+                            {block.subtitle}
+                          </p>
                         )}
                         {(parsedOptions.length > 0 ? parsedOptions : ['Choice A', 'Choice B']).map(
                           (choice) => {
@@ -2954,7 +3069,10 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                               <label
                                 key={choice}
                                 onClick={(e) => e.stopPropagation()}
-                                className="flex items-center gap-2 text-xs text-slate-200 cursor-pointer"
+                                style={primaryStyle}
+                                className={`flex items-center gap-2 ${customFont || 'text-xs'} ${customWeight} ${
+                                  customTextColor || 'text-slate-200'
+                                } cursor-pointer`}
                               >
                                 <input
                                   type="radio"
@@ -2972,11 +3090,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     ) : block.controlVariant === 'switch' ? (
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <p style={primaryStyle} className="text-xs font-semibold text-white truncate">
+                          <p
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                              customTextColor || 'text-white'
+                            } truncate`}
+                          >
                             {displayContent}
                           </p>
                           {block.subtitle && (
-                            <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                            <p style={subtitleStyle} className="text-[10px] text-slate-400 truncate">
+                              {block.subtitle}
+                            </p>
                           )}
                         </div>
                         <button
@@ -3014,11 +3139,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           className="w-4 h-4 accent-indigo-500 rounded"
                         />
                         <div className="min-w-0">
-                          <p style={primaryStyle} className="font-medium text-white">
+                          <p
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-medium'} ${
+                              customTextColor || 'text-white'
+                            }`}
+                          >
                             {displayContent}
                           </p>
                           {block.subtitle && (
-                            <p className="text-[10px] text-slate-400">{block.subtitle}</p>
+                            <p style={subtitleStyle} className="text-[10px] text-slate-400">
+                              {block.subtitle}
+                            </p>
                           )}
                         </div>
                       </label>
@@ -3040,7 +3172,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     } flex items-center justify-between gap-3 cursor-pointer transition-colors hover:bg-white/[0.06]`}
                   >
                     <div className="min-w-0">
-                      <p style={primaryStyle} className="text-xs font-semibold text-white truncate">
+                      <p
+                        style={primaryStyle}
+                        className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                          customTextColor || 'text-white'
+                        } truncate`}
+                      >
                         {displayContent}
                       </p>
                       {block.subtitle && (
@@ -3081,7 +3218,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     } flex items-center justify-between gap-3 cursor-pointer transition-colors hover:bg-white/[0.06]`}
                   >
                     <div className="min-w-0">
-                      <p style={primaryStyle} className="text-xs font-semibold text-white truncate">
+                      <p
+                        style={primaryStyle}
+                        className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                          customTextColor || 'text-white'
+                        } truncate`}
+                      >
                         {displayContent}
                       </p>
                       {block.subtitle && (
@@ -3130,7 +3272,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <Lock className="w-3.5 h-3.5 text-sky-400 shrink-0" />
-                          <span style={primaryStyle} className="text-xs font-semibold text-white truncate">
+                          <span
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                              customTextColor || 'text-white'
+                            } truncate`}
+                          >
                             {displayContent}
                           </span>
                         </div>
@@ -3185,7 +3332,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       } border border-white/10 space-y-2`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span style={primaryStyle} className="text-xs font-semibold text-white">
+                        <span
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                            customTextColor || 'text-white'
+                          }`}
+                        >
                           {displayContent}
                         </span>
                         <span
@@ -3233,11 +3385,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       } border border-white/10 flex items-center justify-between gap-3`}
                     >
                       <div className="min-w-0">
-                        <p style={primaryStyle} className="text-xs font-semibold text-white truncate">
+                        <p
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                            customTextColor || 'text-white'
+                          } truncate`}
+                        >
                           {displayContent}
                         </p>
                         {block.subtitle && (
-                          <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                          <p style={subtitleStyle} className="text-[10px] text-slate-400 truncate">
+                            {block.subtitle}
+                          </p>
                         )}
                       </div>
                       <div
@@ -3312,7 +3471,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <CreditCard className="w-4 h-4 text-sky-400" />
-                          <span style={primaryStyle} className="text-xs font-bold text-white">
+                          <span
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                              customTextColor || 'text-white'
+                            }`}
+                          >
                             {displayContent}
                           </span>
                         </div>
@@ -3386,11 +3550,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       } border border-white/10 flex items-center justify-between gap-3`}
                     >
                       <div className="min-w-0">
-                        <p style={primaryStyle} className="text-xs font-semibold text-white truncate">
+                        <p
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                            customTextColor || 'text-white'
+                          } truncate`}
+                        >
                           {displayContent}
                         </p>
                         {block.subtitle && (
-                          <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                          <p style={subtitleStyle} className="text-[10px] text-slate-400 truncate">
+                            {block.subtitle}
+                          </p>
                         )}
                       </div>
                       <div className="inline-flex items-center rounded-xl bg-[#090B10] border border-white/15 overflow-hidden shrink-0">
@@ -3447,7 +3618,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         customBg || 'bg-white/[0.04]'
                       } border border-white/10 space-y-2`}
                     >
-                      <span style={primaryStyle} className="text-xs font-semibold text-white block">
+                      <span
+                        style={primaryStyle}
+                        className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                          customTextColor || 'text-white'
+                        } block`}
+                      >
                         {displayContent}
                       </span>
                       <div className="flex flex-wrap gap-1.5">
@@ -3461,14 +3637,25 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                                 e.stopPropagation();
                                 toggleChip(chip);
                               }}
-                              style={isChosen ? { backgroundColor: resolvedAccent } : undefined}
-                              className={`px-3 py-1 rounded-full text-[11px] font-medium border transition-colors cursor-pointer ${
+                              style={{
+                                ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}),
+                                ...(isChosen
+                                  ? {
+                                      backgroundColor: block.style?.customBgHex || resolvedAccent,
+                                      ...(block.style?.bgGradient ? { background: block.style.bgGradient } : {}),
+                                      ...(block.style?.boxShadow ? { boxShadow: block.style.boxShadow } : {}),
+                                    }
+                                  : {}),
+                              }}
+                              className={`px-3 py-1 rounded-full ${customFont || 'text-[11px]'} ${
+                                customWeight || 'font-medium'
+                              } border transition-colors cursor-pointer ${
                                 isChosen
-                                  ? 'text-white border-transparent shadow-xs'
+                                  ? `${customTextColor || 'text-white'} border-transparent shadow-xs`
                                   : 'bg-[#090B10] border-white/15 text-slate-300 hover:border-white/30'
                               }`}
                             >
-                              {chip}
+                              <span style={isChosen ? primaryStyle : undefined}>{chip}</span>
                             </button>
                           );
                         })}
@@ -3499,7 +3686,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       } border border-white/10 space-y-2`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span style={primaryStyle} className="text-xs font-semibold text-white flex items-center gap-1.5">
+                        <span
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                            customTextColor || 'text-white'
+                          } flex items-center gap-1.5`}
+                        >
                           <MapPin className="w-3.5 h-3.5 text-rose-400" />
                           <span>{displayContent}</span>
                         </span>
@@ -3571,7 +3763,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       } border border-white/10 space-y-2`}
                     >
                       <div className="flex items-center justify-between">
-                        <span style={primaryStyle} className="text-xs font-semibold text-white">
+                        <span
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                            customTextColor || 'text-white'
+                          }`}
+                        >
                           {displayContent}
                         </span>
                         <span className="text-[10px] font-mono text-sky-300">
@@ -3585,7 +3782,10 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                             <label
                               key={item}
                               onClick={(e) => e.stopPropagation()}
-                              className="flex items-center gap-2 text-xs text-slate-200 cursor-pointer"
+                              style={primaryStyle}
+                              className={`flex items-center gap-2 ${customFont || 'text-xs'} ${customWeight} ${
+                                customTextColor || 'text-slate-200'
+                              } cursor-pointer`}
                             >
                               <input
                                 type="checkbox"
@@ -3614,7 +3814,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                   >
                     <div className="flex items-center gap-1.5">
                       <PenTool className="w-3.5 h-3.5 text-sky-400" />
-                      <span style={primaryStyle} className="text-xs font-semibold text-white">
+                      <span
+                        style={primaryStyle}
+                        className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                          customTextColor || 'text-white'
+                        }`}
+                      >
                         {displayContent}
                       </span>
                     </div>
@@ -3639,14 +3844,23 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     } border border-dashed border-white/20 space-y-2 text-center`}
                   >
                     {block.subtitle && (
-                      <p className="text-[10px] font-semibold text-slate-400">{block.subtitle}</p>
+                      <p style={subtitleStyle} className="text-[10px] font-semibold text-slate-400">
+                        {block.subtitle}
+                      </p>
                     )}
                     <label
                       onClick={(e) => e.stopPropagation()}
                       className="flex flex-col items-center justify-center gap-1.5 py-2 cursor-pointer hover:text-sky-300 transition-colors"
                     >
                       <Upload className="w-5 h-5 text-fuchsia-400" />
-                      <span className="text-xs font-semibold text-white">{displayContent}</span>
+                      <span
+                        style={primaryStyle}
+                        className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                          customTextColor || 'text-white'
+                        }`}
+                      >
+                        {displayContent}
+                      </span>
                       <input
                         type="file"
                         className="hidden"
@@ -3804,9 +4018,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     >
                       {renderVectorIcon(block.iconName, 'w-5 h-5')}
                     </div>
-                    <p className="text-xs font-bold text-white">{displayContent}</p>
+                    <p
+                      style={primaryStyle}
+                      className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                        customTextColor || 'text-white'
+                      }`}
+                    >
+                      {displayContent}
+                    </p>
                     {block.subtitle && (
-                      <p className="text-[10px] text-slate-400">{block.subtitle}</p>
+                      <p style={subtitleStyle} className="text-[10px] text-slate-400">
+                        {block.subtitle}
+                      </p>
                     )}
                   </div>
                 </div>
@@ -3851,9 +4074,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       )}
                       <div className="flex items-center justify-between gap-2">
                         <div className="min-w-0">
-                          <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                          <p
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                              customTextColor || 'text-white'
+                            } truncate`}
+                          >
+                            {displayContent}
+                          </p>
                           {block.subtitle && (
-                            <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                            <p style={subtitleStyle} className="text-[10px] text-slate-400 truncate">
+                              {block.subtitle}
+                            </p>
                           )}
                         </div>
                         {parsedVid.kind !== 'empty' && (
@@ -3980,6 +4212,8 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       }}
                       style={{
                         backgroundColor: block.style?.customBgHex || resolvedAccent,
+                        ...(block.style?.bgGradient ? { background: block.style.bgGradient } : {}),
+                        ...(block.style?.borderColor ? { borderColor: block.style.borderColor } : {}),
                         color: block.style?.customTextHex || '#ffffff',
                         boxShadow: block.style?.boxShadow,
                       }}
@@ -3990,7 +4224,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       {renderVectorIcon(block.iconName || 'plus', 'w-5 h-5')}
                     </button>
                     {displayContent && (
-                      <span className="text-xs font-medium text-slate-300">{displayContent}</span>
+                      <span
+                        style={primaryStyle}
+                        className={`${customFont || 'text-xs'} ${customWeight || 'font-medium'} ${
+                          customTextColor || 'text-slate-300'
+                        }`}
+                      >
+                        {displayContent}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -4116,10 +4357,19 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                               className="w-full px-2 py-0.5 rounded bg-black/50 border border-sky-400 text-xs text-white outline-none"
                             />
                           ) : (
-                            <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                            <p
+                              style={primaryStyle}
+                              className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                                customTextColor || 'text-white'
+                              } truncate`}
+                            >
+                              {displayContent}
+                            </p>
                           )}
                           {block.subtitle && (
-                            <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                            <p style={subtitleStyle} className="text-[10px] text-slate-400 truncate">
+                              {block.subtitle}
+                            </p>
                           )}
                         </div>
                         <button
@@ -4177,8 +4427,15 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     >
                       <div className="flex items-center justify-between">
                         <div>
-                          <p className="text-xs font-bold text-white">{displayContent}</p>
-                          <p className="text-[10px] text-sky-300 font-semibold">
+                          <p
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                              customTextColor || 'text-white'
+                            }`}
+                          >
+                            {displayContent}
+                          </p>
+                          <p style={subtitleStyle} className="text-[10px] text-sky-300 font-semibold">
                             {monthNames[cal.month]} {cal.year} · Selected: {cal.day}
                           </p>
                         </div>
@@ -4267,9 +4524,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       } border border-white/10 flex items-center justify-between gap-3`}
                     >
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                        <p
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                            customTextColor || 'text-white'
+                          } truncate`}
+                        >
+                          {displayContent}
+                        </p>
                         {block.subtitle && (
-                          <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                          <p style={subtitleStyle} className="text-[10px] text-slate-400 truncate">
+                            {block.subtitle}
+                          </p>
                         )}
                       </div>
                       <button
@@ -4282,6 +4548,13 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                             counterValue: active ? Math.max(0, count - 1) : count + 1,
                           });
                         }}
+                        style={{
+                          ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}),
+                          ...(block.style?.bgGradient ? { background: block.style.bgGradient } : {}),
+                          ...(block.style?.customBgHex ? { backgroundColor: block.style.customBgHex } : {}),
+                          ...(block.style?.borderColor ? { borderColor: block.style.borderColor } : {}),
+                          ...(block.style?.boxShadow ? { boxShadow: block.style.boxShadow } : {}),
+                        }}
                         className={`px-3 py-1.5 rounded-full border flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
                           active
                             ? 'bg-rose-500/20 border-rose-400/60 text-rose-300 scale-105'
@@ -4289,7 +4562,9 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         }`}
                       >
                         {renderVectorIcon(block.iconName || 'heart', 'w-4 h-4')}
-                        <span className="font-mono tabular-nums">{count}</span>
+                        <span style={primaryStyle} className="font-mono tabular-nums">
+                          {count}
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -4365,9 +4640,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           {state.playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
                         </button>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                          <p
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                              customTextColor || 'text-white'
+                            } truncate`}
+                          >
+                            {displayContent}
+                          </p>
                           {block.subtitle && (
-                            <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                            <p style={subtitleStyle} className="text-[10px] text-slate-400 truncate">
+                              {block.subtitle}
+                            </p>
                           )}
                         </div>
                         <button
@@ -4491,7 +4775,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         <div className="w-8 h-8 rounded-full bg-rose-500/25 border border-rose-400 flex items-center justify-center text-rose-400 shadow-lg">
                           <MapPin className="w-4 h-4 fill-rose-500/40" />
                         </div>
-                        <span className="mt-1 px-2 py-0.5 rounded bg-black/75 border border-white/15 text-[10px] font-bold text-white">
+                        <span
+                          style={primaryStyle}
+                          className={`mt-1 px-2 py-0.5 rounded bg-black/75 border border-white/15 ${
+                            customFont || 'text-[10px]'
+                          } ${customWeight || 'font-bold'} ${customTextColor || 'text-white'}`}
+                        >
                           {displayContent}
                         </span>
                       </div>
@@ -4500,7 +4789,10 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       </span>
                     </div>
                     {block.subtitle && (
-                      <div className="px-3 py-2 text-[10px] font-mono text-slate-400 border-t border-white/10">
+                      <div
+                        style={subtitleStyle}
+                        className="px-3 py-2 text-[10px] font-mono text-slate-400 border-t border-white/10"
+                      >
                         {block.subtitle}
                       </div>
                     )}
@@ -4543,15 +4835,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           };
                         }}
                         onPointerMove={(e) => {
-                          if (!mapDragRef.current || mapDragRef.current.id !== block.id) return;
-                          const dx = e.clientX - mapDragRef.current.startX;
-                          const dy = e.clientY - mapDragRef.current.startY;
+                          const drag = mapDragRef.current;
+                          if (!drag || drag.id !== block.id) return;
+                          const dx = e.clientX - drag.startX;
+                          const dy = e.clientY - drag.startY;
+                          const nextPanX = Math.max(-80, Math.min(80, drag.origX + dx));
+                          const nextPanY = Math.max(-50, Math.min(50, drag.origY + dy));
                           setMapViewState((p) => ({
                             ...p,
                             [block.id]: {
-                              ...ms,
-                              panX: Math.max(-80, Math.min(80, mapDragRef.current!.origX + dx)),
-                              panY: Math.max(-50, Math.min(50, mapDragRef.current!.origY + dy)),
+                              ...(p[block.id] || ms),
+                              panX: nextPanX,
+                              panY: nextPanY,
                             },
                           }));
                         }}
@@ -4683,9 +4978,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         {block.badgeText || 'AD'}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-bold text-white truncate">{displayContent}</p>
+                        <p
+                          style={primaryStyle}
+                          className={`${customFont || 'text-[11px]'} ${customWeight || 'font-bold'} ${
+                            customTextColor || 'text-white'
+                          } truncate`}
+                        >
+                          {displayContent}
+                        </p>
                         {block.subtitle && (
-                          <p className="text-[9px] text-slate-300 truncate">{block.subtitle}</p>
+                          <p style={subtitleStyle} className="text-[9px] text-slate-300 truncate">
+                            {block.subtitle}
+                          </p>
                         )}
                       </div>
                       <button
@@ -4694,7 +4998,10 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           e.stopPropagation();
                           onTriggerAction(block, formInputs);
                         }}
-                        style={{ backgroundColor: resolvedAccent }}
+                        style={{
+                          backgroundColor: resolvedAccent,
+                          ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}),
+                        }}
                         className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-white shrink-0 cursor-pointer"
                       >
                         {block.actionPayload || 'Open'}
@@ -4763,8 +5070,15 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       </div>
                       <div className="min-w-0 flex-1 space-y-1.5">
                         <div>
-                          <p className="text-xs font-bold text-white truncate">{displayContent}</p>
-                          <p className="text-[10px] text-slate-400 truncate">
+                          <p
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                              customTextColor || 'text-white'
+                            } truncate`}
+                          >
+                            {displayContent}
+                          </p>
+                          <p style={subtitleStyle} className="text-[10px] text-slate-400 truncate">
                             Preset: {preset} · {speed}x
                           </p>
                         </div>
@@ -4835,13 +5149,22 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         className="relative z-10 p-4 bg-slate-950/40 space-y-2"
                       >
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs font-bold text-white">{displayContent}</span>
+                          <span
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                              customTextColor || 'text-white'
+                            }`}
+                          >
+                            {displayContent}
+                          </span>
                           <span className="px-2 py-0.5 rounded-full bg-black/50 border border-white/15 text-[9px] font-mono text-sky-200">
                             blur({blurPx}px)
                           </span>
                         </div>
                         {block.subtitle && (
-                          <p className="text-[10px] text-slate-200/85">{block.subtitle}</p>
+                          <p style={subtitleStyle} className="text-[10px] text-slate-200/85">
+                            {block.subtitle}
+                          </p>
                         )}
                         {block.children && block.children.length > 0 && (
                           <div className="pt-1 space-y-2">
@@ -4877,7 +5200,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         />
                       )}
                       <div className="relative z-10 text-center space-y-1 bg-black/45 px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/10">
-                        <div className="flex items-center justify-center gap-1.5 text-sky-300 text-xs font-bold">
+                        <div
+                          style={primaryStyle}
+                          className={`flex items-center justify-center gap-1.5 ${
+                            customTextColor || 'text-sky-300'
+                          } ${customFont || 'text-xs'} ${customWeight || 'font-bold'}`}
+                        >
                           <Maximize2 className="w-3.5 h-3.5" />
                           <span>{displayContent}</span>
                         </div>
@@ -4924,13 +5252,22 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       )}
                       <div className="relative z-10 space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-white">{displayContent}</span>
+                          <span
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                              customTextColor || 'text-white'
+                            }`}
+                          >
+                            {displayContent}
+                          </span>
                           <span className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/30 text-[9px] font-mono text-cyan-200 uppercase">
                             {preset}
                           </span>
                         </div>
                         {block.subtitle && (
-                          <p className="text-[10px] text-slate-200/80">{block.subtitle}</p>
+                          <p style={subtitleStyle} className="text-[10px] text-slate-200/80">
+                            {block.subtitle}
+                          </p>
                         )}
                         {block.children && block.children.length > 0 && (
                           <div className="pt-1 space-y-2">
@@ -4962,9 +5299,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         Shader: {preset}
                       </span>
                       <div className="relative z-10">
-                        <p className="text-sm font-extrabold text-white drop-shadow">{displayContent}</p>
+                        <p
+                          style={primaryStyle}
+                          className={`${customFont || 'text-sm'} ${customWeight || 'font-extrabold'} ${
+                            customTextColor || 'text-white'
+                          } drop-shadow`}
+                        >
+                          {displayContent}
+                        </p>
                         {block.subtitle && (
-                          <p className="text-[10px] text-white/85">{block.subtitle}</p>
+                          <p style={subtitleStyle} className="text-[10px] text-white/85">
+                            {block.subtitle}
+                          </p>
                         )}
                       </div>
                     </div>
@@ -4992,13 +5338,22 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       } border border-indigo-400/35 transition-transform duration-150 space-y-1.5`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-white">{displayContent}</span>
+                        <span
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                            customTextColor || 'text-white'
+                          }`}
+                        >
+                          {displayContent}
+                        </span>
                         <span className="text-[9px] font-mono text-indigo-300 bg-black/40 px-1.5 py-0.5 rounded">
                           {rot}° · {Math.round(scl * 100)}%
                         </span>
                       </div>
                       {block.subtitle && (
-                        <p className="text-[10px] text-slate-300">{block.subtitle}</p>
+                        <p style={subtitleStyle} className="text-[10px] text-slate-300">
+                          {block.subtitle}
+                        </p>
                       )}
                       {block.children && block.children.length > 0 && (
                         <div className="pt-1 space-y-1.5">
@@ -5035,7 +5390,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         </div>
                       )}
                       <div className="flex items-center justify-between">
-                        <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                        <p
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                            customTextColor || 'text-white'
+                          } truncate`}
+                        >
+                          {displayContent}
+                        </p>
                         <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-white/10 text-sky-300">
                           {block.videoUrl ? 'VIDEO' : 'MEDIA'}
                         </span>
@@ -5083,8 +5445,17 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           )}
                         </button>
                         <div className="min-w-0 flex-1">
-                          <p className="text-xs font-bold text-white truncate">{displayContent}</p>
-                          <p className="text-[10px] text-sky-300 font-mono">State: {activeState}</p>
+                          <p
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                              customTextColor || 'text-white'
+                            } truncate`}
+                          >
+                            {displayContent}
+                          </p>
+                          <p style={subtitleStyle} className="text-[10px] text-sky-300 font-mono">
+                            State: {activeState}
+                          </p>
                         </div>
                       </div>
                       <div className="flex flex-wrap gap-1.5">
@@ -5125,7 +5496,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       <div className="px-3 py-2 bg-[#141923] border-b border-white/10 flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <FileText className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                          <span className="text-[11px] font-semibold text-white truncate">{displayContent}</span>
+                          <span
+                            style={primaryStyle}
+                            className={`${customFont || 'text-[11px]'} ${customWeight || 'font-semibold'} ${
+                              customTextColor || 'text-white'
+                            } truncate`}
+                          >
+                            {displayContent}
+                          </span>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <button
@@ -5220,7 +5598,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       } border border-white/10 space-y-2`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-bold text-white truncate">{displayContent}</span>
+                        <span
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                            customTextColor || 'text-white'
+                          } truncate`}
+                        >
+                          {displayContent}
+                        </span>
                         <span className="text-xs font-mono font-bold text-sky-300">{pct}%</span>
                       </div>
                       <div className="w-full h-2.5 rounded-full bg-white/10 overflow-hidden">
@@ -5233,7 +5618,9 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         />
                       </div>
                       <div className="flex items-center justify-between text-[10px]">
-                        <span className="text-slate-400 truncate">{block.subtitle}</span>
+                        <span style={subtitleStyle} className="text-slate-400 truncate">
+                          {block.subtitle}
+                        </span>
                         <div className="flex items-center gap-1 shrink-0">
                           <button
                             type="button"
@@ -5287,7 +5674,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       } border border-white/10 space-y-2`}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                        <div
+                          style={primaryStyle}
+                          className={`flex items-center gap-1.5 ${customFont || 'text-xs'} ${
+                            customWeight || 'font-bold'
+                          } ${customTextColor || 'text-white'}`}
+                        >
                           <Languages className="w-4 h-4 text-sky-400" />
                           <span>{displayContent}</span>
                         </div>
@@ -5334,8 +5726,15 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           )}
                         </div>
                         <div>
-                          <p className="text-xs font-bold text-white">{displayContent}</p>
-                          <p className="text-[10px] text-slate-400">
+                          <p
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                              customTextColor || 'text-white'
+                            }`}
+                          >
+                            {displayContent}
+                          </p>
+                          <p style={subtitleStyle} className="text-[10px] text-slate-400">
                             {count === 0 ? 'No unread alerts' : `${count} unread notification${count === 1 ? '' : 's'}`}
                           </p>
                         </div>
@@ -5401,8 +5800,15 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div>
-                          <p className="text-xs font-bold text-white">{displayContent}</p>
-                          <p className="text-[10px] text-sky-300 font-mono">
+                          <p
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                              customTextColor || 'text-white'
+                            }`}
+                          >
+                            {displayContent}
+                          </p>
+                          <p style={subtitleStyle} className="text-[10px] text-sky-300 font-mono">
                             {hoverIdx !== null && coords[hoverIdx]
                               ? `${coords[hoverIdx].label}: ${coords[hoverIdx].value}`
                               : block.subtitle || `${mode.toUpperCase()} · ${pts.length} pts`}
@@ -5491,7 +5897,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                             <Radio className="w-3 h-3" />
                             <span>{mux.live ? 'LIVE' : block.badgeText || 'STANDBY'}</span>
                           </span>
-                          <span className="text-xs font-bold text-white truncate">{displayContent}</span>
+                          <span
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                              customTextColor || 'text-white'
+                            } truncate`}
+                          >
+                            {displayContent}
+                          </span>
                         </div>
                         {mux.live && (
                           <span className="text-[10px] font-mono text-emerald-300 shrink-0">
@@ -5566,7 +5979,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       } space-y-1.5`}
                     >
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                        <div
+                          style={primaryStyle}
+                          className={`flex items-center gap-1.5 ${customFont || 'text-xs'} ${
+                            customWeight || 'font-bold'
+                          } ${customTextColor || 'text-white'}`}
+                        >
                           <MousePointer2 className="w-3.5 h-3.5 text-sky-400" />
                           <span>{displayContent}</span>
                         </div>
@@ -5665,10 +6083,15 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           e.stopPropagation();
                           setTooltipVisible((p) => ({ ...p, [block.id]: !open }));
                         }}
-                        className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-semibold text-white inline-flex items-center gap-1.5 cursor-pointer"
+                        style={surfaceStyle}
+                        className={`px-3.5 py-2 ${customRadius} ${
+                          customBg || 'bg-white/10'
+                        } hover:bg-white/15 border border-white/15 ${customFont || 'text-xs'} ${
+                          customWeight || 'font-semibold'
+                        } ${customTextColor || 'text-white'} inline-flex items-center gap-1.5 cursor-pointer`}
                       >
                         <AlertCircle className="w-3.5 h-3.5 text-sky-400" />
-                        <span>{displayContent}</span>
+                        <span style={primaryStyle}>{displayContent}</span>
                       </button>
                       {open && (
                         <div
@@ -5703,7 +6126,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5 min-w-0">
                           <GitBranch className="w-3.5 h-3.5 text-amber-300 shrink-0" />
-                          <span className="text-[11px] font-mono font-bold text-amber-200 truncate">
+                          <span
+                            style={primaryStyle}
+                            className={`${customFont || 'text-[11px]'} font-mono ${
+                              customWeight || 'font-bold'
+                            } ${customTextColor || 'text-amber-200'} truncate`}
+                          >
                             IF ({displayContent})
                           </span>
                         </div>
@@ -5807,9 +6235,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     <div className="flex items-center gap-2 min-w-0">
                       <GripVertical className="w-4 h-4 text-indigo-300 shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                        <p
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                            customTextColor || 'text-white'
+                          } truncate`}
+                        >
+                          {displayContent}
+                        </p>
                         {block.subtitle && (
-                          <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                          <p style={subtitleStyle} className="text-[10px] text-slate-400 truncate">
+                            {block.subtitle}
+                          </p>
                         )}
                       </div>
                     </div>
@@ -5857,8 +6294,15 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div>
-                          <p className="text-xs font-bold text-white">{displayContent}</p>
-                          <p className="text-[10px] text-slate-400">
+                          <p
+                            style={primaryStyle}
+                            className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                              customTextColor || 'text-white'
+                            }`}
+                          >
+                            {displayContent}
+                          </p>
+                          <p style={subtitleStyle} className="text-[10px] text-slate-400">
                             {isOver ? 'Release to drop item here' : block.subtitle || 'Drop Draggable widgets here'}
                           </p>
                         </div>
@@ -5928,7 +6372,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     <div className="rounded-2xl border border-white/15 bg-[#0B0E16] overflow-hidden flex flex-col">
                       <div className="px-3 py-2 bg-[#141923] border-b border-white/10 flex items-center gap-2">
                         <Bot className="w-4 h-4 text-sky-400" />
-                        <span className="text-xs font-bold text-white">{displayContent}</span>
+                        <span
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                            customTextColor || 'text-white'
+                          }`}
+                        >
+                          {displayContent}
+                        </span>
                       </div>
                       <div className="p-3 space-y-2 max-h-48 overflow-y-auto">
                         {thread.messages.map((m, mIdx) => (
@@ -6288,7 +6739,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           ? `list[${block.logicConfig?.listName || 'tasks'}]`
                           : `${block.logicConfig?.repeatCount ?? 5}x`}
                       </span>
-                      <p className="text-xs font-semibold text-white truncate">{displayContent}</p>
+                      <p
+                        style={primaryStyle}
+                        className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                          customTextColor || 'text-white'
+                        } truncate`}
+                      >
+                        {displayContent}
+                      </p>
                     </div>
                     <button
                       type="button"
@@ -6320,7 +6778,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         <span className="text-[10px] font-mono text-amber-300 block">
                           VAR {vName} ({block.logicConfig?.varOp || 'set'})
                         </span>
-                        <p className="text-xs font-mono font-bold text-white truncate">
+                        <p
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} font-mono ${
+                            customWeight || 'font-bold'
+                          } ${customTextColor || 'text-white'} truncate`}
+                        >
                           {vName} = {JSON.stringify(vCurrent ?? 0)}
                         </p>
                       </div>
@@ -6434,7 +6897,12 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           {(block.logicConfig?.mathTextOp || 'random').toUpperCase()}(
                           {block.logicConfig?.argA || '1'}, {block.logicConfig?.argB || '100'})
                         </span>
-                        <p className="text-xs font-mono font-bold text-white truncate">
+                        <p
+                          style={primaryStyle}
+                          className={`${customFont || 'text-xs'} font-mono ${
+                            customWeight || 'font-bold'
+                          } ${customTextColor || 'text-white'} truncate`}
+                        >
                           Result: {previewVal}
                         </p>
                       </div>
@@ -6466,7 +6934,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       <span className="text-[10px] font-mono text-amber-300 uppercase">
                         Action: {block.action || 'alert'}
                       </span>
-                      <p className="text-xs font-semibold text-white truncate">{displayContent}</p>
+                      <p
+                        style={primaryStyle}
+                        className={`${customFont || 'text-xs'} ${customWeight || 'font-semibold'} ${
+                          customTextColor || 'text-white'
+                        } truncate`}
+                      >
+                        {displayContent}
+                      </p>
                     </div>
                     <button
                       type="button"
