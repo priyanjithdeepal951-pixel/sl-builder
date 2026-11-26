@@ -1857,6 +1857,132 @@ export function generateHtmlExport(
     </div>
   </section>`;
 
+        case 'ui-fab':
+          return `  <div id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3 flex justify-end${customCls}">
+    <button type="button" onclick="slShowToast(${escapeHtml(JSON.stringify(b.actionPayload || content))})" style="background:${escapeHtml(
+            resolvedAccent
+          )};" class="h-12 px-5 rounded-full text-white text-sm font-bold shadow-lg inline-flex items-center gap-2 cursor-pointer">+ ${content}</button>
+  </div>`;
+
+        case 'ui-checkbox-tile':
+        case 'ui-switch-tile':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-3xl mx-auto px-6 py-2${customCls}">
+    <label style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 flex items-center justify-between gap-3 cursor-pointer">
+      <div><div style="${textFxCss}" class="text-sm font-semibold">${content}</div>${
+            subtitle ? `<div style="color:${subColor};" class="text-xs">${subtitle}</div>` : ''
+          }</div>
+      <input type="checkbox" data-sl-input-id="${escapeHtml(b.id)}" data-sl-input-label="${escapeHtml(
+            b.subtitle || b.name
+          )}" ${b.isExpanded ? 'checked' : ''} class="w-4 h-4 accent-indigo-500" />
+    </label>
+  </section>`;
+
+        case 'ui-pin-code':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-md mx-auto px-6 py-3${customCls}">
+    <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-2 text-center">
+      <div style="${textFxCss}" class="text-sm font-bold">${content}</div>
+      <input type="text" maxlength="6" data-sl-input-id="${escapeHtml(b.id)}" data-sl-input-label="${escapeHtml(
+            b.name
+          )}" placeholder="• • • •" class="w-48 mx-auto text-center tracking-[0.5em] px-4 py-2.5 rounded-xl bg-[#090B10] border border-white/20 text-lg font-mono text-white" />
+    </div>
+  </section>`;
+
+        case 'ui-slider':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-3xl mx-auto px-6 py-3${customCls}">
+    <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-2">
+      <div class="flex justify-between text-sm font-semibold"><span style="${textFxCss}">${content}</span><span>${
+            b.progressValue ?? 65
+          }</span></div>
+      <input type="range" min="0" max="100" value="${b.progressValue ?? 65}" data-sl-input-id="${escapeHtml(
+            b.id
+          )}" class="w-full accent-indigo-500" />
+    </div>
+  </section>`;
+
+        case 'ui-rating-bar':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-3xl mx-auto px-6 py-3${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 flex items-center justify-between">
+      <span style="${textFxCss}" class="text-sm font-semibold">${content}</span>
+      <span class="text-amber-400 text-lg">${'★'.repeat(b.counterValue ?? 4)}${'☆'.repeat(
+            Math.max(0, 5 - (b.counterValue ?? 4))
+          )}</span>
+    </div>
+  </section>`;
+
+        case 'ui-credit-card':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-xl mx-auto px-6 py-3${customCls}">
+    <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-2.5">
+      <div style="${textFxCss}" class="text-sm font-bold">${content}</div>
+      <input type="text" placeholder="4242 4242 4242 4242" class="w-full px-3 py-2 rounded-lg bg-[#090B10] border border-white/15 text-xs font-mono text-white" />
+      <div class="grid grid-cols-2 gap-2">
+        <input type="text" placeholder="MM/YY" class="px-3 py-2 rounded-lg bg-[#090B10] border border-white/15 text-xs font-mono text-white" />
+        <input type="password" placeholder="CVC" class="px-3 py-2 rounded-lg bg-[#090B10] border border-white/15 text-xs font-mono text-white" />
+      </div>
+    </div>
+  </section>`;
+
+        case 'ui-counter-button':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-3xl mx-auto px-6 py-3${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 flex items-center justify-between">
+      <span style="${textFxCss}" class="text-sm font-semibold">${content}</span>
+      <div class="inline-flex items-center gap-3 px-3 py-1 rounded-xl bg-[#090B10] border border-white/15 text-sm font-mono font-bold text-white">- ${
+            b.counterValue ?? 2
+          } +</div>
+    </div>
+  </section>`;
+
+        case 'ui-choice-chips': {
+          const chips = (parsedOptions.length ? parsedOptions : ['Design', 'Frontend', 'Mobile App'])
+            .map(
+              (ch, i) =>
+                `<span class="px-3 py-1 rounded-full text-xs border ${
+                  i === 0 ? 'bg-indigo-600 text-white border-transparent' : 'bg-[#090B10] border-white/15 text-slate-300'
+                }">${escapeHtml(ch)}</span>`
+            )
+            .join('');
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-3xl mx-auto px-6 py-3${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 space-y-2">
+      <div style="${textFxCss}" class="text-sm font-semibold">${content}</div>
+      <div class="flex flex-wrap gap-2">${chips}</div>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-place-picker': {
+          const places = parsedOptions.length ? parsedOptions : ['Colombo 03, Sri Lanka', 'Kandy City Center'];
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-3xl mx-auto px-6 py-3${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 space-y-2">
+      <div style="${textFxCss}" class="text-sm font-semibold">${content}</div>
+      <input type="text" value="${escapeHtml(places[0] || '')}" placeholder="Search place..." class="w-full px-3 py-2 rounded-lg bg-[#090B10] border border-white/15 text-xs text-white" />
+    </div>
+  </section>`;
+        }
+
+        case 'ui-checkbox-group': {
+          const items = (parsedOptions.length ? parsedOptions : ['Option A', 'Option B'])
+            .map(
+              (item, idx) =>
+                `<label class="flex items-center gap-2 text-sm text-slate-200"><input type="checkbox" ${
+                  idx === 0 ? 'checked' : ''
+                } class="w-4 h-4 accent-indigo-500" /><span>${escapeHtml(item)}</span></label>`
+            )
+            .join('');
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-3xl mx-auto px-6 py-3${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 space-y-2">
+      <div style="${textFxCss}" class="text-sm font-semibold">${content}</div>
+      <div class="space-y-1.5">${items}</div>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-signature':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-xl mx-auto px-6 py-3${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 space-y-2">
+      <div style="${textFxCss}" class="text-sm font-semibold">${content}</div>
+      <div class="h-24 rounded-xl bg-[#090B10] border border-dashed border-white/20 flex items-center justify-center text-xs text-slate-500">Signature Pad</div>
+    </div>
+  </section>`;
+
         case 'ui-footer':
           return `  <footer id="${elId}" style="${layoutStyle}font-family: ${fontFam}; background: ${
             bgVal || (isLightPage ? 'rgba(255, 255, 255, 0.85)' : '#0b0e16')
@@ -3051,11 +3177,38 @@ export function generateReactTsxExport(
       </section>`;
         }
         case 'ui-checkbox':
+        case 'ui-checkbox-tile':
+        case 'ui-switch-tile':
           return `      <section id=${JSON.stringify(elId)} className="max-w-3xl mx-auto px-6 py-3 w-full">
-        <label className="p-4 rounded-xl bg-white/5 border border-white/10 flex items-center gap-3 cursor-pointer">
-          <input type="checkbox" checked={inputs[${JSON.stringify(b.id)}] === 'true'} onChange={(e) => setInputs((p) => ({ ...p, [${JSON.stringify(b.id)}]: String(e.target.checked) }))} className="w-4 h-4 accent-indigo-500" />
+        <label className="p-4 rounded-xl bg-white/5 border border-white/10 flex items-center justify-between gap-3 cursor-pointer">
           <span className="text-sm font-medium">{${safeTitle}}</span>
+          <input type="checkbox" checked={inputs[${JSON.stringify(b.id)}] === 'true'} onChange={(e) => setInputs((p) => ({ ...p, [${JSON.stringify(b.id)}]: String(e.target.checked) }))} className="w-4 h-4 accent-indigo-500" />
         </label>
+      </section>`;
+        case 'ui-fab':
+          return `      <div id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-3 flex justify-end w-full">
+        <button type="button" onClick={() => showToast(${JSON.stringify(b.actionPayload || b.content)})} className="h-12 px-5 rounded-full bg-indigo-600 text-white text-sm font-bold shadow-lg cursor-pointer">+ {${safeTitle}}</button>
+      </div>`;
+        case 'ui-slider':
+          return `      <section id=${JSON.stringify(elId)} className="max-w-3xl mx-auto px-6 py-3 w-full">
+        <div className="p-4 rounded-xl bg-white/5 border border-white/10 space-y-2">
+          <div className="flex justify-between text-sm font-medium"><span>{${safeTitle}}</span><span>{inputs[${JSON.stringify(b.id)}] || ${JSON.stringify(String(b.progressValue ?? 65))}}</span></div>
+          <input type="range" min={0} max={100} value={Number(inputs[${JSON.stringify(b.id)}] || ${b.progressValue ?? 65})} onChange={(e) => setInputs((p) => ({ ...p, [${JSON.stringify(b.id)}]: e.target.value }))} className="w-full accent-indigo-500" />
+        </div>
+      </section>`;
+        case 'ui-pin-code':
+        case 'ui-rating-bar':
+        case 'ui-credit-card':
+        case 'ui-counter-button':
+        case 'ui-choice-chips':
+        case 'ui-place-picker':
+        case 'ui-checkbox-group':
+        case 'ui-signature':
+          return `      <section id=${JSON.stringify(elId)} className="max-w-3xl mx-auto px-6 py-3 w-full">
+        <div className="p-5 rounded-xl bg-white/5 border border-white/10 space-y-1.5"${styleAttr}>
+          <div className="text-sm font-bold">{textOverrides[${JSON.stringify(b.id)}] ?? ${safeTitle}}</div>
+          {${safeSub} && <p className="text-xs opacity-75">{${safeSub}}</p>}
+        </div>
       </section>`;
         case 'logic-counter':
           return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">

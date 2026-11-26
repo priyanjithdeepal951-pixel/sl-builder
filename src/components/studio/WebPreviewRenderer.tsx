@@ -68,6 +68,10 @@ import {
   Layers,
   Maximize2,
   AlertCircle,
+  CreditCard,
+  Minus,
+  PanelRight,
+  PenTool,
 } from 'lucide-react';
 import {
   CanvasBlock,
@@ -438,6 +442,107 @@ function buildQrCells(value: string): boolean[][] {
   return grid;
 }
 
+const SignaturePadWidget: React.FC<{
+  blockId: string;
+  accentColor: string;
+  onSignedChange: (hasSig: boolean) => void;
+}> = ({ accentColor, onSignedChange }) => {
+  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const drawingRef = React.useRef(false);
+  const [hasStroke, setHasStroke] = React.useState(false);
+
+  const getPos = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: ((e.clientX - rect.left) / Math.max(1, rect.width)) * canvas.width,
+      y: ((e.clientY - rect.top) / Math.max(1, rect.height)) * canvas.height,
+    };
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    e.stopPropagation();
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    canvas.setPointerCapture(e.pointerId);
+    drawingRef.current = true;
+    const { x, y } = getPos(e);
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2.4;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drawingRef.current) return;
+    e.stopPropagation();
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getPos(e);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    if (!hasStroke) {
+      setHasStroke(true);
+      onSignedChange(true);
+    }
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (!drawingRef.current) return;
+    e.stopPropagation();
+    drawingRef.current = false;
+  };
+
+  const clearPad = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setHasStroke(false);
+    onSignedChange(false);
+  };
+
+  return (
+    <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+      <div className="relative rounded-xl bg-[#090B10] border border-dashed border-white/20 overflow-hidden">
+        <canvas
+          ref={canvasRef}
+          width={360}
+          height={110}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          className="w-full h-[104px] touch-none cursor-crosshair block"
+        />
+        {!hasStroke && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11px] text-slate-500">
+            Sign here with mouse or touch
+          </div>
+        )}
+        <div className="pointer-events-none absolute inset-x-4 bottom-3 border-b border-white/15" />
+      </div>
+      <div className="flex items-center justify-between text-[10px]">
+        <span style={{ color: hasStroke ? accentColor : '#94a3b8' }} className="font-mono">
+          {hasStroke ? 'Signature captured' : 'Awaiting signature'}
+        </span>
+        <button
+          type="button"
+          onClick={clearPad}
+          className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-slate-200 font-semibold cursor-pointer"
+        >
+          Clear
+        </button>
+      </div>
+    </div>
+  );
+};
+
 export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
   blocks,
   selectedBlockId,
@@ -529,6 +634,16 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
       }
     >
   >({});
+  const [drawerCollapsed, setDrawerCollapsed] = useState<Record<string, boolean>>({});
+  const [pinMaskState, setPinMaskState] = useState<Record<string, boolean>>({});
+  const pinInputRefs = React.useRef<Record<string, Array<HTMLInputElement | null>>>({});
+  const [ratingHover, setRatingHover] = useState<Record<string, number>>({});
+  const [creditCardState, setCreditCardState] = useState<
+    Record<string, { number: string; expiry: string; cvc: string; holder: string }>
+  >({});
+  const [choiceChipsSelected, setChoiceChipsSelected] = useState<Record<string, string[]>>({});
+  const [placePickerSearch, setPlacePickerSearch] = useState<Record<string, string>>({});
+  const [checkboxGroupSelected, setCheckboxGroupSelected] = useState<Record<string, string[]>>({});
 
   React.useEffect(() => {
     const activeIds = Object.keys(audioPlayState).filter((id) => audioPlayState[id]?.playing);
@@ -809,6 +924,9 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
     tp === 'ui-chart' ||
     tp === 'ui-sticky-header' ||
     tp === 'ui-genui-chat' ||
+    tp === 'ui-choice-chips' ||
+    tp === 'ui-place-picker' ||
+    tp === 'ui-checkbox-group' ||
     (tp === 'ui-checkbox' && variant === 'radio');
 
   return (
@@ -1080,47 +1198,113 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                 </header>
               )}
 
-              {/* 1b. SIDEBAR */}
-              {block.type === 'ui-sidebar' && (
-                <div className="px-5 py-1.5">
-                  <aside
-                    style={surfaceStyle}
-                    className={`${customPad || 'p-3.5'} ${customRadius} ${
-                      customBg || 'bg-white/[0.04]'
-                    } border border-white/10 space-y-2`}
-                  >
-                    <div className="flex items-center gap-2 text-xs font-bold text-white border-b border-white/10 pb-2">
-                      <PanelLeft className="w-3.5 h-3.5 text-sky-400" />
-                      <span style={primaryStyle}>{displayContent}</span>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      {(parsedOptions.length > 0
-                        ? parsedOptions
-                        : ['Dashboard', 'Projects', 'Settings']
-                      ).map((item, idx) => {
-                        const active = (sidebarActiveIdx[block.id] ?? 0) === idx;
-                        return (
-                          <button
-                            key={`${item}_${idx}`}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSidebarActiveIdx((prev) => ({ ...prev, [block.id]: idx }));
-                              onTriggerAction(block, { ...formInputs, [block.id]: item });
-                            }}
-                            className={`text-left px-2.5 py-1.5 rounded-lg text-[11px] font-medium flex items-center justify-between cursor-pointer transition-colors ${
-                              active
-                                ? 'bg-indigo-600/30 text-white border border-indigo-400/40'
-                                : 'text-slate-300 hover:bg-white/5'
+              {/* 1b. SIDEBAR / DRAWER / ENDDRAWER */}
+              {block.type === 'ui-sidebar' && (() => {
+                const isEndDrawer = block.tooltipPosition === 'right';
+                const isCollapsed = Boolean(drawerCollapsed[block.id]);
+                return (
+                  <div className={`px-5 py-1.5 flex ${isEndDrawer ? 'justify-end' : 'justify-start'}`}>
+                    <aside
+                      style={surfaceStyle}
+                      className={`w-full ${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2`}
+                    >
+                      <div
+                        className={`flex items-center justify-between gap-2 text-xs font-bold text-white ${
+                          isCollapsed ? '' : 'border-b border-white/10 pb-2'
+                        } ${isEndDrawer ? 'flex-row-reverse' : ''}`}
+                      >
+                        <div className={`flex items-center gap-2 ${isEndDrawer ? 'flex-row-reverse' : ''}`}>
+                          {isEndDrawer ? (
+                            <PanelRight className="w-3.5 h-3.5 text-sky-400" />
+                          ) : (
+                            <PanelLeft className="w-3.5 h-3.5 text-sky-400" />
+                          )}
+                          <span style={primaryStyle}>{displayContent}</span>
+                          {block.badgeText && (
+                            <span className="px-1.5 py-0.5 rounded bg-sky-500/15 text-[9px] font-mono text-sky-300">
+                              {block.badgeText}
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setDrawerCollapsed((p) => ({ ...p, [block.id]: !p[block.id] }));
+                          }}
+                          className="p-1 rounded hover:bg-white/10 text-slate-400 hover:text-white cursor-pointer"
+                          title={isCollapsed ? 'Open Drawer' : 'Collapse Drawer'}
+                        >
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 transition-transform ${
+                              isCollapsed ? '-rotate-90' : 'rotate-0'
                             }`}
-                          >
-                            <span>{item}</span>
-                            {active && <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </aside>
+                          />
+                        </button>
+                      </div>
+                      {!isCollapsed && (
+                        <div className="flex flex-col gap-1">
+                          {(parsedOptions.length > 0
+                            ? parsedOptions
+                            : ['Dashboard', 'Projects', 'Settings']
+                          ).map((item, idx) => {
+                            const active = (sidebarActiveIdx[block.id] ?? 0) === idx;
+                            return (
+                              <button
+                                key={`${item}_${idx}`}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSidebarActiveIdx((prev) => ({ ...prev, [block.id]: idx }));
+                                  onTriggerAction(block, { ...formInputs, [block.id]: item });
+                                }}
+                                className={`text-left px-2.5 py-1.5 rounded-lg text-[11px] font-medium flex items-center justify-between cursor-pointer transition-colors ${
+                                  active
+                                    ? 'bg-indigo-600/30 text-white border border-indigo-400/40'
+                                    : 'text-slate-300 hover:bg-white/5'
+                                }`}
+                              >
+                                <span>{item}</span>
+                                {active && <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </aside>
+                  </div>
+                );
+              })()}
+
+              {/* 1b2. FLOATING ACTION BUTTON (FAB) */}
+              {block.type === 'ui-fab' && (
+                <div
+                  className={`px-5 py-2 flex items-center ${
+                    block.style?.textAlign === 'left'
+                      ? 'justify-start'
+                      : block.style?.textAlign === 'center'
+                      ? 'justify-center'
+                      : 'justify-end'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    disabled={isDisabled}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTriggerAction(block, formInputs);
+                    }}
+                    title={displayContent}
+                    style={{ backgroundColor: block.style?.customBgHex || resolvedAccent }}
+                    className="group inline-flex items-center gap-2 h-12 px-4 rounded-full text-white font-semibold text-xs shadow-[0_8px_24px_rgba(79,70,229,0.45)] hover:scale-105 active:scale-95 transition-all cursor-pointer"
+                  >
+                    <span className="w-6 h-6 rounded-full bg-white/15 flex items-center justify-center">
+                      {renderVectorIcon(block.iconName || 'plus', 'w-4 h-4')}
+                    </span>
+                    {displayContent && <span style={primaryStyle}>{displayContent}</span>}
+                  </button>
                 </div>
               )}
 
@@ -2839,6 +3023,608 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         </div>
                       </label>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* 11c2. CHECKBOX LIST TILE */}
+              {block.type === 'ui-checkbox-tile' && (
+                <div className="px-5 py-1.5">
+                  <label
+                    onClick={(e) => e.stopPropagation()}
+                    style={surfaceStyle}
+                    className={`${customPad || 'p-3.5'} ${customRadius} ${
+                      customBg || 'bg-white/[0.04]'
+                    } border ${
+                      block.isExpanded ? 'border-indigo-400/40' : 'border-white/10'
+                    } flex items-center justify-between gap-3 cursor-pointer transition-colors hover:bg-white/[0.06]`}
+                  >
+                    <div className="min-w-0">
+                      <p style={primaryStyle} className="text-xs font-semibold text-white truncate">
+                        {displayContent}
+                      </p>
+                      {block.subtitle && (
+                        <p style={subtitleStyle} className="text-[10px] text-slate-400 truncate mt-0.5">
+                          {block.subtitle}
+                        </p>
+                      )}
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(block.isExpanded)}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        onUpdateBlock({ ...block, isExpanded: checked });
+                        setFormInput(block.id, checked ? 'Checked' : 'Unchecked', true);
+                      }}
+                      className="w-4 h-4 accent-indigo-500 rounded shrink-0 cursor-pointer"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {/* 11c3. SWITCH LIST TILE */}
+              {block.type === 'ui-switch-tile' && (
+                <div className="px-5 py-1.5">
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const nextState = !block.isExpanded;
+                      onUpdateBlock({ ...block, isExpanded: nextState });
+                      setFormInput(block.id, nextState ? 'Enabled' : 'Disabled', true);
+                    }}
+                    style={surfaceStyle}
+                    className={`${customPad || 'p-3.5'} ${customRadius} ${
+                      customBg || 'bg-white/[0.04]'
+                    } border ${
+                      block.isExpanded ? 'border-indigo-400/40' : 'border-white/10'
+                    } flex items-center justify-between gap-3 cursor-pointer transition-colors hover:bg-white/[0.06]`}
+                  >
+                    <div className="min-w-0">
+                      <p style={primaryStyle} className="text-xs font-semibold text-white truncate">
+                        {displayContent}
+                      </p>
+                      {block.subtitle && (
+                        <p style={subtitleStyle} className="text-[10px] text-slate-400 truncate mt-0.5">
+                          {block.subtitle}
+                        </p>
+                      )}
+                    </div>
+                    <div
+                      className={`w-10 h-5 rounded-full p-0.5 transition-colors shrink-0 ${
+                        block.isExpanded ? 'bg-indigo-500' : 'bg-slate-700'
+                      }`}
+                    >
+                      <div
+                        className={`w-4 h-4 rounded-full bg-white transition-transform ${
+                          block.isExpanded ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 11c4. PIN CODE / OTP */}
+              {block.type === 'ui-pin-code' && (() => {
+                const pinLen = Math.min(6, Math.max(4, block.counterValue ?? 4));
+                const rawPin = (formInputs[block.id] || '').slice(0, pinLen);
+                const isMasked = Boolean(pinMaskState[block.id]);
+                const updatePinAt = (idx: number, char: string) => {
+                  const arr = Array.from({ length: pinLen }, (_, i) => rawPin[i] || '');
+                  arr[idx] = char.replace(/[^0-9a-zA-Z]/g, '').slice(-1);
+                  const joined = arr.join('');
+                  setFormInput(block.id, joined, true);
+                  if (arr[idx] && idx < pinLen - 1) {
+                    pinInputRefs.current[block.id]?.[idx + 1]?.focus();
+                  }
+                };
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2.5`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <Lock className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+                          <span style={primaryStyle} className="text-xs font-semibold text-white truncate">
+                            {displayContent}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPinMaskState((p) => ({ ...p, [block.id]: !p[block.id] }));
+                          }}
+                          className="text-[10px] font-mono text-slate-400 hover:text-white cursor-pointer"
+                        >
+                          {isMasked ? 'Show' : 'Hide'}
+                        </button>
+                      </div>
+                      <div className="flex items-center justify-center gap-2">
+                        {Array.from({ length: pinLen }, (_, idx) => (
+                          <input
+                            key={idx}
+                            ref={(el) => {
+                              if (!pinInputRefs.current[block.id]) pinInputRefs.current[block.id] = [];
+                              pinInputRefs.current[block.id][idx] = el;
+                            }}
+                            type={isMasked ? 'password' : 'text'}
+                            inputMode="numeric"
+                            maxLength={1}
+                            value={rawPin[idx] || ''}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) => updatePinAt(idx, e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Backspace' && !rawPin[idx] && idx > 0) {
+                                pinInputRefs.current[block.id]?.[idx - 1]?.focus();
+                              }
+                            }}
+                            className="w-10 h-11 rounded-xl bg-[#090B10] border border-white/20 focus:border-[#4D97FF] text-center text-base font-mono font-bold text-white outline-none"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 11c5. SLIDER */}
+              {block.type === 'ui-slider' && (() => {
+                const sliderVal = Number(formInputs[block.id] ?? block.progressValue ?? 65);
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span style={primaryStyle} className="text-xs font-semibold text-white">
+                          {displayContent}
+                        </span>
+                        <span
+                          style={{ backgroundColor: resolvedAccent }}
+                          className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold text-white"
+                        >
+                          {sliderVal}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={100}
+                        value={sliderVal}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => {
+                          const v = Number(e.target.value);
+                          onUpdateBlock({ ...block, progressValue: v });
+                          setFormInput(block.id, String(v), true);
+                        }}
+                        style={{ accentColor: resolvedAccent }}
+                        className="w-full cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[9px] font-mono text-slate-500">
+                        <span>0</span>
+                        <span>50</span>
+                        <span>100</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 11c6. RATING BAR */}
+              {block.type === 'ui-rating-bar' && (() => {
+                const currentRating = block.counterValue ?? 4;
+                const activeHover = ratingHover[block.id] ?? 0;
+                const displayStars = activeHover || currentRating;
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 flex items-center justify-between gap-3`}
+                    >
+                      <div className="min-w-0">
+                        <p style={primaryStyle} className="text-xs font-semibold text-white truncate">
+                          {displayContent}
+                        </p>
+                        {block.subtitle && (
+                          <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                        )}
+                      </div>
+                      <div
+                        className="flex items-center gap-1 shrink-0"
+                        onMouseLeave={() => setRatingHover((p) => ({ ...p, [block.id]: 0 }))}
+                      >
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <button
+                            key={star}
+                            type="button"
+                            onMouseEnter={() => setRatingHover((p) => ({ ...p, [block.id]: star }))}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateBlock({ ...block, counterValue: star });
+                              setFormInput(block.id, `${star} / 5 stars`, true);
+                            }}
+                            className="p-0.5 cursor-pointer transition-transform hover:scale-110"
+                          >
+                            <Star
+                              className={`w-4 h-4 ${
+                                star <= displayStars
+                                  ? 'fill-amber-400 text-amber-400'
+                                  : 'text-slate-600'
+                              }`}
+                            />
+                          </button>
+                        ))}
+                        <span className="ml-1 text-[10px] font-mono text-amber-300 font-bold">
+                          {currentRating}/5
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 11c7. CREDIT CARD FORM */}
+              {block.type === 'ui-credit-card' && (() => {
+                const cc = creditCardState[block.id] || {
+                  number: '',
+                  expiry: '',
+                  cvc: '',
+                  holder: '',
+                };
+                const patchCard = (patch: Partial<typeof cc>) => {
+                  const next = { ...cc, ...patch };
+                  setCreditCardState((p) => ({ ...p, [block.id]: next }));
+                  const last4 = next.number.replace(/\s+/g, '').slice(-4);
+                  setFormInput(
+                    block.id,
+                    last4 ? `Card •••• ${last4} (${next.expiry || 'MM/YY'})` : '',
+                    true
+                  );
+                };
+                const digits = cc.number.replace(/\D/g, '');
+                const brand = digits.startsWith('4')
+                  ? 'VISA'
+                  : digits.startsWith('5')
+                  ? 'MASTERCARD'
+                  : digits.startsWith('3')
+                  ? 'AMEX'
+                  : block.badgeText || 'CARD';
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`${customPad || 'p-4'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2.5`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <CreditCard className="w-4 h-4 text-sky-400" />
+                          <span style={primaryStyle} className="text-xs font-bold text-white">
+                            {displayContent}
+                          </span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded bg-indigo-500/20 text-[9px] font-mono font-bold text-indigo-300">
+                          {brand}
+                        </span>
+                      </div>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={19}
+                        value={cc.number}
+                        onChange={(e) => {
+                          const raw = e.target.value.replace(/\D/g, '').slice(0, 16);
+                          const formatted = raw.replace(/(.{4})/g, '$1 ').trim();
+                          patchCard({ number: formatted });
+                        }}
+                        placeholder="4242 4242 4242 4242"
+                        className="w-full rounded-lg bg-[#090B10] border border-white/15 px-3 py-1.5 text-xs font-mono text-white placeholder-slate-500 outline-none focus:border-[#4D97FF]"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          maxLength={5}
+                          value={cc.expiry}
+                          onChange={(e) => {
+                            const d = e.target.value.replace(/\D/g, '').slice(0, 4);
+                            const formatted = d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d;
+                            patchCard({ expiry: formatted });
+                          }}
+                          placeholder="MM/YY"
+                          className="w-full rounded-lg bg-[#090B10] border border-white/15 px-3 py-1.5 text-xs font-mono text-white placeholder-slate-500 outline-none focus:border-[#4D97FF]"
+                        />
+                        <input
+                          type="password"
+                          maxLength={4}
+                          value={cc.cvc}
+                          onChange={(e) =>
+                            patchCard({ cvc: e.target.value.replace(/\D/g, '').slice(0, 4) })
+                          }
+                          placeholder="CVC"
+                          className="w-full rounded-lg bg-[#090B10] border border-white/15 px-3 py-1.5 text-xs font-mono text-white placeholder-slate-500 outline-none focus:border-[#4D97FF]"
+                        />
+                      </div>
+                      <input
+                        type="text"
+                        value={cc.holder}
+                        onChange={(e) => patchCard({ holder: e.target.value })}
+                        placeholder="Cardholder Name"
+                        className="w-full rounded-lg bg-[#090B10] border border-white/15 px-3 py-1.5 text-xs text-white placeholder-slate-500 outline-none focus:border-[#4D97FF]"
+                      />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 11c8. COUNTER BUTTON */}
+              {block.type === 'ui-counter-button' && (() => {
+                const val = block.counterValue ?? 2;
+                const setCount = (nextVal: number) => {
+                  const clamped = Math.max(0, nextVal);
+                  onUpdateBlock({ ...block, counterValue: clamped });
+                  setFormInput(block.id, String(clamped), true);
+                };
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 flex items-center justify-between gap-3`}
+                    >
+                      <div className="min-w-0">
+                        <p style={primaryStyle} className="text-xs font-semibold text-white truncate">
+                          {displayContent}
+                        </p>
+                        {block.subtitle && (
+                          <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                        )}
+                      </div>
+                      <div className="inline-flex items-center rounded-xl bg-[#090B10] border border-white/15 overflow-hidden shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCount(val - 1);
+                          }}
+                          className="w-8 h-8 flex items-center justify-center text-slate-300 hover:bg-white/10 hover:text-white cursor-pointer"
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <span className="px-3 text-xs font-mono font-bold text-white tabular-nums">
+                          {val}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setCount(val + 1);
+                          }}
+                          style={{ backgroundColor: resolvedAccent }}
+                          className="w-8 h-8 flex items-center justify-center text-white hover:brightness-110 cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 11c9. CHOICE CHIPS */}
+              {block.type === 'ui-choice-chips' && (() => {
+                const chips =
+                  parsedOptions.length > 0
+                    ? parsedOptions
+                    : ['Design', 'Frontend', 'Mobile App', 'Backend API'];
+                const activeChips = choiceChipsSelected[block.id] ?? [chips[0]];
+                const toggleChip = (chip: string) => {
+                  const exists = activeChips.includes(chip);
+                  const next = exists
+                    ? activeChips.filter((c) => c !== chip)
+                    : [...activeChips, chip];
+                  setChoiceChipsSelected((p) => ({ ...p, [block.id]: next }));
+                  setFormInput(block.id, next.join(', '), true);
+                };
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2`}
+                    >
+                      <span style={primaryStyle} className="text-xs font-semibold text-white block">
+                        {displayContent}
+                      </span>
+                      <div className="flex flex-wrap gap-1.5">
+                        {chips.map((chip) => {
+                          const isChosen = activeChips.includes(chip);
+                          return (
+                            <button
+                              key={chip}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleChip(chip);
+                              }}
+                              style={isChosen ? { backgroundColor: resolvedAccent } : undefined}
+                              className={`px-3 py-1 rounded-full text-[11px] font-medium border transition-colors cursor-pointer ${
+                                isChosen
+                                  ? 'text-white border-transparent shadow-xs'
+                                  : 'bg-[#090B10] border-white/15 text-slate-300 hover:border-white/30'
+                              }`}
+                            >
+                              {chip}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 11c10. PLACE PICKER */}
+              {block.type === 'ui-place-picker' && (() => {
+                const places =
+                  parsedOptions.length > 0
+                    ? parsedOptions
+                    : ['Colombo 03, Sri Lanka', 'Kandy City Center', 'Galle Fort'];
+                const query = placePickerSearch[block.id] ?? '';
+                const filteredPlaces = query.trim()
+                  ? places.filter((pl) => pl.toLowerCase().includes(query.toLowerCase()))
+                  : places;
+                const pickedPlace = formInputs[block.id] || places[0];
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      onClick={(e) => e.stopPropagation()}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span style={primaryStyle} className="text-xs font-semibold text-white flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-rose-400" />
+                          <span>{displayContent}</span>
+                        </span>
+                        <span className="text-[10px] font-mono text-emerald-300 truncate max-w-[140px]">
+                          {pickedPlace}
+                        </span>
+                      </div>
+                      <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                        <input
+                          type="text"
+                          value={query}
+                          onChange={(e) =>
+                            setPlacePickerSearch((p) => ({ ...p, [block.id]: e.target.value }))
+                          }
+                          placeholder="Search place or city..."
+                          className="w-full pl-8 pr-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-xs text-white placeholder-slate-500 outline-none focus:border-[#4D97FF]"
+                        />
+                      </div>
+                      <div className="space-y-1 max-h-28 overflow-y-auto">
+                        {(filteredPlaces.length > 0 ? filteredPlaces : [query]).map((pl) => {
+                          const isSelectedPlace = pickedPlace === pl;
+                          return (
+                            <button
+                              key={pl}
+                              type="button"
+                              onClick={() => setFormInput(block.id, pl, true)}
+                              className={`w-full text-left px-2.5 py-1.5 rounded-lg text-[11px] flex items-center justify-between cursor-pointer transition-colors ${
+                                isSelectedPlace
+                                  ? 'bg-indigo-600/25 border border-indigo-400/40 text-white font-semibold'
+                                  : 'bg-[#090B10]/70 border border-white/5 text-slate-300 hover:bg-white/5'
+                              }`}
+                            >
+                              <span className="flex items-center gap-1.5 truncate">
+                                <MapPin className="w-3 h-3 text-sky-400 shrink-0" />
+                                <span className="truncate">{pl}</span>
+                              </span>
+                              {isSelectedPlace && <Check className="w-3 h-3 text-emerald-400 shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 11c11. CHECKBOX GROUP */}
+              {block.type === 'ui-checkbox-group' && (() => {
+                const choices =
+                  parsedOptions.length > 0
+                    ? parsedOptions
+                    : ['UI/UX Prototyping', 'E-Commerce Store', 'SaaS Dashboard'];
+                const checkedList = checkboxGroupSelected[block.id] ?? [choices[0]];
+                const toggleItem = (item: string) => {
+                  const exists = checkedList.includes(item);
+                  const next = exists
+                    ? checkedList.filter((i) => i !== item)
+                    : [...checkedList, item];
+                  setCheckboxGroupSelected((p) => ({ ...p, [block.id]: next }));
+                  setFormInput(block.id, next.join(', '), true);
+                };
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span style={primaryStyle} className="text-xs font-semibold text-white">
+                          {displayContent}
+                        </span>
+                        <span className="text-[10px] font-mono text-sky-300">
+                          {checkedList.length}/{choices.length} selected
+                        </span>
+                      </div>
+                      <div className="space-y-1.5">
+                        {choices.map((item) => {
+                          const isChecked = checkedList.includes(item);
+                          return (
+                            <label
+                              key={item}
+                              onClick={(e) => e.stopPropagation()}
+                              className="flex items-center gap-2 text-xs text-slate-200 cursor-pointer"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => toggleItem(item)}
+                                className="w-3.5 h-3.5 accent-indigo-500 rounded"
+                              />
+                              <span>{item}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* 11c12. SIGNATURE PAD */}
+              {block.type === 'ui-signature' && (
+                <div className="px-5 py-1.5">
+                  <div
+                    style={surfaceStyle}
+                    className={`${customPad || 'p-3.5'} ${customRadius} ${
+                      customBg || 'bg-white/[0.04]'
+                    } border border-white/10 space-y-2`}
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <PenTool className="w-3.5 h-3.5 text-sky-400" />
+                      <span style={primaryStyle} className="text-xs font-semibold text-white">
+                        {displayContent}
+                      </span>
+                    </div>
+                    <SignaturePadWidget
+                      blockId={block.id}
+                      accentColor={resolvedAccent}
+                      onSignedChange={(signed) =>
+                        setFormInput(block.id, signed ? 'Signature Captured' : '', true)
+                      }
+                    />
                   </div>
                 </div>
               )}

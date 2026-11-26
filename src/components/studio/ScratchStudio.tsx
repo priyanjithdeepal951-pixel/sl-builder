@@ -223,6 +223,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   const [frequentlyUsedOpen, setFrequentlyUsedOpen] = useState<boolean>(true);
   const [layoutElementsOpen, setLayoutElementsOpen] = useState<boolean>(true);
   const [baseElementsOpen, setBaseElementsOpen] = useState<boolean>(true);
+  const [pageElementsOpen, setPageElementsOpen] = useState<boolean>(true);
+  const [formElementsOpen, setFormElementsOpen] = useState<boolean>(true);
   const [moreWidgetsOpen, setMoreWidgetsOpen] = useState<boolean>(false);
   const [viewport, setViewport] = useState<ViewportMode>('desktop');
   const [stageSize, setStageSize] = useState<'small' | 'normal' | 'fullscreen'>('normal');
@@ -698,7 +700,18 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         b.type === 'ui-textarea' ||
         b.type === 'ui-select' ||
         b.type === 'ui-checkbox' ||
-        b.type === 'ui-file-upload'
+        b.type === 'ui-file-upload' ||
+        b.type === 'ui-checkbox-tile' ||
+        b.type === 'ui-switch-tile' ||
+        b.type === 'ui-pin-code' ||
+        b.type === 'ui-slider' ||
+        b.type === 'ui-rating-bar' ||
+        b.type === 'ui-credit-card' ||
+        b.type === 'ui-counter-button' ||
+        b.type === 'ui-choice-chips' ||
+        b.type === 'ui-place-picker' ||
+        b.type === 'ui-checkbox-group' ||
+        b.type === 'ui-signature'
     );
     const fields: Array<{ id: string; label: string; value: string; hasUserEntry: boolean }> = [];
     inputBlocks.forEach((inp) => {
@@ -722,6 +735,35 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
             hasUserEntry: checked || rawTyped !== undefined,
           });
         }
+      } else if (inp.type === 'ui-checkbox-tile' || inp.type === 'ui-switch-tile') {
+        const checked = rawTyped !== undefined ? rawTyped === 'Checked' || rawTyped === 'Enabled' : Boolean(inp.isExpanded);
+        fields.push({
+          id: inp.id,
+          label,
+          value: rawTyped || (checked ? 'Yes' : 'No'),
+          hasUserEntry: true,
+        });
+      } else if (inp.type === 'ui-slider') {
+        fields.push({
+          id: inp.id,
+          label,
+          value: rawTyped || String(inp.progressValue ?? 65),
+          hasUserEntry: true,
+        });
+      } else if (inp.type === 'ui-rating-bar') {
+        fields.push({
+          id: inp.id,
+          label,
+          value: rawTyped || `${inp.counterValue ?? 4} / 5 stars`,
+          hasUserEntry: true,
+        });
+      } else if (inp.type === 'ui-counter-button') {
+        fields.push({
+          id: inp.id,
+          label,
+          value: rawTyped || String(inp.counterValue ?? 2),
+          hasUserEntry: true,
+        });
       } else {
         const val = (rawTyped || '').trim();
         if (val) {
@@ -3353,6 +3395,344 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         )}
                       </div>
 
+                      {/* PAGE ELEMENTS */}
+                      <div className="pt-2 border-t border-white/[0.06]">
+                        <button
+                          type="button"
+                          onClick={() => setPageElementsOpen((o) => !o)}
+                          className="w-full flex items-center justify-between py-1 text-left cursor-pointer group"
+                        >
+                          <span className="text-[11px] font-medium tracking-[0.08em] text-[#9aa3b2] group-hover:text-white uppercase transition-colors">
+                            PAGE ELEMENTS
+                          </span>
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 text-[#8b949e] transition-transform duration-150 ${
+                              pageElementsOpen ? 'rotate-0' : '-rotate-90'
+                            }`}
+                          />
+                        </button>
+                        {pageElementsOpen && (
+                          <div className="grid grid-cols-3 gap-2 pt-2">
+                            {(
+                              [
+                                {
+                                  id: 'AppBar',
+                                  tplId: 'tpl-appbar',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="3" y="8" width="18" height="8" rx="1.5" />
+                                      <path d="M6.5 12h1.5" />
+                                      <line x1="10.5" y1="12" x2="17" y2="12" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'FAB',
+                                  tplId: 'tpl-fab',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                                      <circle cx="12" cy="12" r="8.5" />
+                                      <line x1="12" y1="8.5" x2="12" y2="15.5" />
+                                      <line x1="8.5" y1="12" x2="15.5" y2="12" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Drawer',
+                                  tplId: 'tpl-drawer',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="4" y1="7" x2="12" y2="7" />
+                                      <line x1="4" y1="12" x2="11" y2="12" />
+                                      <line x1="4" y1="17" x2="12" y2="17" />
+                                      <polyline points="19 8 15 12 19 16" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'EndDrawer',
+                                  tplId: 'tpl-end-drawer',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                      <line x1="4" y1="7" x2="12" y2="7" />
+                                      <line x1="4" y1="12" x2="11" y2="12" />
+                                      <line x1="4" y1="17" x2="12" y2="17" />
+                                      <polyline points="19 8 15 12 19 16" />
+                                    </svg>
+                                  ),
+                                },
+                              ] as const
+                            ).map((item) => {
+                              const tpl =
+                                WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === item.tplId) ||
+                                WEB_STUDIO_BLOCK_TEMPLATES[0];
+                              return (
+                                <button
+                                  key={`page_${item.id}`}
+                                  type="button"
+                                  draggable
+                                  onDragStart={(e) => handlePaletteDragStart(e, tpl)}
+                                  onClick={() => handleAddTemplateBlock(tpl)}
+                                  title={`Add ${item.id}`}
+                                  className="h-[74px] rounded-[8px] bg-[#1e2127] hover:bg-[#262a33] border border-white/[0.07] hover:border-white/[0.16] px-1.5 flex flex-col items-center justify-center gap-1.5 text-center transition-colors cursor-grab active:cursor-grabbing"
+                                >
+                                  <span className="text-[#c9d1d9] flex items-center justify-center">
+                                    {item.icon}
+                                  </span>
+                                  <span className="text-[11px] font-normal text-[#9aa3b2] truncate w-full leading-tight">
+                                    {item.id}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* FORM ELEMENTS */}
+                      <div className="pt-2 border-t border-white/[0.06]">
+                        <button
+                          type="button"
+                          onClick={() => setFormElementsOpen((o) => !o)}
+                          className="w-full flex items-center justify-between py-1 text-left cursor-pointer group"
+                        >
+                          <span className="text-[11px] font-medium tracking-[0.08em] text-[#9aa3b2] group-hover:text-white uppercase transition-colors">
+                            FORM ELEMENTS
+                          </span>
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 text-[#8b949e] transition-transform duration-150 ${
+                              formElementsOpen ? 'rotate-0' : '-rotate-90'
+                            }`}
+                          />
+                        </button>
+                        {formElementsOpen && (
+                          <div className="grid grid-cols-3 gap-2 pt-2">
+                            {(
+                              [
+                                {
+                                  id: 'TextField',
+                                  tplId: 'tpl-text-input',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M12 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-6" />
+                                      <path d="M18.4 2.6a2 2 0 0 1 3 3L12 15l-4 1 1-4Z" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'DropDown',
+                                  tplId: 'tpl-select',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.5">
+                                      <rect x="2.5" y="7" width="19" height="10" rx="2" />
+                                      <text x="10.2" y="13.5" textAnchor="middle" fill="currentColor" stroke="none" fontSize="5.2" fontWeight="700" fontFamily="sans-serif">DROP</text>
+                                      <path d="M17 11l1.5 2 1.5-2" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Checkbox',
+                                  tplId: 'tpl-checkbox',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="4" y="4" width="16" height="16" rx="2.5" />
+                                      <polyline points="8.5 12.2 11 14.8 16 9.2" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'CheckboxListTile',
+                                  tplId: 'tpl-checkbox-tile',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="2.5" y="7" width="19" height="10" rx="2" />
+                                      <line x1="5.5" y1="10.5" x2="10.5" y2="10.5" />
+                                      <line x1="5.5" y1="13.5" x2="9" y2="13.5" />
+                                      <rect x="13" y="9" width="6" height="6" rx="1" />
+                                      <polyline points="14.5 12 15.6 13.2 17.6 10.8" strokeWidth="1.3" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Switch',
+                                  tplId: 'tpl-switch',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.8">
+                                      <rect x="2.5" y="7.5" width="19" height="9" rx="4.5" />
+                                      <circle cx="16.5" cy="12" r="2.6" fill="currentColor" stroke="none" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'SwitchListTile',
+                                  tplId: 'tpl-switch-tile',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                                      <rect x="2.5" y="7" width="19" height="10" rx="2" />
+                                      <line x1="5.5" y1="10.5" x2="10" y2="10.5" />
+                                      <line x1="5.5" y1="13.5" x2="8.5" y2="13.5" />
+                                      <rect x="12" y="9.5" width="7" height="5" rx="2.5" />
+                                      <circle cx="16.8" cy="12" r="1.4" fill="currentColor" stroke="none" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'RadioButton',
+                                  tplId: 'tpl-radio',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round">
+                                      <circle cx="7" cy="8" r="2.8" />
+                                      <circle cx="7" cy="8" r="1" fill="currentColor" stroke="none" />
+                                      <line x1="12.5" y1="8" x2="19.5" y2="8" />
+                                      <circle cx="7" cy="16" r="2.8" />
+                                      <line x1="12.5" y1="16" x2="19.5" y2="16" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'PinCode',
+                                  tplId: 'tpl-pin-code',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="9.5" y="5.5" width="5" height="4" rx="0.8" />
+                                      <path d="M10.5 5.5V4.2a1.5 1.5 0 0 1 3 0v1.3" />
+                                      <rect x="3" y="12" width="18" height="6.5" rx="1.8" strokeDasharray="2.5 1.5" />
+                                      <circle cx="6.5" cy="15.2" r="1" fill="currentColor" stroke="none" />
+                                      <circle cx="10.2" cy="15.2" r="1" fill="currentColor" stroke="none" />
+                                      <circle cx="13.8" cy="15.2" r="1" fill="currentColor" stroke="none" />
+                                      <circle cx="17.5" cy="15.2" r="1" fill="currentColor" stroke="none" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Slider',
+                                  tplId: 'tpl-slider',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                                      <line x1="3" y1="12" x2="9" y2="12" />
+                                      <line x1="15" y1="12" x2="21" y2="12" />
+                                      <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'RatingBar',
+                                  tplId: 'tpl-rating-bar',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="currentColor">
+                                      <path d="M5 9.2l.9 1.8 2 .3-1.4 1.4.3 2L5 13.7l-1.8 1 .3-2-1.4-1.4 2-.3L5 9.2zM12 9.2l.9 1.8 2 .3-1.4 1.4.3 2-1.8-1-1.8 1 .3-2-1.4-1.4 2-.3L12 9.2zM19 9.2l.9 1.8 2 .3-1.4 1.4.3 2-1.8-1-1.8 1 .3-2-1.4-1.4 2-.3L19 9.2z" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'CreditCardForm',
+                                  tplId: 'tpl-credit-card',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="3" y="6" width="18" height="12" rx="2" />
+                                      <line x1="3" y1="10.5" x2="21" y2="10.5" strokeWidth="2.2" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Counter Button',
+                                  tplId: 'tpl-counter-button',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                                      <rect x="2.5" y="7" width="19" height="10" rx="2" />
+                                      <line x1="5.5" y1="12" x2="8" y2="12" />
+                                      <text x="12" y="14.2" textAnchor="middle" fill="currentColor" stroke="none" fontSize="7" fontWeight="700" fontFamily="sans-serif">2</text>
+                                      <line x1="16" y1="12" x2="18.8" y2="12" />
+                                      <line x1="17.4" y1="10.6" x2="17.4" y2="13.4" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'ChoiceChips',
+                                  tplId: 'tpl-choice-chips',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.4">
+                                      <rect x="3" y="6.5" width="12" height="6" rx="3" fill="currentColor" fillOpacity="0.2" />
+                                      <rect x="8.5" y="11.5" width="12.5" height="6" rx="3" />
+                                      <text x="9" y="10.8" textAnchor="middle" fill="currentColor" stroke="none" fontSize="3.8" fontWeight="700" fontFamily="sans-serif">Option</text>
+                                      <text x="14.8" y="15.8" textAnchor="middle" fill="currentColor" stroke="none" fontSize="3.8" fontWeight="700" fontFamily="sans-serif">Option</text>
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'PlacePicker',
+                                  tplId: 'tpl-place-picker',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="currentColor">
+                                      <path d="M12 2.5a6.5 6.5 0 0 0-6.5 6.5c0 4.8 6.5 12 6.5 12s6.5-7.2 6.5-12A6.5 6.5 0 0 0 12 2.5zm0 9a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Form Validation',
+                                  tplId: 'tpl-form-validation',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+                                      <line x1="4" y1="5" x2="20" y2="5" />
+                                      <line x1="4" y1="8.5" x2="20" y2="8.5" />
+                                      <line x1="4" y1="12" x2="20" y2="12" />
+                                      <line x1="4" y1="15.5" x2="20" y2="15.5" />
+                                      <rect x="13" y="18.2" width="7" height="2.6" rx="1.3" fill="currentColor" stroke="none" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'CheckboxGroup',
+                                  tplId: 'tpl-checkbox-group',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+                                      <rect x="4" y="5" width="4" height="4" rx="0.8" />
+                                      <line x1="11" y1="7" x2="20" y2="7" />
+                                      <rect x="4" y="10.5" width="4" height="4" rx="0.8" />
+                                      <line x1="11" y1="12.5" x2="20" y2="12.5" />
+                                      <polyline points="4.2 17.8 5.6 19.2 8.2 16.4" />
+                                      <line x1="11" y1="18" x2="20" y2="18" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Signature',
+                                  tplId: 'tpl-signature',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" className="w-[20px] h-[20px]" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                                      <path d="M4 17c3-1 5-9 6.5-11.5C12 3 13 5 11.5 9c-1.2 3.2-3 7.5-1.5 7.5 1.2 0 2.5-3.5 3.5-3.5 1 0 .5 3 1.5 3s2-2 3-2 1.2 2 2 2" />
+                                      <line x1="4" y1="20" x2="20" y2="20" />
+                                    </svg>
+                                  ),
+                                },
+                              ] as const
+                            ).map((item) => {
+                              const tpl =
+                                WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === item.tplId) ||
+                                WEB_STUDIO_BLOCK_TEMPLATES[0];
+                              return (
+                                <button
+                                  key={`form_${item.id}`}
+                                  type="button"
+                                  draggable
+                                  onDragStart={(e) => handlePaletteDragStart(e, tpl)}
+                                  onClick={() => handleAddTemplateBlock(tpl)}
+                                  title={`Add ${item.id}`}
+                                  className="h-[74px] rounded-[8px] bg-[#1e2127] hover:bg-[#262a33] border border-white/[0.07] hover:border-white/[0.16] px-1.5 flex flex-col items-center justify-center gap-1.5 text-center transition-colors cursor-grab active:cursor-grabbing"
+                                >
+                                  <span className="text-[#c9d1d9] flex items-center justify-center">
+                                    {item.icon}
+                                  </span>
+                                  <span className="text-[11px] font-normal text-[#9aa3b2] truncate w-full leading-tight">
+                                    {item.id}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
                       {/* Collapsible section for remaining blocks & logic */}
                       <div className="pt-2 border-t border-white/[0.06]">
                         <button
@@ -3931,6 +4311,9 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                       blk.type === 'ui-rive' ||
                                       blk.type === 'ui-language-selector' ||
                                       blk.type === 'ui-chart' ||
+                                      blk.type === 'ui-choice-chips' ||
+                                      blk.type === 'ui-place-picker' ||
+                                      blk.type === 'ui-checkbox-group' ||
                                       (blk.type === 'ui-checkbox' &&
                                         blk.controlVariant === 'radio')) && (
                                       <input
@@ -3955,7 +4338,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                             blk.type === 'ui-calendar' ||
                                             blk.type === 'ui-rive' ||
                                             blk.type === 'ui-language-selector' ||
-                                            blk.type === 'ui-chart';
+                                            blk.type === 'ui-chart' ||
+                                            blk.type === 'ui-choice-chips' ||
+                                            blk.type === 'ui-place-picker' ||
+                                            blk.type === 'ui-checkbox-group';
                                           handleUpdateBlock({
                                             ...blk,
                                             options: parsed,
@@ -6887,6 +7273,9 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         selectedBlock.type === 'ui-rive' ||
                         selectedBlock.type === 'ui-language-selector' ||
                         selectedBlock.type === 'ui-chart' ||
+                        selectedBlock.type === 'ui-choice-chips' ||
+                        selectedBlock.type === 'ui-place-picker' ||
+                        selectedBlock.type === 'ui-checkbox-group' ||
                         (selectedBlock.type === 'ui-checkbox' &&
                           selectedBlock.controlVariant === 'radio')) && (
                         <div className="flex items-center gap-2">
@@ -6909,7 +7298,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 selectedBlock.type === 'ui-calendar' ||
                                 selectedBlock.type === 'ui-rive' ||
                                 selectedBlock.type === 'ui-language-selector' ||
-                                selectedBlock.type === 'ui-chart';
+                                selectedBlock.type === 'ui-chart' ||
+                                selectedBlock.type === 'ui-choice-chips' ||
+                                selectedBlock.type === 'ui-place-picker' ||
+                                selectedBlock.type === 'ui-checkbox-group';
                               handleUpdateBlock({
                                 ...selectedBlock,
                                 options: parsed,
