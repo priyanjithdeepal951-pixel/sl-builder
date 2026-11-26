@@ -50,6 +50,24 @@ import {
   Flame,
   Crown,
   Compass,
+  Plus,
+  Trash2,
+  Pause,
+  Volume2,
+  VolumeX,
+  Radio,
+  MousePointer2,
+  ZoomIn,
+  ZoomOut,
+  Send,
+  RefreshCw,
+  QrCode,
+  FileText,
+  Languages,
+  Bot,
+  Layers,
+  Maximize2,
+  AlertCircle,
 } from 'lucide-react';
 import {
   CanvasBlock,
@@ -239,6 +257,187 @@ export function renderVectorIcon(iconName: string | undefined, className = 'w-6 
   }
 }
 
+function renderRichTextSpans(raw: string): React.ReactNode {
+  const tokenRegex = /(\*\*[^*]+\*\*|\*[^*]+\*|__[^_]+__|#[0-9a-fA-F]{3,8}\|[^`\n]+|`[^`]+`)/g;
+  const parts = raw.split(tokenRegex);
+  return parts.map((part, idx) => {
+    if (!part) return null;
+    if (part.startsWith('**') && part.endsWith('**') && part.length > 4) {
+      return (
+        <strong key={idx} className="font-extrabold text-white">
+          {part.slice(2, -2)}
+        </strong>
+      );
+    }
+    if (part.startsWith('*') && part.endsWith('*') && part.length > 2) {
+      return (
+        <em key={idx} className="italic text-sky-200">
+          {part.slice(1, -1)}
+        </em>
+      );
+    }
+    if (part.startsWith('__') && part.endsWith('__') && part.length > 4) {
+      return (
+        <span key={idx} className="underline decoration-sky-400 decoration-2 underline-offset-4">
+          {part.slice(2, -2)}
+        </span>
+      );
+    }
+    if (part.startsWith('#') && part.includes('|')) {
+      const pipeIdx = part.indexOf('|');
+      const hex = part.slice(0, pipeIdx);
+      const label = part.slice(pipeIdx + 1);
+      const safeHex = /^#[0-9a-fA-F]{3,8}$/.test(hex) ? hex : '#38bdf8';
+      return (
+        <span key={idx} style={{ color: safeHex }} className="font-bold">
+          {label}
+        </span>
+      );
+    }
+    if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+      return (
+        <code
+          key={idx}
+          className="px-1.5 py-0.5 mx-0.5 rounded bg-white/10 font-mono text-[11px] text-amber-300"
+        >
+          {part.slice(1, -1)}
+        </code>
+      );
+    }
+    return <React.Fragment key={idx}>{part}</React.Fragment>;
+  });
+}
+
+function renderMarkdownBlocks(raw: string): React.ReactNode {
+  const lines = raw.replace(/\\n/g, '\n').split('\n');
+  const nodes: React.ReactNode[] = [];
+  let inCode = false;
+  let codeLines: string[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim().startsWith('```')) {
+      if (inCode) {
+        nodes.push(
+          <pre
+            key={`code_${i}`}
+            className="p-2.5 rounded-lg bg-[#05070C] border border-white/10 font-mono text-[11px] text-emerald-300 overflow-x-auto"
+          >
+            <code>{codeLines.join('\n')}</code>
+          </pre>
+        );
+        codeLines = [];
+        inCode = false;
+      } else {
+        inCode = true;
+      }
+      continue;
+    }
+    if (inCode) {
+      codeLines.push(line);
+      continue;
+    }
+    const trimmed = line.trim();
+    if (!trimmed) {
+      nodes.push(<div key={`sp_${i}`} className="h-1" />);
+      continue;
+    }
+    if (trimmed.startsWith('### ')) {
+      nodes.push(
+        <h5 key={`h3_${i}`} className="text-xs font-bold text-sky-300">
+          {renderRichTextSpans(trimmed.slice(4))}
+        </h5>
+      );
+    } else if (trimmed.startsWith('## ')) {
+      nodes.push(
+        <h4 key={`h2_${i}`} className="text-sm font-bold text-white">
+          {renderRichTextSpans(trimmed.slice(3))}
+        </h4>
+      );
+    } else if (trimmed.startsWith('# ')) {
+      nodes.push(
+        <h3 key={`h1_${i}`} className="text-base font-extrabold text-white border-b border-white/10 pb-1">
+          {renderRichTextSpans(trimmed.slice(2))}
+        </h3>
+      );
+    } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+      nodes.push(
+        <div key={`li_${i}`} className="flex items-start gap-2 text-xs text-slate-200 pl-1">
+          <span className="text-sky-400 font-bold leading-5">&bull;</span>
+          <span className="flex-1 leading-5">{renderRichTextSpans(trimmed.slice(2))}</span>
+        </div>
+      );
+    } else {
+      nodes.push(
+        <p key={`p_${i}`} className="text-xs text-slate-200 leading-relaxed">
+          {renderRichTextSpans(trimmed)}
+        </p>
+      );
+    }
+  }
+  return <div className="space-y-1.5">{nodes}</div>;
+}
+
+function buildBarcodeBars(value: string): Array<{ x: number; w: number }> {
+  const safe = value || 'SL-STUDIO';
+  const bars: Array<{ x: number; w: number }> = [];
+  let cursor = 4;
+  // Guard start
+  bars.push({ x: cursor, w: 2 });
+  cursor += 4;
+  bars.push({ x: cursor, w: 2 });
+  cursor += 4;
+  for (let i = 0; i < Math.min(safe.length * 3, 44); i++) {
+    const ch = safe.charCodeAt(i % safe.length);
+    const w = ((ch + i * 7) % 3) + 1;
+    const gap = ((ch * 3 + i) % 3) + 1.5;
+    bars.push({ x: cursor, w });
+    cursor += w + gap;
+    if (cursor > 192) break;
+  }
+  bars.push({ x: cursor, w: 2 });
+  cursor += 4;
+  bars.push({ x: cursor, w: 2 });
+  return bars;
+}
+
+function buildQrCells(value: string): boolean[][] {
+  const size = 21;
+  const grid: boolean[][] = Array.from({ length: size }, () => Array(size).fill(false));
+  const paintFinder = (r0: number, c0: number) => {
+    for (let r = 0; r < 7; r++) {
+      for (let c = 0; c < 7; c++) {
+        const isBorder = r === 0 || r === 6 || c === 0 || c === 6;
+        const isCenter = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+        grid[r0 + r][c0 + c] = isBorder || isCenter;
+      }
+    }
+  };
+  paintFinder(0, 0);
+  paintFinder(0, size - 7);
+  paintFinder(size - 7, 0);
+
+  let seed = 0;
+  for (let i = 0; i < value.length; i++) {
+    seed = (seed * 31 + value.charCodeAt(i)) >>> 0;
+  }
+  for (let r = 0; r < size; r++) {
+    for (let c = 0; c < size; c++) {
+      const inTopLeft = r < 8 && c < 8;
+      const inTopRight = r < 8 && c >= size - 8;
+      const inBottomLeft = r >= size - 8 && c < 8;
+      if (inTopLeft || inTopRight || inBottomLeft) continue;
+      if (r === 6 || c === 6) {
+        grid[r][c] = (r + c) % 2 === 0;
+        continue;
+      }
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      grid[r][c] = ((seed >>> 16) & 1) === 1;
+    }
+  }
+  return grid;
+}
+
 export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
   blocks,
   selectedBlockId,
@@ -289,6 +488,65 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
   >({});
   const pageDragStartX = React.useRef<Record<string, number | null>>({});
   const carouselRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
+  const audioRefs = React.useRef<Record<string, HTMLAudioElement | null>>({});
+  const mapDragRef = React.useRef<{ id: string; startX: number; startY: number; origX: number; origY: number } | null>(null);
+
+  const [slidableState, setSlidableState] = useState<Record<string, 'closed' | 'actions' | 'deleted'>>({});
+  const [slidableEditingId, setSlidableEditingId] = useState<string | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState<Record<string, { year: number; month: number; day: number }>>({});
+  const [audioPlayState, setAudioPlayState] = useState<Record<string, { playing: boolean; progress: number; muted: boolean }>>({});
+  const [webviewUrls, setWebviewUrls] = useState<Record<string, string>>({});
+  const [webviewReloadKey, setWebviewReloadKey] = useState<Record<string, number>>({});
+  const [mapViewState, setMapViewState] = useState<
+    Record<
+      string,
+      {
+        zoom: number;
+        panX: number;
+        panY: number;
+        extraMarkers: Array<{ label: string; x: number; y: number }>;
+        activeMarkerLabel: string | null;
+      }
+    >
+  >({});
+  const [dismissedAds, setDismissedAds] = useState<Record<string, boolean>>({});
+  const [lottieSpeeds, setLottieSpeeds] = useState<Record<string, number>>({});
+  const [pdfStates, setPdfStates] = useState<Record<string, { page: number; zoom: number }>>({});
+  const [muxStates, setMuxStates] = useState<Record<string, { live: boolean; viewers: number }>>({});
+  const [mouseStates, setMouseStates] = useState<
+    Record<string, { hovering: boolean; x: number; y: number; enters: number }>
+  >({});
+  const [tooltipVisible, setTooltipVisible] = useState<Record<string, boolean>>({});
+  const [chartHoveredIdx, setChartHoveredIdx] = useState<Record<string, number | null>>({});
+  const [dragTargetOver, setDragTargetOver] = useState<Record<string, boolean>>({});
+  const [dragTargetItems, setDragTargetItems] = useState<Record<string, string[]>>({});
+  const [genUiChats, setGenUiChats] = useState<
+    Record<
+      string,
+      {
+        draft: string;
+        messages: Array<{ role: 'user' | 'assistant'; text: string; cardTitle?: string; chips?: string[] }>;
+      }
+    >
+  >({});
+
+  React.useEffect(() => {
+    const activeIds = Object.keys(audioPlayState).filter((id) => audioPlayState[id]?.playing);
+    if (activeIds.length === 0) return;
+    const timer = window.setInterval(() => {
+      setAudioPlayState((prev) => {
+        const next = { ...prev };
+        activeIds.forEach((id) => {
+          const cur = prev[id];
+          if (!cur?.playing) return;
+          const nextProg = cur.progress >= 100 ? 0 : cur.progress + 2;
+          next[id] = { ...cur, progress: nextProg };
+        });
+        return next;
+      });
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [audioPlayState]);
 
   React.useEffect(() => {
     return () => {
@@ -543,6 +801,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
     tp === 'ui-flex' ||
     tp === 'ui-vertical-divider' ||
     tp === 'ui-select' ||
+    tp === 'ui-calendar' ||
+    tp === 'ui-google-map' ||
+    tp === 'ui-rive' ||
+    tp === 'ui-pdf-viewer' ||
+    tp === 'ui-language-selector' ||
+    tp === 'ui-chart' ||
+    tp === 'ui-sticky-header' ||
+    tp === 'ui-genui-chat' ||
     (tp === 'ui-checkbox' && variant === 'radio');
 
   return (
@@ -2887,6 +3153,2062 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* 12b. EXTENDED BASE ELEMENTS (34 Widgets) */}
+              {block.type === 'ui-richtext' && (
+                <div className="px-5 py-1.5">
+                  <div
+                    style={surfaceStyle}
+                    className={`${customPad || 'p-4'} ${customRadius} ${
+                      customBg || 'bg-white/[0.04]'
+                    } border border-white/10 ${alignClass} space-y-1.5`}
+                  >
+                    <div
+                      style={primaryStyle}
+                      className={`${customFont || 'text-sm'} ${customWeight || 'font-normal'} ${
+                        customTextColor || 'text-slate-100'
+                      } leading-relaxed`}
+                    >
+                      {renderRichTextSpans(displayContent)}
+                    </div>
+                    {block.subtitle && (
+                      <p style={subtitleStyle} className="text-[10px] text-slate-400">
+                        {block.subtitle}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {block.type === 'ui-icon-button' && (
+                <div className={`px-5 py-1.5 ${alignClass}`}>
+                  <div className="inline-flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      disabled={isDisabled}
+                      title={displayContent}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectBlock(block.id);
+                        if (!isDisabled) onTriggerAction(block, formInputs);
+                      }}
+                      style={{
+                        backgroundColor: block.style?.customBgHex || resolvedAccent,
+                        color: block.style?.customTextHex || '#ffffff',
+                        boxShadow: block.style?.boxShadow,
+                      }}
+                      className={`w-11 h-11 ${
+                        block.style?.borderRadius || 'rounded-full'
+                      } flex items-center justify-center shadow-lg transition-transform active:scale-90 hover:brightness-110 cursor-pointer border border-white/15`}
+                    >
+                      {renderVectorIcon(block.iconName || 'plus', 'w-5 h-5')}
+                    </button>
+                    {displayContent && (
+                      <span className="text-xs font-medium text-slate-300">{displayContent}</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {block.type === 'ui-list-tile' && (
+                <div className="px-5 py-1.5">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onSelectBlock(block.id);
+                      onTriggerAction(block, formInputs);
+                    }}
+                    style={surfaceStyle}
+                    className={`w-full ${customPad || 'p-3'} ${customRadius} ${
+                      customBg || 'bg-white/[0.04]'
+                    } border border-white/10 hover:border-sky-400/40 flex items-center gap-3 text-left transition-all cursor-pointer`}
+                  >
+                    <div
+                      style={{ backgroundColor: `${resolvedAccent}22`, color: resolvedAccent }}
+                      className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 border border-white/10"
+                    >
+                      {renderVectorIcon(block.iconName || 'settings', 'w-4 h-4')}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p
+                        style={primaryStyle}
+                        className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                          customTextColor || 'text-white'
+                        } truncate`}
+                      >
+                        {displayContent}
+                      </p>
+                      {block.subtitle && (
+                        <p style={subtitleStyle} className="text-[10px] text-slate-400 truncate">
+                          {block.subtitle}
+                        </p>
+                      )}
+                    </div>
+                    {block.badgeText && (
+                      <span
+                        style={{ backgroundColor: resolvedAccent }}
+                        className="px-2 py-0.5 rounded-full text-[9px] font-bold text-white shrink-0"
+                      >
+                        {block.badgeText}
+                      </span>
+                    )}
+                    <ChevronRight className="w-4 h-4 text-slate-400 shrink-0" />
+                  </button>
+                </div>
+              )}
+
+              {block.type === 'ui-slidable-tile' && (() => {
+                const mode = slidableState[block.id] || 'closed';
+                if (mode === 'deleted') {
+                  return (
+                    <div className="px-5 py-1.5">
+                      <div className="p-2.5 rounded-xl bg-rose-950/30 border border-rose-500/30 flex items-center justify-between text-xs text-rose-200">
+                        <span>Item archived/deleted</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSlidableState((p) => ({ ...p, [block.id]: 'closed' }));
+                          }}
+                          className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] font-semibold text-white cursor-pointer"
+                        >
+                          Undo
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+                const actionsOpen = mode === 'actions';
+                return (
+                  <div className="px-5 py-1.5">
+                    <div className="relative overflow-hidden rounded-xl border border-white/10 bg-[#0B0E14]">
+                      <div className="absolute inset-y-0 right-0 flex items-stretch z-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSlidableEditingId(slidableEditingId === block.id ? null : block.id);
+                          }}
+                          className="px-3 bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          <span>Edit</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSlidableState((p) => ({ ...p, [block.id]: 'deleted' }));
+                          }}
+                          className="px-3 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Delete</span>
+                        </button>
+                      </div>
+                      <div
+                        style={{
+                          ...surfaceStyle,
+                          transform: actionsOpen ? 'translateX(-118px)' : 'translateX(0px)',
+                        }}
+                        className={`relative z-10 ${customPad || 'p-3'} ${
+                          customBg || 'bg-[#161B26]'
+                        } flex items-center gap-3 transition-transform duration-200`}
+                      >
+                        <div className="w-8 h-8 rounded-lg bg-sky-500/15 border border-sky-400/30 flex items-center justify-center text-sky-300 shrink-0">
+                          {renderVectorIcon(block.iconName || 'sparkles', 'w-4 h-4')}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          {slidableEditingId === block.id ? (
+                            <input
+                              type="text"
+                              value={block.content}
+                              onClick={(e) => e.stopPropagation()}
+                              onChange={(e) => onUpdateBlock({ ...block, content: e.target.value })}
+                              onKeyDown={(e) => e.key === 'Enter' && setSlidableEditingId(null)}
+                              className="w-full px-2 py-0.5 rounded bg-black/50 border border-sky-400 text-xs text-white outline-none"
+                            />
+                          ) : (
+                            <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                          )}
+                          {block.subtitle && (
+                            <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSlidableState((p) => ({
+                              ...p,
+                              [block.id]: actionsOpen ? 'closed' : 'actions',
+                            }));
+                          }}
+                          className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-[10px] font-semibold text-sky-300 flex items-center gap-1 cursor-pointer shrink-0"
+                        >
+                          <ChevronLeft className={`w-3 h-3 transition-transform ${actionsOpen ? 'rotate-180' : ''}`} />
+                          <span>{actionsOpen ? 'Close' : 'Slide'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-calendar' && (() => {
+                const now = new Date();
+                const cal = calendarMonth[block.id] || {
+                  year: now.getFullYear(),
+                  month: now.getMonth(),
+                  day: now.getDate(),
+                };
+                const firstDayIdx = new Date(cal.year, cal.month, 1).getDay();
+                const daysInMonth = new Date(cal.year, cal.month + 1, 0).getDate();
+                const monthNames = [
+                  'January', 'February', 'March', 'April', 'May', 'June',
+                  'July', 'August', 'September', 'October', 'November', 'December',
+                ];
+                const eventDays = new Set(
+                  (parsedOptions.length > 0 ? parsedOptions : ['5', '12', '18', '24'])
+                    .map((s) => Number.parseInt(s, 10))
+                    .filter((n) => !Number.isNaN(n))
+                );
+                const stepMonth = (delta: number) => {
+                  const d = new Date(cal.year, cal.month + delta, 1);
+                  setCalendarMonth((p) => ({
+                    ...p,
+                    [block.id]: { year: d.getFullYear(), month: d.getMonth(), day: 1 },
+                  }));
+                };
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2.5`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-xs font-bold text-white">{displayContent}</p>
+                          <p className="text-[10px] text-sky-300 font-semibold">
+                            {monthNames[cal.month]} {cal.year} · Selected: {cal.day}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              stepMonth(-1);
+                            }}
+                            className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              stepMonth(1);
+                            }}
+                            className="p-1 rounded-lg bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-7 gap-1 text-center text-[9px] font-mono text-slate-400">
+                        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+                          <div key={d} className="py-0.5">{d}</div>
+                        ))}
+                        {Array.from({ length: firstDayIdx }).map((_, idx) => (
+                          <div key={`blank_${idx}`} />
+                        ))}
+                        {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((dayNum) => {
+                          const isSelectedDay = cal.day === dayNum;
+                          const hasEvent = eventDays.has(dayNum);
+                          return (
+                            <button
+                              key={dayNum}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setCalendarMonth((p) => ({
+                                  ...p,
+                                  [block.id]: { ...cal, day: dayNum },
+                                }));
+                              }}
+                              style={isSelectedDay ? { backgroundColor: resolvedAccent } : undefined}
+                              className={`relative py-1 rounded-md text-[10px] font-semibold cursor-pointer transition-colors ${
+                                isSelectedDay
+                                  ? 'text-white shadow'
+                                  : 'text-slate-200 hover:bg-white/10'
+                              }`}
+                            >
+                              {dayNum}
+                              {hasEvent && (
+                                <span
+                                  className={`absolute bottom-0.5 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full ${
+                                    isSelectedDay ? 'bg-white' : 'bg-amber-400'
+                                  }`}
+                                />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {eventDays.has(cal.day) && (
+                        <div className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-400/30 text-[10px] text-amber-200">
+                          Event scheduled for {monthNames[cal.month]} {cal.day}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-toggle-icon' && (() => {
+                const active = Boolean(block.isExpanded);
+                const count = block.counterValue ?? 0;
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 flex items-center justify-between gap-3`}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                        {block.subtitle && (
+                          <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdateBlock({
+                            ...block,
+                            isExpanded: !active,
+                            counterValue: active ? Math.max(0, count - 1) : count + 1,
+                          });
+                        }}
+                        className={`px-3 py-1.5 rounded-full border flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer ${
+                          active
+                            ? 'bg-rose-500/20 border-rose-400/60 text-rose-300 scale-105'
+                            : 'bg-white/5 border-white/15 text-slate-300 hover:text-white'
+                        }`}
+                      >
+                        {renderVectorIcon(block.iconName || 'heart', 'w-4 h-4')}
+                        <span className="font-mono tabular-nums">{count}</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-audio-player' && (() => {
+                const state = audioPlayState[block.id] || { playing: false, progress: 28, muted: false };
+                const totalSec = 165;
+                const currentSec = Math.round((state.progress / 100) * totalSec);
+                const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+                const playToggle = (e: React.MouseEvent) => {
+                  e.stopPropagation();
+                  const nextPlaying = !state.playing;
+                  const audioEl = audioRefs.current[block.id];
+                  if (audioEl && block.videoUrl) {
+                    if (nextPlaying) void audioEl.play().catch(() => {});
+                    else audioEl.pause();
+                  } else if (nextPlaying && !state.muted) {
+                    try {
+                      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+                      const ctx = new AudioCtx();
+                      const osc = ctx.createOscillator();
+                      const gain = ctx.createGain();
+                      osc.type = 'sine';
+                      osc.frequency.setValueAtTime(440, ctx.currentTime);
+                      osc.frequency.exponentialRampToValueAtTime(660, ctx.currentTime + 0.18);
+                      gain.gain.setValueAtTime(0.06, ctx.currentTime);
+                      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.28);
+                      osc.connect(gain);
+                      gain.connect(ctx.destination);
+                      osc.start();
+                      osc.stop(ctx.currentTime + 0.3);
+                    } catch {
+                      // ignore autoplay block
+                    }
+                  }
+                  setAudioPlayState((p) => ({
+                    ...p,
+                    [block.id]: { ...state, playing: nextPlaying },
+                  }));
+                };
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2.5`}
+                    >
+                      {block.videoUrl && (
+                        <audio
+                          ref={(el) => {
+                            audioRefs.current[block.id] = el;
+                          }}
+                          src={block.videoUrl}
+                          muted={state.muted}
+                          onEnded={() =>
+                            setAudioPlayState((p) => ({
+                              ...p,
+                              [block.id]: { ...state, playing: false, progress: 0 },
+                            }))
+                          }
+                        />
+                      )}
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={playToggle}
+                          style={{ backgroundColor: resolvedAccent }}
+                          className="w-9 h-9 rounded-full flex items-center justify-center text-white shadow shrink-0 cursor-pointer hover:brightness-110"
+                        >
+                          {state.playing ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 ml-0.5" />}
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                          {block.subtitle && (
+                            <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAudioPlayState((p) => ({
+                              ...p,
+                              [block.id]: { ...state, muted: !state.muted },
+                            }));
+                          }}
+                          className="p-1.5 rounded-lg bg-white/5 hover:bg-white/15 text-slate-300 cursor-pointer"
+                        >
+                          {state.muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      <div className="flex items-end gap-1 h-7 px-1">
+                        {[35, 65, 50, 90, 75, 45, 85, 60, 95, 70, 50, 80, 65, 92, 48, 72, 55, 84, 42, 60].map(
+                          (h, idx) => {
+                            const pct = (idx / 20) * 100;
+                            const filled = pct <= state.progress;
+                            return (
+                              <div
+                                key={idx}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setAudioPlayState((p) => ({
+                                    ...p,
+                                    [block.id]: { ...state, progress: Math.round(pct) },
+                                  }));
+                                }}
+                                style={{
+                                  height: `${state.playing ? Math.max(25, ((h + (state.progress % 30)) % 95)) : h}%`,
+                                  backgroundColor: filled ? resolvedAccent : 'rgba(255,255,255,0.16)',
+                                }}
+                                className="flex-1 rounded-full transition-all duration-150 cursor-pointer"
+                              />
+                            );
+                          }
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                        <span>{fmt(currentSec)}</span>
+                        <span>{fmt(totalSec)}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-webview' && (() => {
+                const rawUrl = webviewUrls[block.id] ?? block.actionPayload ?? block.content ?? 'https://example.com';
+                const safeUrl = /^https?:\/\//i.test(rawUrl.trim())
+                  ? rawUrl.trim()
+                  : `https://${rawUrl.trim() || 'example.com'}`;
+                const reloadNum = webviewReloadKey[block.id] || 0;
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`rounded-2xl overflow-hidden border border-white/15 bg-[#090C12] flex flex-col`}
+                    >
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="px-2.5 py-2 bg-[#141923] border-b border-white/10 flex items-center gap-2"
+                      >
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span className="w-2 h-2 rounded-full bg-rose-400/80" />
+                          <span className="w-2 h-2 rounded-full bg-amber-400/80" />
+                          <span className="w-2 h-2 rounded-full bg-emerald-400/80" />
+                        </div>
+                        <input
+                          type="text"
+                          value={rawUrl}
+                          onChange={(e) =>
+                            setWebviewUrls((p) => ({ ...p, [block.id]: e.target.value }))
+                          }
+                          className="flex-1 min-w-0 px-2 py-1 rounded bg-[#090B10] border border-white/10 text-[10px] font-mono text-sky-200 outline-none focus:border-sky-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setWebviewReloadKey((p) => ({ ...p, [block.id]: (p[block.id] || 0) + 1 }))
+                          }
+                          title="Reload WebView"
+                          className="p-1 rounded bg-white/10 hover:bg-white/20 text-slate-200 cursor-pointer"
+                        >
+                          <RefreshCw className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <div className="relative h-48 bg-white">
+                        <iframe
+                          key={`${safeUrl}_${reloadNum}`}
+                          src={safeUrl}
+                          title={displayContent}
+                          sandbox="allow-scripts allow-same-origin allow-forms"
+                          className="w-full h-full border-0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-static-map' && (
+                <div className="px-5 py-1.5">
+                  <div
+                    style={surfaceStyle}
+                    className={`${customRadius} overflow-hidden border border-white/15 bg-[#0E1624]`}
+                  >
+                    <div className="relative h-36 bg-[#131C2B] overflow-hidden select-none">
+                      <svg viewBox="0 0 320 140" className="w-full h-full">
+                        <rect width="320" height="140" fill="#131C2B" />
+                        <path d="M0 30 H320 M0 75 H320 M0 112 H320" stroke="#1E293B" strokeWidth="5" />
+                        <path d="M55 0 V140 M145 0 V140 M245 0 V140" stroke="#1E293B" strokeWidth="6" />
+                        <path d="M0 95 Q160 65 320 98" stroke="#0284C7" strokeOpacity="0.4" strokeWidth="10" fill="none" />
+                        <rect x="70" y="38" width="60" height="28" rx="4" fill="#14532D" fillOpacity="0.45" />
+                        <rect x="160" y="80" width="70" height="25" rx="4" fill="#1E293B" />
+                      </svg>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <div className="w-8 h-8 rounded-full bg-rose-500/25 border border-rose-400 flex items-center justify-center text-rose-400 shadow-lg">
+                          <MapPin className="w-4 h-4 fill-rose-500/40" />
+                        </div>
+                        <span className="mt-1 px-2 py-0.5 rounded bg-black/75 border border-white/15 text-[10px] font-bold text-white">
+                          {displayContent}
+                        </span>
+                      </div>
+                      <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded bg-black/70 text-[8px] font-mono uppercase text-slate-300 border border-white/10">
+                        Static Map
+                      </span>
+                    </div>
+                    {block.subtitle && (
+                      <div className="px-3 py-2 text-[10px] font-mono text-slate-400 border-t border-white/10">
+                        {block.subtitle}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {block.type === 'ui-google-map' && (() => {
+                const ms = mapViewState[block.id] || {
+                  zoom: 1,
+                  panX: 0,
+                  panY: 0,
+                  extraMarkers: [],
+                  activeMarkerLabel: null,
+                };
+                const baseMarkers = (parsedOptions.length > 0
+                  ? parsedOptions
+                  : ['HQ Studio | 45 | 42', 'Cafe Spot | 68 | 58']
+                ).map((raw, idx) => {
+                  const [lbl, xStr, yStr] = raw.split('|').map((s) => s.trim());
+                  return {
+                    label: lbl || `Pin ${idx + 1}`,
+                    x: Number(xStr) || 35 + idx * 25,
+                    y: Number(yStr) || 40 + idx * 15,
+                  };
+                });
+                const allMarkers = [...baseMarkers, ...ms.extraMarkers];
+                return (
+                  <div className="px-5 py-1.5">
+                    <div className="rounded-2xl overflow-hidden border border-white/15 bg-[#0D1520]">
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => {
+                          mapDragRef.current = {
+                            id: block.id,
+                            startX: e.clientX,
+                            startY: e.clientY,
+                            origX: ms.panX,
+                            origY: ms.panY,
+                          };
+                        }}
+                        onPointerMove={(e) => {
+                          if (!mapDragRef.current || mapDragRef.current.id !== block.id) return;
+                          const dx = e.clientX - mapDragRef.current.startX;
+                          const dy = e.clientY - mapDragRef.current.startY;
+                          setMapViewState((p) => ({
+                            ...p,
+                            [block.id]: {
+                              ...ms,
+                              panX: Math.max(-80, Math.min(80, mapDragRef.current!.origX + dx)),
+                              panY: Math.max(-50, Math.min(50, mapDragRef.current!.origY + dy)),
+                            },
+                          }));
+                        }}
+                        onPointerUp={() => {
+                          mapDragRef.current = null;
+                        }}
+                        onPointerLeave={() => {
+                          mapDragRef.current = null;
+                        }}
+                        className="relative h-44 bg-[#101C2E] overflow-hidden cursor-grab active:cursor-grabbing select-none"
+                      >
+                        <div
+                          style={{
+                            transform: `translate(${ms.panX}px, ${ms.panY}px) scale(${ms.zoom})`,
+                          }}
+                          className="absolute inset-0 transition-transform duration-75 origin-center"
+                        >
+                          <svg viewBox="0 0 360 180" className="w-full h-full">
+                            <rect width="360" height="180" fill="#101C2E" />
+                            <path d="M0 35 H360 M0 90 H360 M0 142 H360" stroke="#1E2F47" strokeWidth="6" />
+                            <path d="M70 0 V180 M180 0 V180 M285 0 V180" stroke="#1E2F47" strokeWidth="7" />
+                            <path d="M0 120 C110 70, 220 150, 360 65" stroke="#0EA5E9" strokeOpacity="0.35" strokeWidth="12" fill="none" />
+                            <rect x="88" y="45" width="76" height="36" rx="6" fill="#166534" fillOpacity="0.4" />
+                          </svg>
+                          {allMarkers.map((mk, mIdx) => (
+                            <button
+                              key={`${mk.label}_${mIdx}`}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setMapViewState((p) => ({
+                                  ...p,
+                                  [block.id]: { ...ms, activeMarkerLabel: mk.label },
+                                }));
+                              }}
+                              style={{ left: `${mk.x}%`, top: `${mk.y}%` }}
+                              className="absolute -translate-x-1/2 -translate-y-full flex flex-col items-center cursor-pointer group"
+                            >
+                              <span className="px-1.5 py-0.5 rounded bg-black/80 text-[9px] font-semibold text-white whitespace-nowrap mb-0.5 border border-white/15">
+                                {mk.label}
+                              </span>
+                              <MapPin className="w-4 h-4 text-rose-400 fill-rose-500/40 drop-shadow" />
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/75 border border-white/15 text-[9px] font-semibold text-sky-300">
+                          {ms.activeMarkerLabel
+                            ? `Pin: ${ms.activeMarkerLabel}`
+                            : `${displayContent} · ${ms.zoom.toFixed(1)}x`}
+                        </div>
+
+                        <div className="absolute bottom-2 right-2 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const n = ms.extraMarkers.length + 1;
+                              setMapViewState((p) => ({
+                                ...p,
+                                [block.id]: {
+                                  ...ms,
+                                  extraMarkers: [
+                                    ...ms.extraMarkers,
+                                    { label: `New Pin #${n}`, x: 25 + ((n * 19) % 55), y: 30 + ((n * 17) % 50) },
+                                  ],
+                                },
+                              }));
+                            }}
+                            className="px-2 py-1 rounded bg-[#2563EB] hover:bg-blue-500 text-white text-[9px] font-bold cursor-pointer shadow"
+                          >
+                            + Pin
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMapViewState((p) => ({
+                                ...p,
+                                [block.id]: { ...ms, zoom: Math.min(2.4, ms.zoom + 0.3) },
+                              }));
+                            }}
+                            className="p-1 rounded bg-black/75 hover:bg-black text-white border border-white/15 cursor-pointer"
+                          >
+                            <ZoomIn className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setMapViewState((p) => ({
+                                ...p,
+                                [block.id]: { ...ms, zoom: Math.max(0.8, ms.zoom - 0.3) },
+                              }));
+                            }}
+                            className="p-1 rounded bg-black/75 hover:bg-black text-white border border-white/15 cursor-pointer"
+                          >
+                            <ZoomOut className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-ad-banner' && (
+                <div className="px-5 py-1.5">
+                  {dismissedAds[block.id] ? (
+                    <div className="px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 flex items-center justify-between text-[10px] text-slate-400">
+                      <span>Ad banner hidden</span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDismissedAds((p) => ({ ...p, [block.id]: false }));
+                        }}
+                        className="text-sky-400 hover:underline cursor-pointer"
+                      >
+                        Show Ad
+                      </button>
+                    </div>
+                  ) : (
+                    <div
+                      style={surfaceStyle}
+                      className="p-3 rounded-xl bg-gradient-to-r from-amber-500/15 via-indigo-500/15 to-sky-500/15 border border-amber-400/30 flex items-center gap-2.5"
+                    >
+                      <span className="px-1.5 py-0.5 rounded bg-amber-400 text-black text-[9px] font-extrabold tracking-wider shrink-0">
+                        {block.badgeText || 'AD'}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold text-white truncate">{displayContent}</p>
+                        {block.subtitle && (
+                          <p className="text-[9px] text-slate-300 truncate">{block.subtitle}</p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onTriggerAction(block, formInputs);
+                        }}
+                        style={{ backgroundColor: resolvedAccent }}
+                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-white shrink-0 cursor-pointer"
+                      >
+                        {block.actionPayload || 'Open'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDismissedAds((p) => ({ ...p, [block.id]: true }));
+                        }}
+                        className="p-1 text-slate-400 hover:text-white cursor-pointer"
+                        title="Dismiss Ad"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {block.type === 'ui-lottie' && (() => {
+                const playing = block.isExpanded !== false;
+                const speed = lottieSpeeds[block.id] || 1;
+                const preset = block.shaderPreset || 'orbit';
+                const dur = `${(2.4 / speed).toFixed(2)}s`;
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-4'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 flex items-center gap-4`}
+                    >
+                      <div className="w-16 h-16 rounded-xl bg-[#090B10] border border-sky-400/25 flex items-center justify-center shrink-0 overflow-hidden">
+                        <svg viewBox="0 0 64 64" className="w-14 h-14">
+                          <circle cx="32" cy="32" r="22" stroke="#38BDF8" strokeOpacity="0.25" strokeWidth="2" fill="none" />
+                          {preset === 'pulse' ? (
+                            <circle cx="32" cy="32" r="10" fill="#38BDF8" fillOpacity="0.8">
+                              {playing && (
+                                <animate attributeName="r" values="8;20;8" dur={dur} repeatCount="indefinite" />
+                              )}
+                            </circle>
+                          ) : preset === 'check' ? (
+                            <path d="M18 33 L28 43 L47 22" stroke="#34D399" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none">
+                              {playing && (
+                                <animate attributeName="stroke-opacity" values="0.35;1;0.35" dur={dur} repeatCount="indefinite" />
+                              )}
+                            </path>
+                          ) : (
+                            <g>
+                              <circle cx="32" cy="10" r="5" fill="#38BDF8" />
+                              <circle cx="32" cy="32" r="6" fill="#818CF8" />
+                              {playing && (
+                                <animateTransform
+                                  attributeName="transform"
+                                  type="rotate"
+                                  from="0 32 32"
+                                  to="360 32 32"
+                                  dur={dur}
+                                  repeatCount="indefinite"
+                                />
+                              )}
+                            </g>
+                          )}
+                        </svg>
+                      </div>
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div>
+                          <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                          <p className="text-[10px] text-slate-400 truncate">
+                            Preset: {preset} · {speed}x
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateBlock({ ...block, isExpanded: !playing });
+                            }}
+                            className="px-2 py-0.5 rounded bg-sky-500/20 border border-sky-400/30 text-[10px] font-semibold text-sky-200 cursor-pointer"
+                          >
+                            {playing ? 'Pause' : 'Play'}
+                          </button>
+                          {[0.5, 1, 2].map((sp) => (
+                            <button
+                              key={sp}
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setLottieSpeeds((p) => ({ ...p, [block.id]: sp }));
+                              }}
+                              className={`px-1.5 py-0.5 rounded text-[9px] font-mono cursor-pointer ${
+                                speed === sp
+                                  ? 'bg-white/20 text-white font-bold'
+                                  : 'bg-white/5 text-slate-400 hover:text-white'
+                              }`}
+                            >
+                              {sp}x
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-blur' && (() => {
+                const blurPx = block.blurAmount ?? 12;
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      onDragOver={(e) => handleContainerDragOver(e, block.id)}
+                      onDragLeave={() => dragOverContainerId === block.id && setDragOverContainerId(null)}
+                      onDrop={(e) => void handleContainerDrop(e, block.id)}
+                      className={`relative overflow-hidden ${customRadius} border ${
+                        dragOverContainerId === block.id ? 'border-[#4D97FF] ring-2 ring-[#4D97FF]' : 'border-white/20'
+                      }`}
+                    >
+                      {block.imageUrl ? (
+                        <img
+                          src={block.imageUrl}
+                          alt=""
+                          className="absolute inset-0 w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="absolute inset-0 bg-gradient-to-br from-sky-500/50 via-fuchsia-500/40 to-amber-400/40">
+                          <div className="absolute -top-6 -left-6 w-28 h-28 rounded-full bg-cyan-400/60" />
+                          <div className="absolute -bottom-6 right-4 w-32 h-32 rounded-full bg-purple-500/60" />
+                        </div>
+                      )}
+                      <div
+                        style={{
+                          backdropFilter: `blur(${blurPx}px)`,
+                          WebkitBackdropFilter: `blur(${blurPx}px)`,
+                        }}
+                        className="relative z-10 p-4 bg-slate-950/40 space-y-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-white">{displayContent}</span>
+                          <span className="px-2 py-0.5 rounded-full bg-black/50 border border-white/15 text-[9px] font-mono text-sky-200">
+                            blur({blurPx}px)
+                          </span>
+                        </div>
+                        {block.subtitle && (
+                          <p className="text-[10px] text-slate-200/85">{block.subtitle}</p>
+                        )}
+                        {block.children && block.children.length > 0 && (
+                          <div className="pt-1 space-y-2">
+                            {block.children.map((ch, idx) => renderChildWidget(ch, block, idx))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-aspect-ratio' && (() => {
+                const ratio = block.aspectRatio || '16/9';
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      onDragOver={(e) => handleContainerDragOver(e, block.id)}
+                      onDragLeave={() => dragOverContainerId === block.id && setDragOverContainerId(null)}
+                      onDrop={(e) => void handleContainerDrop(e, block.id)}
+                      style={{ ...surfaceStyle, aspectRatio: ratio }}
+                      className={`relative w-full max-h-64 overflow-hidden ${customRadius} ${
+                        customBg || 'bg-[#0C1018]'
+                      } border ${
+                        dragOverContainerId === block.id ? 'border-[#4D97FF] ring-2 ring-[#4D97FF]' : 'border-sky-400/30'
+                      } flex flex-col items-center justify-center p-3`}
+                    >
+                      {block.imageUrl && (
+                        <img
+                          src={block.imageUrl}
+                          alt={displayContent}
+                          className="absolute inset-0 w-full h-full object-cover opacity-85"
+                        />
+                      )}
+                      <div className="relative z-10 text-center space-y-1 bg-black/45 px-3 py-1.5 rounded-xl backdrop-blur-sm border border-white/10">
+                        <div className="flex items-center justify-center gap-1.5 text-sky-300 text-xs font-bold">
+                          <Maximize2 className="w-3.5 h-3.5" />
+                          <span>{displayContent}</span>
+                        </div>
+                        <p className="text-[10px] font-mono text-slate-300">Ratio: {ratio.replace('/', ':')}</p>
+                      </div>
+                      {block.children && block.children.length > 0 && (
+                        <div className="relative z-10 w-full mt-2 space-y-1.5">
+                          {block.children.map((ch, idx) => renderChildWidget(ch, block, idx))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-shader-wrap' && (() => {
+                const preset = block.shaderPreset || 'hologram';
+                const overlayGradient =
+                  preset === 'neon-wave'
+                    ? 'linear-gradient(120deg, rgba(236,72,153,0.35), rgba(56,189,248,0.35), rgba(16,185,129,0.35))'
+                    : preset === 'prism'
+                    ? 'conic-gradient(from 90deg, rgba(244,63,94,0.3), rgba(234,179,8,0.3), rgba(34,211,238,0.3), rgba(168,85,247,0.3))'
+                    : 'linear-gradient(135deg, rgba(56,189,248,0.28), rgba(168,85,247,0.28), rgba(45,212,191,0.28))';
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      onDragOver={(e) => handleContainerDragOver(e, block.id)}
+                      onDragLeave={() => dragOverContainerId === block.id && setDragOverContainerId(null)}
+                      onDrop={(e) => void handleContainerDrop(e, block.id)}
+                      className={`relative overflow-hidden ${customRadius} border border-cyan-400/35 p-4 bg-[#0D111A]`}
+                    >
+                      <div
+                        style={{ background: overlayGradient }}
+                        className="absolute inset-0 animate-pulse pointer-events-none"
+                      />
+                      {preset === 'scanline' && (
+                        <div
+                          style={{
+                            backgroundImage:
+                              'repeating-linear-gradient(0deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, transparent 1px, transparent 4px)',
+                          }}
+                          className="absolute inset-0 pointer-events-none"
+                        />
+                      )}
+                      <div className="relative z-10 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-white">{displayContent}</span>
+                          <span className="px-2 py-0.5 rounded bg-cyan-500/20 border border-cyan-400/30 text-[9px] font-mono text-cyan-200 uppercase">
+                            {preset}
+                          </span>
+                        </div>
+                        {block.subtitle && (
+                          <p className="text-[10px] text-slate-200/80">{block.subtitle}</p>
+                        )}
+                        {block.children && block.children.length > 0 && (
+                          <div className="pt-1 space-y-2">
+                            {block.children.map((ch, idx) => renderChildWidget(ch, block, idx))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-shader-fill' && (() => {
+                const preset = block.shaderPreset || 'plasma';
+                const shaderBg =
+                  preset === 'aurora'
+                    ? 'radial-gradient(circle at 20% 25%, #10b981, transparent 50%), radial-gradient(circle at 80% 70%, #6366f1, transparent 55%), linear-gradient(135deg, #042f2e, #0f172a)'
+                    : preset === 'liquid-cyan'
+                    ? 'radial-gradient(circle at 30% 30%, #22d3ee, transparent 48%), radial-gradient(circle at 75% 65%, #3b82f6, transparent 52%), #082f49'
+                    : 'radial-gradient(circle at 18% 20%, #ec4899, transparent 48%), radial-gradient(circle at 82% 75%, #38bdf8, transparent 52%), linear-gradient(135deg, #3b0764, #0f172a)';
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={{ background: shaderBg, height: block.style?.height || '120px' }}
+                      className={`${customRadius} border border-white/20 p-4 flex flex-col justify-between relative overflow-hidden`}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-pulse pointer-events-none" />
+                      <span className="relative z-10 self-end px-2 py-0.5 rounded bg-black/50 text-[9px] font-mono uppercase text-white border border-white/15">
+                        Shader: {preset}
+                      </span>
+                      <div className="relative z-10">
+                        <p className="text-sm font-extrabold text-white drop-shadow">{displayContent}</p>
+                        {block.subtitle && (
+                          <p className="text-[10px] text-white/85">{block.subtitle}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-transform' && (() => {
+                const rot = block.transformRotate ?? -4;
+                const scl = (block.transformScale ?? 100) / 100;
+                const tx = block.transformTranslateX ?? 0;
+                const ty = block.transformTranslateY ?? 0;
+                return (
+                  <div className="px-5 py-3">
+                    <div
+                      onDragOver={(e) => handleContainerDragOver(e, block.id)}
+                      onDragLeave={() => dragOverContainerId === block.id && setDragOverContainerId(null)}
+                      onDrop={(e) => void handleContainerDrop(e, block.id)}
+                      style={{
+                        ...surfaceStyle,
+                        transform: `translate(${tx}px, ${ty}px) rotate(${rot}deg) scale(${scl})`,
+                      }}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-indigo-950/40'
+                      } border border-indigo-400/35 transition-transform duration-150 space-y-1.5`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-white">{displayContent}</span>
+                        <span className="text-[9px] font-mono text-indigo-300 bg-black/40 px-1.5 py-0.5 rounded">
+                          {rot}° · {Math.round(scl * 100)}%
+                        </span>
+                      </div>
+                      {block.subtitle && (
+                        <p className="text-[10px] text-slate-300">{block.subtitle}</p>
+                      )}
+                      {block.children && block.children.length > 0 && (
+                        <div className="pt-1 space-y-1.5">
+                          {block.children.map((ch, idx) => renderChildWidget(ch, block, idx))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-media-display' && (() => {
+                const parsedVid = parseVideoUrl(block.videoUrl);
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2`}
+                    >
+                      {parsedVid.kind === 'youtube' || parsedVid.kind === 'vimeo' ? (
+                        <div className="w-full aspect-video rounded-lg overflow-hidden bg-black">
+                          <iframe src={parsedVid.embedUrl} title={displayContent} className="w-full h-full border-0" allowFullScreen />
+                        </div>
+                      ) : parsedVid.kind === 'direct' ? (
+                        <video controls playsInline src={parsedVid.embedUrl} className="w-full max-h-44 rounded-lg bg-black" />
+                      ) : block.imageUrl ? (
+                        <img src={block.imageUrl} alt={displayContent} className="w-full max-h-48 object-cover rounded-lg border border-white/10" />
+                      ) : (
+                        <div className="h-32 rounded-lg bg-gradient-to-br from-slate-900 to-sky-950/60 border border-dashed border-sky-400/35 flex flex-col items-center justify-center gap-1.5 text-sky-300 text-xs">
+                          <Layers className="w-5 h-5" />
+                          <span>Upload Photo or Paste Video URL</span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                        <span className="text-[9px] font-mono uppercase px-1.5 py-0.5 rounded bg-white/10 text-sky-300">
+                          {block.videoUrl ? 'VIDEO' : 'MEDIA'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-rive' && (() => {
+                const states = parsedOptions.length > 0 ? parsedOptions : ['Idle', 'Active', 'Celebrate'];
+                const activeIdx = (block.counterValue ?? 0) % states.length;
+                const activeState = states[activeIdx];
+                const isCelebrate = activeState.toLowerCase().includes('celeb');
+                const isActive = activeState.toLowerCase().includes('act');
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-4'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2.5`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateBlock({ ...block, counterValue: (activeIdx + 1) % states.length });
+                          }}
+                          className={`w-14 h-14 rounded-2xl border flex items-center justify-center transition-all duration-300 cursor-pointer shrink-0 ${
+                            isCelebrate
+                              ? 'bg-amber-500/25 border-amber-400 text-amber-300 scale-110 rotate-6'
+                              : isActive
+                              ? 'bg-emerald-500/25 border-emerald-400 text-emerald-300 scale-105'
+                              : 'bg-indigo-500/20 border-indigo-400/40 text-indigo-300'
+                          }`}
+                        >
+                          {isCelebrate ? (
+                            <Sparkles className="w-7 h-7 animate-bounce" />
+                          ) : isActive ? (
+                            <Rocket className="w-7 h-7 animate-pulse" />
+                          ) : (
+                            <Zap className="w-6 h-6" />
+                          )}
+                        </button>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                          <p className="text-[10px] text-sky-300 font-mono">State: {activeState}</p>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {states.map((st, idx) => (
+                          <button
+                            key={st}
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateBlock({ ...block, counterValue: idx });
+                            }}
+                            style={idx === activeIdx ? { backgroundColor: resolvedAccent } : undefined}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold cursor-pointer ${
+                              idx === activeIdx
+                                ? 'text-white shadow'
+                                : 'bg-white/5 text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            {st}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-pdf-viewer' && (() => {
+                const pagesList =
+                  parsedOptions.length > 0
+                    ? parsedOptions
+                    : ['Page 1 · Document Summary', 'Page 2 · Specifications', 'Page 3 · Appendix'];
+                const pdf = pdfStates[block.id] || { page: 0, zoom: 100 };
+                const safePage = Math.max(0, Math.min(pagesList.length - 1, pdf.page));
+                return (
+                  <div className="px-5 py-1.5">
+                    <div className="rounded-2xl overflow-hidden border border-white/15 bg-[#0B0E15]">
+                      <div className="px-3 py-2 bg-[#141923] border-b border-white/10 flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <FileText className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                          <span className="text-[11px] font-semibold text-white truncate">{displayContent}</span>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPdfStates((p) => ({
+                                ...p,
+                                [block.id]: { ...pdf, zoom: Math.max(80, pdf.zoom - 10) },
+                              }));
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-white/10 text-[10px] text-white cursor-pointer"
+                          >
+                            -
+                          </button>
+                          <span className="text-[9px] font-mono text-slate-300">{pdf.zoom}%</span>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPdfStates((p) => ({
+                                ...p,
+                                [block.id]: { ...pdf, zoom: Math.min(130, pdf.zoom + 10) },
+                              }));
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-white/10 text-[10px] text-white cursor-pointer"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                      {block.videoUrl ? (
+                        <iframe src={block.videoUrl} title={displayContent} className="w-full h-44 bg-white border-0" />
+                      ) : (
+                        <div className="p-3 bg-[#090B10] flex justify-center overflow-auto">
+                          <div
+                            style={{ transform: `scale(${pdf.zoom / 100})`, transformOrigin: 'top center' }}
+                            className="w-full bg-slate-100 text-slate-900 rounded-lg p-3.5 shadow-md space-y-1.5 transition-transform"
+                          >
+                            <div className="text-[9px] font-mono uppercase tracking-wider text-slate-500">
+                              Page {safePage + 1} of {pagesList.length}
+                            </div>
+                            <p className="text-xs font-bold text-slate-900">{displayContent}</p>
+                            <p className="text-[11px] text-slate-700 leading-relaxed">{pagesList[safePage]}</p>
+                          </div>
+                        </div>
+                      )}
+                      <div className="px-3 py-1.5 bg-[#141923] border-t border-white/10 flex items-center justify-between text-[10px] text-slate-300">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPdfStates((p) => ({
+                              ...p,
+                              [block.id]: { ...pdf, page: Math.max(0, safePage - 1) },
+                            }));
+                          }}
+                          className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 cursor-pointer"
+                        >
+                          Prev
+                        </button>
+                        <span className="font-mono">
+                          {safePage + 1} / {pagesList.length}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPdfStates((p) => ({
+                              ...p,
+                              [block.id]: { ...pdf, page: Math.min(pagesList.length - 1, safePage + 1) },
+                            }));
+                          }}
+                          className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 cursor-pointer"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-progress-bar' && (() => {
+                const pct = Math.max(0, Math.min(100, block.progressValue ?? 75));
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-white truncate">{displayContent}</span>
+                        <span className="text-xs font-mono font-bold text-sky-300">{pct}%</span>
+                      </div>
+                      <div className="w-full h-2.5 rounded-full bg-white/10 overflow-hidden">
+                        <div
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor: block.style?.customBgHex || resolvedAccent,
+                          }}
+                          className="h-full rounded-full transition-all duration-300"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="text-slate-400 truncate">{block.subtitle}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateBlock({ ...block, progressValue: Math.max(0, pct - 10) });
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-slate-200 font-mono cursor-pointer"
+                          >
+                            -10%
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateBlock({ ...block, progressValue: Math.min(100, pct + 10) });
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-white/10 hover:bg-white/20 text-slate-200 font-mono cursor-pointer"
+                          >
+                            +10%
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-language-selector' && (() => {
+                const langs =
+                  parsedOptions.length > 0
+                    ? parsedOptions
+                    : ['English (EN)', 'සිංහල (SI)', 'தமிழ் (TA)'];
+                const activeIdx = (block.counterValue ?? 0) % langs.length;
+                const activeLang = langs[activeIdx];
+                const greeting = activeLang.includes('සිංහල')
+                  ? 'ආයුබෝවන්! භාෂාව සාර්ථකව මාරු විය.'
+                  : activeLang.includes('தமிழ்')
+                  ? 'வணக்கம்! மொழி மாற்றப்பட்டது.'
+                  : activeLang.includes('Español')
+                  ? '¡Hola! Idioma actualizado.'
+                  : activeLang.includes('日本語')
+                  ? 'こんにちは！言語を変更しました。'
+                  : 'Hello! App language switched cleanly.';
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                          <Languages className="w-4 h-4 text-sky-400" />
+                          <span>{displayContent}</span>
+                        </div>
+                        <select
+                          value={activeIdx}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={(e) =>
+                            onUpdateBlock({ ...block, counterValue: Number(e.target.value) })
+                          }
+                          className="px-2 py-1 rounded-lg bg-[#090B10] border border-white/15 text-[11px] text-white outline-none cursor-pointer"
+                        >
+                          {langs.map((l, idx) => (
+                            <option key={l} value={idx}>
+                              {l}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="px-2.5 py-1.5 rounded-lg bg-sky-500/10 border border-sky-400/25 text-[11px] text-sky-200">
+                        {greeting}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-notification-badge' && (() => {
+                const count = block.counterValue ?? (Number.parseInt(block.badgeText || '3', 10) || 0);
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 flex items-center justify-between gap-3`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="relative w-10 h-10 rounded-xl bg-white/10 border border-white/15 flex items-center justify-center text-white">
+                          {renderVectorIcon(block.iconName || 'bell', 'w-5 h-5')}
+                          {count > 0 && (
+                            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-extrabold flex items-center justify-center shadow">
+                              {count > 99 ? '99+' : count}
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-white">{displayContent}</p>
+                          <p className="text-[10px] text-slate-400">
+                            {count === 0 ? 'No unread alerts' : `${count} unread notification${count === 1 ? '' : 's'}`}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateBlock({ ...block, counterValue: count + 1, badgeText: String(count + 1) });
+                          }}
+                          className="px-2 py-1 rounded bg-sky-500/20 hover:bg-sky-500/30 text-sky-200 text-[10px] font-bold cursor-pointer"
+                        >
+                          +1
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateBlock({ ...block, counterValue: 0, badgeText: '0' });
+                          }}
+                          className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-slate-300 text-[10px] font-semibold cursor-pointer"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-chart' && (() => {
+                const mode = block.chartType || 'line';
+                const pts = (parsedOptions.length > 0
+                  ? parsedOptions
+                  : ['Jan:32', 'Feb:54', 'Mar:48', 'Apr:82', 'May:71', 'Jun:95']
+                ).map((item, idx) => {
+                  const [lbl, valStr] = item.split(':').map((s) => s.trim());
+                  return {
+                    label: lbl || `P${idx + 1}`,
+                    value: Math.max(0, Number.parseFloat(valStr) || (idx + 1) * 15),
+                  };
+                });
+                const maxVal = Math.max(10, ...pts.map((p) => p.value));
+                const hoverIdx = chartHoveredIdx[block.id] ?? null;
+                const svgW = 280;
+                const svgH = 110;
+                const padX = 16;
+                const padY = 14;
+                const coords = pts.map((p, i) => ({
+                  x: padX + (pts.length > 1 ? (i / (pts.length - 1)) * (svgW - padX * 2) : (svgW - padX * 2) / 2),
+                  y: svgH - padY - (p.value / maxVal) * (svgH - padY * 2),
+                  ...p,
+                }));
+                const polyPoints = coords.map((c) => `${c.x},${c.y}`).join(' ');
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 space-y-2`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-bold text-white">{displayContent}</p>
+                          <p className="text-[10px] text-sky-300 font-mono">
+                            {hoverIdx !== null && coords[hoverIdx]
+                              ? `${coords[hoverIdx].label}: ${coords[hoverIdx].value}`
+                              : block.subtitle || `${mode.toUpperCase()} · ${pts.length} pts`}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateBlock({ ...block, chartType: mode === 'line' ? 'bar' : 'line' });
+                          }}
+                          className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] font-semibold text-slate-200 cursor-pointer"
+                        >
+                          {mode === 'line' ? 'Switch Bar' : 'Switch Line'}
+                        </button>
+                      </div>
+                      <svg viewBox={`0 0 ${svgW} ${svgH}`} className="w-full h-28 bg-[#090B10] rounded-xl border border-white/10">
+                        <line x1={padX} y1={svgH - padY} x2={svgW - padX} y2={svgH - padY} stroke="rgba(255,255,255,0.12)" />
+                        <line x1={padX} y1={svgH / 2} x2={svgW - padX} y2={svgH / 2} stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
+                        {mode === 'bar' ? (
+                          coords.map((c, idx) => {
+                            const bw = Math.max(12, Math.min(28, (svgW - padX * 2) / pts.length - 8));
+                            const bh = svgH - padY - c.y;
+                            return (
+                              <g
+                                key={idx}
+                                onMouseEnter={() => setChartHoveredIdx((p) => ({ ...p, [block.id]: idx }))}
+                                onMouseLeave={() => setChartHoveredIdx((p) => ({ ...p, [block.id]: null }))}
+                                className="cursor-pointer"
+                              >
+                                <rect
+                                  x={c.x - bw / 2}
+                                  y={c.y}
+                                  width={bw}
+                                  height={Math.max(2, bh)}
+                                  rx="4"
+                                  fill={hoverIdx === idx ? '#38BDF8' : resolvedAccent}
+                                />
+                              </g>
+                            );
+                          })
+                        ) : (
+                          <>
+                            <polyline fill="none" stroke={resolvedAccent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" points={polyPoints} />
+                            {coords.map((c, idx) => (
+                              <circle
+                                key={idx}
+                                cx={c.x}
+                                cy={c.y}
+                                r={hoverIdx === idx ? 5 : 3.5}
+                                fill={hoverIdx === idx ? '#FBBF24' : '#ffffff'}
+                                stroke={resolvedAccent}
+                                strokeWidth="2"
+                                onMouseEnter={() => setChartHoveredIdx((p) => ({ ...p, [block.id]: idx }))}
+                                onMouseLeave={() => setChartHoveredIdx((p) => ({ ...p, [block.id]: null }))}
+                                className="cursor-pointer"
+                              />
+                            ))}
+                          </>
+                        )}
+                      </svg>
+                      <div className="flex justify-between px-2 text-[9px] font-mono text-slate-400">
+                        {coords.map((c, idx) => (
+                          <span key={idx}>{c.label}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-mux-broadcast' && (() => {
+                const mux = muxStates[block.id] || { live: false, viewers: 142 };
+                return (
+                  <div className="px-5 py-1.5">
+                    <div className="rounded-2xl overflow-hidden border border-white/15 bg-[#090B10] p-3.5 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold tracking-wider flex items-center gap-1 ${
+                              mux.live
+                                ? 'bg-rose-600 text-white animate-pulse'
+                                : 'bg-slate-700 text-slate-300'
+                            }`}
+                          >
+                            <Radio className="w-3 h-3" />
+                            <span>{mux.live ? 'LIVE' : block.badgeText || 'STANDBY'}</span>
+                          </span>
+                          <span className="text-xs font-bold text-white truncate">{displayContent}</span>
+                        </div>
+                        {mux.live && (
+                          <span className="text-[10px] font-mono text-emerald-300 shrink-0">
+                            {mux.viewers} watching
+                          </span>
+                        )}
+                      </div>
+                      <div className="h-24 rounded-xl bg-gradient-to-br from-slate-900 via-[#12192A] to-rose-950/35 border border-white/10 flex flex-col items-center justify-center gap-1">
+                        <Video className={`w-6 h-6 ${mux.live ? 'text-rose-400' : 'text-slate-500'}`} />
+                        <span className="text-[10px] font-mono text-slate-400 truncate max-w-[90%]">
+                          {block.actionPayload || 'rtmps://global-live.mux.com:443/app'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] text-slate-400 truncate">{block.subtitle}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMuxStates((p) => ({
+                              ...p,
+                              [block.id]: { live: !mux.live, viewers: mux.live ? 0 : 148 },
+                            }));
+                          }}
+                          className={`px-3 py-1 rounded-lg text-[10px] font-bold cursor-pointer shrink-0 ${
+                            mux.live
+                              ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                              : 'bg-emerald-600 hover:bg-emerald-500 text-white'
+                          }`}
+                        >
+                          {mux.live ? 'End Stream' : 'Go Live'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-mouse-region' && (() => {
+                const ms = mouseStates[block.id] || { hovering: false, x: 0, y: 0, enters: 0 };
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      onMouseEnter={() =>
+                        setMouseStates((p) => ({
+                          ...p,
+                          [block.id]: { ...ms, hovering: true, enters: ms.enters + 1 },
+                        }))
+                      }
+                      onMouseLeave={() =>
+                        setMouseStates((p) => ({
+                          ...p,
+                          [block.id]: { ...ms, hovering: false },
+                        }))
+                      }
+                      onMouseMove={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setMouseStates((p) => ({
+                          ...p,
+                          [block.id]: {
+                            ...ms,
+                            hovering: true,
+                            x: Math.round(e.clientX - rect.left),
+                            y: Math.round(e.clientY - rect.top),
+                          },
+                        }));
+                      }}
+                      className={`p-4 rounded-2xl border transition-all ${
+                        ms.hovering
+                          ? 'bg-sky-500/15 border-sky-400 ring-2 ring-sky-400/30'
+                          : 'bg-white/[0.04] border-white/15'
+                      } space-y-1.5`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-white">
+                          <MousePointer2 className="w-3.5 h-3.5 text-sky-400" />
+                          <span>{displayContent}</span>
+                        </div>
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-mono font-bold ${
+                            ms.hovering ? 'bg-emerald-500/25 text-emerald-300' : 'bg-white/10 text-slate-400'
+                          }`}
+                        >
+                          {ms.hovering ? 'HOVERING' : 'IDLE'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] font-mono text-slate-300">
+                        Pointer: ({ms.x}, {ms.y}) · Hover enters: {ms.enters}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-barcode' && (() => {
+                const mode = block.barcodeMode || 'barcode';
+                const val = displayContent || 'SL-STUDIO-2026';
+                const bars = buildBarcodeBars(val);
+                const qr = buildQrCells(val);
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-4'} ${customRadius} ${
+                        customBg || 'bg-white/[0.04]'
+                      } border border-white/10 flex flex-col items-center gap-2.5`}
+                    >
+                      <div className="w-full flex items-center justify-between">
+                        <span className="text-[10px] font-mono text-slate-400 uppercase">{mode}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateBlock({ ...block, barcodeMode: mode === 'barcode' ? 'qr' : 'barcode' });
+                          }}
+                          className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] font-semibold text-sky-300 flex items-center gap-1 cursor-pointer"
+                        >
+                          <QrCode className="w-3 h-3" />
+                          <span>{mode === 'barcode' ? 'Show QR' : 'Show Barcode'}</span>
+                        </button>
+                      </div>
+                      <div className="p-3 rounded-xl bg-white shadow-inner">
+                        {mode === 'qr' ? (
+                          <svg viewBox="0 0 105 105" className="w-24 h-24">
+                            <rect width="105" height="105" fill="#ffffff" />
+                            {qr.map((row, rIdx) =>
+                              row.map((on, cIdx) =>
+                                on ? (
+                                  <rect
+                                    key={`${rIdx}_${cIdx}`}
+                                    x={cIdx * 5}
+                                    y={rIdx * 5}
+                                    width="5"
+                                    height="5"
+                                    fill="#0f172a"
+                                  />
+                                ) : null
+                              )
+                            )}
+                          </svg>
+                        ) : (
+                          <svg viewBox="0 0 200 52" className="w-48 h-12">
+                            <rect width="200" height="52" fill="#ffffff" />
+                            {bars.map((b, i) => (
+                              <rect key={i} x={b.x} y="4" width={b.w} height="44" fill="#0f172a" />
+                            ))}
+                          </svg>
+                        )}
+                      </div>
+                      <span className="text-[11px] font-mono font-bold text-white tracking-widest">
+                        {val}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-tooltip' && (() => {
+                const open = Boolean(tooltipVisible[block.id]);
+                const pos = block.tooltipPosition || 'top';
+                return (
+                  <div className={`px-5 py-3 ${alignClass}`}>
+                    <div
+                      onMouseEnter={() => setTooltipVisible((p) => ({ ...p, [block.id]: true }))}
+                      onMouseLeave={() => setTooltipVisible((p) => ({ ...p, [block.id]: false }))}
+                      className="relative inline-block"
+                    >
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTooltipVisible((p) => ({ ...p, [block.id]: !open }));
+                        }}
+                        className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/15 text-xs font-semibold text-white inline-flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <AlertCircle className="w-3.5 h-3.5 text-sky-400" />
+                        <span>{displayContent}</span>
+                      </button>
+                      {open && (
+                        <div
+                          className={`absolute z-30 whitespace-nowrap max-w-[240px] truncate px-2.5 py-1.5 rounded-lg bg-[#05080F] border border-sky-400/50 text-[10px] font-medium text-sky-100 shadow-xl ${
+                            pos === 'bottom'
+                              ? 'top-full left-1/2 -translate-x-1/2 mt-1.5'
+                              : pos === 'left'
+                              ? 'right-full top-1/2 -translate-y-1/2 mr-2'
+                              : pos === 'right'
+                              ? 'left-full top-1/2 -translate-y-1/2 ml-2'
+                              : 'bottom-full left-1/2 -translate-x-1/2 mb-1.5'
+                          }`}
+                        >
+                          {block.subtitle || 'Helpful tooltip guidance'}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-conditional-builder' && (() => {
+                const condTrue = block.isExpanded !== false;
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      style={surfaceStyle}
+                      className={`${customPad || 'p-3.5'} ${customRadius} ${
+                        customBg || 'bg-amber-950/20'
+                      } border border-amber-400/30 space-y-2.5`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <GitBranch className="w-3.5 h-3.5 text-amber-300 shrink-0" />
+                          <span className="text-[11px] font-mono font-bold text-amber-200 truncate">
+                            IF ({displayContent})
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUpdateBlock({ ...block, isExpanded: !condTrue });
+                          }}
+                          className={`px-2 py-0.5 rounded-full text-[9px] font-bold cursor-pointer ${
+                            condTrue
+                              ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-400/40'
+                              : 'bg-rose-500/25 text-rose-300 border border-rose-400/40'
+                          }`}
+                        >
+                          {condTrue ? 'TRUE' : 'FALSE'}
+                        </button>
+                      </div>
+                      <div
+                        className={`p-3 rounded-xl border text-xs ${
+                          condTrue
+                            ? 'bg-emerald-950/35 border-emerald-400/35 text-emerald-100'
+                            : 'bg-slate-900/70 border-white/15 text-slate-300'
+                        }`}
+                      >
+                        {condTrue
+                          ? block.conditionTrueText || 'True branch rendered'
+                          : block.conditionFalseText || 'False branch rendered'}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-sticky-header' && (() => {
+                const groups = (parsedOptions.length > 0
+                  ? parsedOptions
+                  : ['Pinned: Today|Design Update|Component Sync|Review', 'Pinned: Earlier|Icon Export|QA']
+                ).map((entry) => {
+                  const parts = entry.split('|').map((s) => s.trim()).filter(Boolean);
+                  return { header: parts[0] || displayContent, items: parts.slice(1) };
+                });
+                return (
+                  <div className="px-5 py-1.5">
+                    <div className="rounded-2xl border border-white/15 bg-[#0A0D14] overflow-hidden">
+                      <div className="max-h-52 overflow-y-auto">
+                        {groups.map((grp, gIdx) => (
+                          <div key={gIdx}>
+                            <div
+                              style={{ backgroundColor: `${resolvedAccent}22` }}
+                              className="sticky top-0 z-10 backdrop-blur-md px-3 py-1.5 border-y border-white/10 text-[10px] font-bold uppercase tracking-wider text-sky-300"
+                            >
+                              {grp.header}
+                            </div>
+                            <div className="divide-y divide-white/5">
+                              {(grp.items.length > 0 ? grp.items : ['List Row A', 'List Row B']).map(
+                                (item, iIdx) => (
+                                  <div key={iIdx} className="px-3 py-2 text-xs text-slate-200">
+                                    {item}
+                                  </div>
+                                )
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-markdown' && (
+                <div className="px-5 py-1.5">
+                  <div
+                    style={surfaceStyle}
+                    className={`${customPad || 'p-4'} ${customRadius} ${
+                      customBg || 'bg-white/[0.04]'
+                    } border border-white/10`}
+                  >
+                    {renderMarkdownBlocks(displayContent)}
+                  </div>
+                </div>
+              )}
+
+              {block.type === 'ui-draggable' && (
+                <div className="px-5 py-1.5">
+                  <div
+                    draggable
+                    onDragStart={(e) => {
+                      e.stopPropagation();
+                      e.dataTransfer.setData(
+                        'application/x-slbuilder-drag-item',
+                        JSON.stringify({ id: block.id, label: displayContent })
+                      );
+                    }}
+                    style={surfaceStyle}
+                    className={`${customPad || 'p-3'} ${customRadius} ${
+                      customBg || 'bg-indigo-950/35'
+                    } border border-indigo-400/40 flex items-center justify-between gap-2.5 cursor-grab active:cursor-grabbing hover:border-indigo-300 transition-colors`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <GripVertical className="w-4 h-4 text-indigo-300 shrink-0" />
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-white truncate">{displayContent}</p>
+                        {block.subtitle && (
+                          <p className="text-[10px] text-slate-400 truncate">{block.subtitle}</p>
+                        )}
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded bg-indigo-500/25 text-indigo-200 text-[9px] font-mono font-bold shrink-0">
+                      {block.badgeText || 'DRAG'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {block.type === 'ui-drag-target' && (() => {
+                const dropped = dragTargetItems[block.id] ?? parsedOptions;
+                const isOver = Boolean(dragTargetOver[block.id]);
+                return (
+                  <div className="px-5 py-1.5">
+                    <div
+                      onDragOver={(e) => {
+                        if (e.dataTransfer.types.includes('application/x-slbuilder-drag-item')) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (!isOver) setDragTargetOver((p) => ({ ...p, [block.id]: true }));
+                        }
+                      }}
+                      onDragLeave={() => setDragTargetOver((p) => ({ ...p, [block.id]: false }))}
+                      onDrop={(e) => {
+                        const raw = e.dataTransfer.getData('application/x-slbuilder-drag-item');
+                        if (!raw) return;
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDragTargetOver((p) => ({ ...p, [block.id]: false }));
+                        try {
+                          const parsed = JSON.parse(raw) as { label?: string };
+                          const lbl = parsed.label || 'Dropped Item';
+                          setDragTargetItems((p) => ({ ...p, [block.id]: [...dropped, lbl] }));
+                          onUpdateBlock({ ...block, options: [...dropped, lbl] });
+                        } catch {
+                          // ignore malformed drag payload
+                        }
+                      }}
+                      className={`p-4 rounded-2xl border-2 border-dashed transition-all space-y-2 ${
+                        isOver
+                          ? 'border-emerald-400 bg-emerald-500/15'
+                          : 'border-white/20 bg-white/[0.03]'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <p className="text-xs font-bold text-white">{displayContent}</p>
+                          <p className="text-[10px] text-slate-400">
+                            {isOver ? 'Release to drop item here' : block.subtitle || 'Drop Draggable widgets here'}
+                          </p>
+                        </div>
+                        {dropped.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDragTargetItems((p) => ({ ...p, [block.id]: [] }));
+                              onUpdateBlock({ ...block, options: [] });
+                            }}
+                            className="px-2 py-0.5 rounded bg-white/10 hover:bg-rose-500/30 text-[10px] text-slate-200 cursor-pointer"
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+                      {dropped.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {dropped.map((lbl, idx) => (
+                            <span
+                              key={`${lbl}_${idx}`}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-[11px] font-semibold text-emerald-200"
+                            >
+                              {lbl}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {block.type === 'ui-genui-chat' && (() => {
+                const thread = genUiChats[block.id] || {
+                  draft: '',
+                  messages: [
+                    {
+                      role: 'assistant' as const,
+                      text: parsedOptions[0] || 'How can I help design your screen today?',
+                      cardTitle: 'Quick UI Actions',
+                      chips: ['Create Login Card', 'Add Pricing Grid'],
+                    },
+                  ],
+                };
+                const sendChat = (promptText?: string) => {
+                  const text = (promptText ?? thread.draft).trim();
+                  if (!text) return;
+                  const nextMsgs = [
+                    ...thread.messages,
+                    { role: 'user' as const, text },
+                    {
+                      role: 'assistant' as const,
+                      text: `Generated structured UI card for "${text}"`,
+                      cardTitle: text,
+                      chips: ['Apply Theme', 'Preview Layout'],
+                    },
+                  ];
+                  setGenUiChats((p) => ({
+                    ...p,
+                    [block.id]: { draft: promptText ? thread.draft : '', messages: nextMsgs },
+                  }));
+                };
+                return (
+                  <div className="px-5 py-1.5">
+                    <div className="rounded-2xl border border-white/15 bg-[#0B0E16] overflow-hidden flex flex-col">
+                      <div className="px-3 py-2 bg-[#141923] border-b border-white/10 flex items-center gap-2">
+                        <Bot className="w-4 h-4 text-sky-400" />
+                        <span className="text-xs font-bold text-white">{displayContent}</span>
+                      </div>
+                      <div className="p-3 space-y-2 max-h-48 overflow-y-auto">
+                        {thread.messages.map((m, mIdx) => (
+                          <div
+                            key={mIdx}
+                            className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
+                          >
+                            <div
+                              className={`max-w-[85%] rounded-xl px-3 py-2 text-[11px] space-y-1.5 ${
+                                m.role === 'user'
+                                  ? 'bg-[#2563EB] text-white'
+                                  : 'bg-[#161C28] border border-white/10 text-slate-200'
+                              }`}
+                            >
+                              <p>{m.text}</p>
+                              {m.role === 'assistant' && m.chips && (
+                                <div className="flex flex-wrap gap-1 pt-0.5">
+                                  {m.chips.map((ch) => (
+                                    <button
+                                      key={ch}
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        sendChat(ch);
+                                      }}
+                                      className="px-2 py-0.5 rounded-full bg-sky-500/20 border border-sky-400/35 text-[9px] font-semibold text-sky-200 cursor-pointer hover:bg-sky-500/30"
+                                    >
+                                      {ch}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-2 bg-[#11151E] border-t border-white/10 flex items-center gap-1.5"
+                      >
+                        <input
+                          type="text"
+                          value={thread.draft}
+                          onChange={(e) =>
+                            setGenUiChats((p) => ({
+                              ...p,
+                              [block.id]: { ...thread, draft: e.target.value },
+                            }))
+                          }
+                          onKeyDown={(e) => e.key === 'Enter' && sendChat()}
+                          placeholder="Ask to generate a UI card..."
+                          className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/10 text-[11px] text-white placeholder-slate-500 outline-none focus:border-sky-400"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => sendChat()}
+                          style={{ backgroundColor: resolvedAccent }}
+                          className="p-1.5 rounded-lg text-white cursor-pointer hover:brightness-110"
+                        >
+                          <Send className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* 13. LOGIC COUNTER */}
               {block.type === 'logic-counter' && (

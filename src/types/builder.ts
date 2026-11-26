@@ -49,6 +49,41 @@ export type BlockType =
   | 'ui-icon'
   | 'ui-video'
   | 'ui-avatar'
+  // Base Elements (Extended FlutterFlow-style widgets)
+  | 'ui-richtext'
+  | 'ui-icon-button'
+  | 'ui-list-tile'
+  | 'ui-slidable-tile'
+  | 'ui-calendar'
+  | 'ui-toggle-icon'
+  | 'ui-audio-player'
+  | 'ui-webview'
+  | 'ui-static-map'
+  | 'ui-google-map'
+  | 'ui-ad-banner'
+  | 'ui-lottie'
+  | 'ui-blur'
+  | 'ui-aspect-ratio'
+  | 'ui-shader-wrap'
+  | 'ui-shader-fill'
+  | 'ui-transform'
+  | 'ui-media-display'
+  | 'ui-rive'
+  | 'ui-pdf-viewer'
+  | 'ui-progress-bar'
+  | 'ui-language-selector'
+  | 'ui-notification-badge'
+  | 'ui-chart'
+  | 'ui-mux-broadcast'
+  | 'ui-mouse-region'
+  | 'ui-barcode'
+  | 'ui-tooltip'
+  | 'ui-conditional-builder'
+  | 'ui-sticky-header'
+  | 'ui-markdown'
+  | 'ui-draggable'
+  | 'ui-drag-target'
+  | 'ui-genui-chat'
   // Events & Triggers (Hat Blocks)
   | 'logic-onload'
   | 'logic-click'
@@ -263,6 +298,19 @@ export interface CanvasBlock {
   backTitle?: string;
   backSubtitle?: string;
   columnsHeader?: string;
+  aspectRatio?: string;
+  blurAmount?: number;
+  progressValue?: number;
+  chartType?: 'line' | 'bar';
+  barcodeMode?: 'barcode' | 'qr';
+  transformRotate?: number;
+  transformScale?: number;
+  transformTranslateX?: number;
+  transformTranslateY?: number;
+  shaderPreset?: string;
+  tooltipPosition?: 'top' | 'bottom' | 'left' | 'right';
+  conditionTrueText?: string;
+  conditionFalseText?: string;
   logicConfig?: BlockLogicConfig;
 }
 

@@ -2833,7 +2833,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'RichText',
-                                  tplId: 'tpl-heading',
+                                  tplId: 'tpl-richtext',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <path d="M7 4h7l4 4v11.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19.5v-14A1.5 1.5 0 0 1 7.5 4z" />
@@ -2893,7 +2893,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'IconButton',
-                                  tplId: 'tpl-button',
+                                  tplId: 'tpl-icon-button',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="w-[20px] h-[20px]">
                                       <rect x="4.5" y="4.5" width="15" height="15" rx="3.5" />
@@ -2903,7 +2903,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'ListTile',
-                                  tplId: 'tpl-listview',
+                                  tplId: 'tpl-list-tile',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="w-[20px] h-[20px]">
                                       <rect x="4.5" y="4.5" width="15" height="15" rx="1.8" />
@@ -2913,7 +2913,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'SlidableListTile',
-                                  tplId: 'tpl-listview',
+                                  tplId: 'tpl-slidable-tile',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" className="w-[20px] h-[20px]">
                                       <rect x="3.5" y="8" width="12.5" height="8" rx="1.2" fill="currentColor" fillOpacity="0.85" />
@@ -2936,7 +2936,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'YoutubePlayer',
-                                  tplId: 'tpl-video',
+                                  tplId: 'tpl-youtube-player',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-[20px] h-[20px]">
                                       <path d="M20.5 7.5a2.4 2.4 0 0 0-1.7-1.7C17.3 5.4 12 5.4 12 5.4s-5.3 0-6.8.4A2.4 2.4 0 0 0 3.5 7.5 25 25 0 0 0 3 12a25 25 0 0 0 .5 4.5 2.4 2.4 0 0 0 1.7 1.7c1.5.4 6.8.4 6.8.4s5.3 0 6.8-.4a2.4 2.4 0 0 0 1.7-1.7A25 25 0 0 0 21 12a25 25 0 0 0-.5-4.5zM10.2 14.8V9.2l4.8 2.8-4.8 2.8z" />
@@ -2945,7 +2945,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Calendar',
-                                  tplId: 'tpl-date-input',
+                                  tplId: 'tpl-calendar',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="4.5" y="5.5" width="15" height="14" rx="2" />
@@ -2955,7 +2955,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'ToggleIcon',
-                                  tplId: 'tpl-switch',
+                                  tplId: 'tpl-toggle-icon',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <path d="M12 19.5s-7-4.4-7-9.6a4.1 4.1 0 0 1 7-2.8 4.1 4.1 0 0 1 7 2.8c0 5.2-7 9.6-7 9.6z" />
@@ -2964,7 +2964,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'AudioPlayer',
-                                  tplId: 'tpl-video',
+                                  tplId: 'tpl-audio-player',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-[20px] h-[20px]">
                                       <path d="M5 10.5v3M8.5 8v8M12 5v14M15.5 8v8M19 10.5v3" />
@@ -2973,7 +2973,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'WebView',
-                                  tplId: 'tpl-link',
+                                  tplId: 'tpl-webview',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="4.5" y="4.5" width="15" height="15" rx="2" />
@@ -2985,7 +2985,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'StaticMap',
-                                  tplId: 'tpl-device',
+                                  tplId: 'tpl-static-map',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <path d="M12 16.5s4.8-4.4 4.8-8.2a4.8 4.8 0 1 0-9.6 0c0 3.8 4.8 8.2 4.8 8.2z" />
@@ -2996,7 +2996,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'GoogleMap',
-                                  tplId: 'tpl-device',
+                                  tplId: 'tpl-google-map',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <polygon points="4,6.5 9.5,4.5 14.5,6.5 20,4.5 20,17.5 14.5,19.5 9.5,17.5 4,19.5" />
@@ -3006,7 +3006,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'AdBanner',
-                                  tplId: 'tpl-badge',
+                                  tplId: 'tpl-ad-banner',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="7" y="3.8" width="10" height="16.4" rx="2" />
@@ -3016,7 +3016,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'LottieAnimation',
-                                  tplId: 'tpl-section',
+                                  tplId: 'tpl-lottie',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="w-[20px] h-[20px]">
                                       <path d="M4.5 10.5c3.5 0 5.5 3 5.5 6.5 0-4.2 2.2-6.5 4.5-7" />
@@ -3026,7 +3026,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Blur',
-                                  tplId: 'tpl-section',
+                                  tplId: 'tpl-blur',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-[20px] h-[20px]">
                                       <circle cx="12" cy="5.5" r="0.9" />
@@ -3053,7 +3053,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'AspectRatio',
-                                  tplId: 'tpl-section',
+                                  tplId: 'tpl-aspect-ratio',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="4" y="5.5" width="16" height="13" rx="1.8" />
@@ -3063,7 +3063,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'ShaderWrapper',
-                                  tplId: 'tpl-section',
+                                  tplId: 'tpl-shader-wrap',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-[20px] h-[20px]">
                                       <rect x="5" y="5" width="14" height="14" rx="2" />
@@ -3073,7 +3073,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'ShaderFill',
-                                  tplId: 'tpl-section',
+                                  tplId: 'tpl-shader-fill',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" className="w-[20px] h-[20px]">
                                       <path d="M5 10l5-5M5 15.5L15.5 5M6.5 19L19 6.5M12 19l7-7M17.5 19L19 17.5" />
@@ -3082,7 +3082,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Transform',
-                                  tplId: 'tpl-section',
+                                  tplId: 'tpl-transform',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <path d="M6.5 4v11.5a1.5 1.5 0 0 0 1.5 1.5h11.5" />
@@ -3093,7 +3093,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'MediaDisplay',
-                                  tplId: 'tpl-image',
+                                  tplId: 'tpl-media-display',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="6.5" y="4.5" width="13" height="11.5" rx="1.8" />
@@ -3105,7 +3105,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'RiveAnimation',
-                                  tplId: 'tpl-section',
+                                  tplId: 'tpl-rive',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <path d="M6.5 6.5h6.5a3.5 3.5 0 0 1 0 7H10l5.5 5" />
@@ -3114,7 +3114,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'PdfViewer',
-                                  tplId: 'tpl-file-upload',
+                                  tplId: 'tpl-pdf-viewer',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" className="w-[20px] h-[20px]">
                                       <rect x="6.5" y="4" width="12.5" height="13.5" rx="1.8" stroke="currentColor" strokeWidth="1.65" />
@@ -3135,7 +3135,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'ProgressBar',
-                                  tplId: 'tpl-stat',
+                                  tplId: 'tpl-progress-bar',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" className="w-[20px] h-[20px]">
                                       <text
@@ -3156,12 +3156,12 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'LanguageSelector',
-                                  tplId: 'tpl-select',
+                                  tplId: 'tpl-language-selector',
                                   icon: <Globe className="w-[20px] h-[20px] stroke-[1.75]" />,
                                 },
                                 {
                                   id: 'Badge',
-                                  tplId: 'tpl-badge',
+                                  tplId: 'tpl-notification-badge',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <path d="M18 15.5H6l1.4-2V10a4.6 4.6 0 0 1 7.2-3.8" />
@@ -3175,7 +3175,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Chart',
-                                  tplId: 'tpl-stat',
+                                  tplId: 'tpl-chart',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <path d="M5 4.5v15h14.5" />
@@ -3185,7 +3185,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'MuxBroadcast',
-                                  tplId: 'tpl-video',
+                                  tplId: 'tpl-mux-broadcast',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="7" y="4" width="9" height="16" rx="2" />
@@ -3217,7 +3217,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'MouseRegion',
-                                  tplId: 'tpl-hat-click',
+                                  tplId: 'tpl-mouse-region',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="4.5" y="5.5" width="15" height="12" rx="1.8" />
@@ -3228,7 +3228,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Barcode',
-                                  tplId: 'tpl-badge',
+                                  tplId: 'tpl-barcode',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="w-[20px] h-[20px]">
                                       <path d="M5 7V5h2.5M16.5 5H19v2M5 17v2h2.5M16.5 19H19v-2" />
@@ -3248,7 +3248,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Tooltip',
-                                  tplId: 'tpl-feedback',
+                                  tplId: 'tpl-tooltip',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <path d="M5 6h14a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 17h-9l-4.5 3v-3H5a1.5 1.5 0 0 1-1.5-1.5v-8A1.5 1.5 0 0 1 5 6z" />
@@ -3257,7 +3257,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'ConditionalBuilder',
-                                  tplId: 'tpl-if-else',
+                                  tplId: 'tpl-conditional-builder',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="4" y="10" width="4.5" height="4.5" rx="0.8" />
@@ -3269,7 +3269,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'StickyHeader',
-                                  tplId: 'tpl-navbar',
+                                  tplId: 'tpl-sticky-header',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="w-[20px] h-[20px]">
                                       <path d="M5 7h1.5M9.5 7h6M5 12h1.5M9.5 12h8M5 17h1.5M9.5 17h8" />
@@ -3279,7 +3279,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Markdown',
-                                  tplId: 'tpl-paragraph',
+                                  tplId: 'tpl-markdown',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" className="w-[20px] h-[20px]">
                                       <rect x="4" y="5.5" width="16" height="13" rx="2" stroke="currentColor" strokeWidth="1.7" />
@@ -3300,7 +3300,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Draggable',
-                                  tplId: 'tpl-card',
+                                  tplId: 'tpl-draggable',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="4.5" y="6.5" width="10" height="11" rx="1.8" strokeDasharray="2.2 2" />
@@ -3311,7 +3311,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'DragTarget',
-                                  tplId: 'tpl-section',
+                                  tplId: 'tpl-drag-target',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="4.5" y="6.5" width="14" height="11.5" rx="2" strokeDasharray="2.4 2" />
@@ -3322,7 +3322,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'GenUI Chat',
-                                  tplId: 'tpl-card',
+                                  tplId: 'tpl-genui-chat',
                                   icon: <Bot className="w-[20px] h-[20px] stroke-[1.75]" />,
                                 },
                               ] as const
@@ -3703,7 +3703,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                     {(blk.type === 'ui-image' ||
                                       blk.type === 'ui-avatar' ||
                                       blk.type === 'ui-card' ||
-                                      blk.type === 'ui-stack') && (
+                                      blk.type === 'ui-stack' ||
+                                      blk.type === 'ui-media-display' ||
+                                      blk.type === 'ui-aspect-ratio' ||
+                                      blk.type === 'ui-blur') && (
                                       <div
                                         className="flex items-center gap-2 pt-0.5"
                                         onClick={(e) => e.stopPropagation()}
@@ -3755,7 +3758,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                       </div>
                                     )}
 
-                                    {blk.type === 'ui-video' && (
+                                    {(blk.type === 'ui-video' ||
+                                      blk.type === 'ui-audio-player' ||
+                                      blk.type === 'ui-media-display' ||
+                                      blk.type === 'ui-pdf-viewer') && (
                                       <div
                                         className="flex items-center gap-1.5 pt-0.5"
                                         onClick={(e) => e.stopPropagation()}
@@ -3763,7 +3769,13 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                         <input
                                           type="text"
                                           value={blk.videoUrl || ''}
-                                          placeholder="YouTube URL (youtube.com/watch?v=... / youtu.be/...) or MP4 URL"
+                                          placeholder={
+                                            blk.type === 'ui-audio-player'
+                                              ? 'MP3 / Audio URL (optional)'
+                                              : blk.type === 'ui-pdf-viewer'
+                                              ? 'PDF File URL (optional)'
+                                              : 'YouTube URL (youtube.com/watch?v=... / youtu.be/...) or MP4 URL'
+                                          }
                                           onChange={(e) =>
                                             handleUpdateBlock({ ...blk, videoUrl: e.target.value })
                                           }
@@ -3772,7 +3784,12 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                       </div>
                                     )}
 
-                                    {blk.type === 'ui-icon' && (
+                                    {(blk.type === 'ui-icon' ||
+                                      blk.type === 'ui-icon-button' ||
+                                      blk.type === 'ui-list-tile' ||
+                                      blk.type === 'ui-slidable-tile' ||
+                                      blk.type === 'ui-toggle-icon' ||
+                                      blk.type === 'ui-notification-badge') && (
                                       <div
                                         className="flex items-center gap-1 overflow-x-auto pb-1 pt-0.5"
                                         onClick={(e) => e.stopPropagation()}
@@ -3857,6 +3874,11 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                         blk.type === 'ui-pricing' ||
                                         blk.type === 'ui-modal' ||
                                         blk.type === 'ui-section' ||
+                                        blk.type === 'ui-list-tile' ||
+                                        blk.type === 'ui-ad-banner' ||
+                                        blk.type === 'ui-notification-badge' ||
+                                        blk.type === 'ui-mux-broadcast' ||
+                                        blk.type === 'ui-draggable' ||
                                         blk.type === 'logic-click' ||
                                         blk.type === 'logic-if') && (
                                         <input
@@ -3873,7 +3895,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                               ? 'Section'
                                               : blk.type === 'logic-if'
                                               ? 'Eval'
-                                              : 'Fire')
+                                              : 'Badge')
                                           }
                                           placeholder="Badge..."
                                           onClick={(e) => {
@@ -3905,6 +3927,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                       blk.type === 'ui-flex' ||
                                       blk.type === 'ui-vertical-divider' ||
                                       blk.type === 'ui-select' ||
+                                      blk.type === 'ui-calendar' ||
+                                      blk.type === 'ui-rive' ||
+                                      blk.type === 'ui-language-selector' ||
+                                      blk.type === 'ui-chart' ||
                                       (blk.type === 'ui-checkbox' &&
                                         blk.controlVariant === 'radio')) && (
                                       <input
@@ -3925,10 +3951,15 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                             .split(/[,|]+/)
                                             .map((s) => s.trim())
                                             .filter(Boolean);
+                                          const keepContent =
+                                            blk.type === 'ui-calendar' ||
+                                            blk.type === 'ui-rive' ||
+                                            blk.type === 'ui-language-selector' ||
+                                            blk.type === 'ui-chart';
                                           handleUpdateBlock({
                                             ...blk,
                                             options: parsed,
-                                            content: parsed.join(' | '),
+                                            ...(keepContent ? {} : { content: parsed.join(' | ') }),
                                           });
                                         }}
                                         className="w-full bg-[#0B0E15] border border-sky-500/20 focus:border-[#4D97FF] rounded-lg px-2.5 py-1 text-[11px] text-sky-200 placeholder-slate-600 outline-none"
@@ -6852,6 +6883,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         selectedBlock.type === 'ui-flex' ||
                         selectedBlock.type === 'ui-vertical-divider' ||
                         selectedBlock.type === 'ui-select' ||
+                        selectedBlock.type === 'ui-calendar' ||
+                        selectedBlock.type === 'ui-rive' ||
+                        selectedBlock.type === 'ui-language-selector' ||
+                        selectedBlock.type === 'ui-chart' ||
                         (selectedBlock.type === 'ui-checkbox' &&
                           selectedBlock.controlVariant === 'radio')) && (
                         <div className="flex items-center gap-2">
@@ -6870,10 +6905,15 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 .split(/[,|]+/)
                                 .map((s) => s.trim())
                                 .filter(Boolean);
+                              const keepContent =
+                                selectedBlock.type === 'ui-calendar' ||
+                                selectedBlock.type === 'ui-rive' ||
+                                selectedBlock.type === 'ui-language-selector' ||
+                                selectedBlock.type === 'ui-chart';
                               handleUpdateBlock({
                                 ...selectedBlock,
                                 options: parsed,
-                                content: parsed.join(' | '),
+                                ...(keepContent ? {} : { content: parsed.join(' | ') }),
                               });
                             }}
                             className="flex-1 min-w-0 px-2.5 py-1 rounded-full bg-[#0A0D13] border border-sky-500/30 text-sky-200 outline-none focus:border-[#4C97FF]"
@@ -7190,6 +7230,11 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         selectedBlock.type === 'ui-card' ||
                         selectedBlock.type === 'ui-form' ||
                         selectedBlock.type === 'ui-flippable-card' ||
+                        selectedBlock.type === 'ui-list-tile' ||
+                        selectedBlock.type === 'ui-ad-banner' ||
+                        selectedBlock.type === 'ui-notification-badge' ||
+                        selectedBlock.type === 'ui-mux-broadcast' ||
+                        selectedBlock.type === 'ui-draggable' ||
                         selectedBlock.type === 'logic-click' ||
                         selectedBlock.type === 'logic-if') && (
                         <div className="space-y-1">
@@ -7214,9 +7259,13 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 ? 'Validate & Submit'
                                 : selectedBlock.type === 'ui-flippable-card'
                                 ? 'Click to Flip'
+                                : selectedBlock.type === 'ui-ad-banner'
+                                ? 'AD'
+                                : selectedBlock.type === 'ui-mux-broadcast'
+                                ? 'STANDBY'
                                 : selectedBlock.type === 'logic-if'
                                 ? 'Eval'
-                                : 'Fire')
+                                : 'New')
                             }
                             onChange={(e) =>
                               handleUpdateBlock({ ...selectedBlock, badgeText: e.target.value })
@@ -7229,7 +7278,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                       {(selectedBlock.type === 'ui-image' ||
                         selectedBlock.type === 'ui-avatar' ||
                         selectedBlock.type === 'ui-card' ||
-                        selectedBlock.type === 'ui-stack') && (
+                        selectedBlock.type === 'ui-stack' ||
+                        selectedBlock.type === 'ui-media-display' ||
+                        selectedBlock.type === 'ui-aspect-ratio' ||
+                        selectedBlock.type === 'ui-blur') && (
                         <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-sky-500/20">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-semibold text-sky-300 flex items-center gap-1">
@@ -7293,22 +7345,33 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         </div>
                       )}
 
-                      {selectedBlock.type === 'ui-video' && (
+                      {(selectedBlock.type === 'ui-video' ||
+                        selectedBlock.type === 'ui-media-display' ||
+                        selectedBlock.type === 'ui-audio-player' ||
+                        selectedBlock.type === 'ui-pdf-viewer') && (
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between gap-2">
-                            <span className="font-semibold text-slate-400">YouTube / Video URL</span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleUpdateBlock({
-                                  ...selectedBlock,
-                                  videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-                                })
-                              }
-                              className="text-[10px] text-sky-400 hover:underline cursor-pointer"
-                            >
-                              Sample YouTube
-                            </button>
+                            <span className="font-semibold text-slate-400">
+                              {selectedBlock.type === 'ui-audio-player'
+                                ? 'MP3 / Audio URL'
+                                : selectedBlock.type === 'ui-pdf-viewer'
+                                ? 'PDF File URL (optional)'
+                                : 'YouTube / Video URL'}
+                            </span>
+                            {selectedBlock.type === 'ui-video' && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    videoUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+                                  })
+                                }
+                                className="text-[10px] text-sky-400 hover:underline cursor-pointer"
+                              >
+                                Sample YouTube
+                              </button>
+                            )}
                           </div>
                           <input
                             type="text"
@@ -7316,13 +7379,24 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             onChange={(e) =>
                               handleUpdateBlock({ ...selectedBlock, videoUrl: e.target.value })
                             }
-                            placeholder="https://youtube.com/watch?v=... or https://youtu.be/..."
+                            placeholder={
+                              selectedBlock.type === 'ui-audio-player'
+                                ? 'https://.../audio.mp3'
+                                : selectedBlock.type === 'ui-pdf-viewer'
+                                ? 'https://.../document.pdf'
+                                : 'https://youtube.com/watch?v=... or MP4 URL'
+                            }
                             className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
                           />
                         </div>
                       )}
 
-                      {selectedBlock.type === 'ui-icon' && (
+                      {(selectedBlock.type === 'ui-icon' ||
+                        selectedBlock.type === 'ui-icon-button' ||
+                        selectedBlock.type === 'ui-list-tile' ||
+                        selectedBlock.type === 'ui-slidable-tile' ||
+                        selectedBlock.type === 'ui-toggle-icon' ||
+                        selectedBlock.type === 'ui-notification-badge') && (
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between">
                             <span className="font-semibold text-slate-400">Real Vector Icon</span>
@@ -7568,13 +7642,339 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         </div>
                       )}
 
+                      {selectedBlock.type === 'ui-richtext' && (
+                        <div className="p-2 rounded-lg bg-[#141923] border border-sky-500/20 text-[10px] text-slate-300 space-y-1">
+                          <span className="font-semibold text-sky-300 block">RichText Formatting Syntax</span>
+                          <p className="font-mono text-slate-400">
+                            **bold** · *italic* · __underline__ · #38bdf8|color · `code`
+                          </p>
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-markdown' && (
+                        <div className="space-y-1 p-2 rounded-lg bg-[#141923] border border-sky-500/20">
+                          <span className="font-semibold text-sky-300 block">Markdown Content</span>
+                          <textarea
+                            rows={4}
+                            value={selectedBlock.content}
+                            onChange={(e) =>
+                              handleUpdateBlock({ ...selectedBlock, content: e.target.value })
+                            }
+                            className="w-full px-2 py-1.5 rounded bg-[#0A0D13] border border-white/10 text-slate-200 font-mono text-[10px] outline-none focus:border-[#4C97FF]"
+                          />
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-blur' && (
+                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-white/10">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-slate-300">Blur Intensity (px)</span>
+                            <span className="font-mono text-sky-400">{selectedBlock.blurAmount ?? 12}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={32}
+                            step={2}
+                            value={selectedBlock.blurAmount ?? 12}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                blurAmount: Number(e.target.value),
+                              })
+                            }
+                            className="w-full accent-[#4C97FF] cursor-pointer"
+                          />
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-aspect-ratio' && (
+                        <div className="space-y-1">
+                          <span className="font-semibold text-slate-400 block">Aspect Ratio</span>
+                          <select
+                            value={selectedBlock.aspectRatio || '16/9'}
+                            onChange={(e) =>
+                              handleUpdateBlock({ ...selectedBlock, aspectRatio: e.target.value })
+                            }
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                          >
+                            <option value="16/9">16:9 (Widescreen)</option>
+                            <option value="4/3">4:3 (Classic)</option>
+                            <option value="1/1">1:1 (Square)</option>
+                            <option value="9/16">9:16 (Portrait / Story)</option>
+                            <option value="21/9">21:9 (Ultrawide)</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-progress-bar' && (
+                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-white/10">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-slate-300">Progress (%)</span>
+                            <span className="font-mono text-sky-400">{selectedBlock.progressValue ?? 75}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            step={5}
+                            value={selectedBlock.progressValue ?? 75}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                progressValue: Number(e.target.value),
+                              })
+                            }
+                            className="w-full accent-[#4C97FF] cursor-pointer"
+                          />
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-chart' && (
+                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-sky-500/20">
+                          <span className="font-semibold text-sky-300 block">Chart Style & Data</span>
+                          <select
+                            value={selectedBlock.chartType || 'line'}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                chartType: e.target.value as 'line' | 'bar',
+                              })
+                            }
+                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                          >
+                            <option value="line">Line Chart</option>
+                            <option value="bar">Bar Chart</option>
+                          </select>
+                          <input
+                            type="text"
+                            value={(selectedBlock.options || []).join(', ')}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                options: e.target.value
+                                  .split(',')
+                                  .map((s) => s.trim())
+                                  .filter(Boolean),
+                              })
+                            }
+                            placeholder="Jan:32, Feb:54, Mar:82"
+                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 font-mono text-[10px] outline-none"
+                          />
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-barcode' && (
+                        <div className="space-y-1">
+                          <span className="font-semibold text-slate-400 block">Code Mode</span>
+                          <select
+                            value={selectedBlock.barcodeMode || 'barcode'}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                barcodeMode: e.target.value as 'barcode' | 'qr',
+                              })
+                            }
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                          >
+                            <option value="barcode">Code-128 Barcode</option>
+                            <option value="qr">QR Code Matrix</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-transform' && (
+                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-indigo-400/20">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-indigo-300">2D Transform</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  transformRotate: 0,
+                                  transformScale: 100,
+                                  transformTranslateX: 0,
+                                  transformTranslateY: 0,
+                                })
+                              }
+                              className="text-[10px] text-sky-400 hover:underline cursor-pointer"
+                            >
+                              Reset
+                            </button>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-[10px]">
+                            <label className="space-y-0.5">
+                              <span className="text-slate-400">Rotate ({selectedBlock.transformRotate ?? -4}°)</span>
+                              <input
+                                type="range"
+                                min={-180}
+                                max={180}
+                                value={selectedBlock.transformRotate ?? -4}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    transformRotate: Number(e.target.value),
+                                  })
+                                }
+                                className="w-full accent-[#4C97FF]"
+                              />
+                            </label>
+                            <label className="space-y-0.5">
+                              <span className="text-slate-400">Scale ({selectedBlock.transformScale ?? 100}%)</span>
+                              <input
+                                type="range"
+                                min={50}
+                                max={150}
+                                value={selectedBlock.transformScale ?? 100}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    transformScale: Number(e.target.value),
+                                  })
+                                }
+                                className="w-full accent-[#4C97FF]"
+                              />
+                            </label>
+                          </div>
+                        </div>
+                      )}
+
+                      {(selectedBlock.type === 'ui-lottie' ||
+                        selectedBlock.type === 'ui-shader-wrap' ||
+                        selectedBlock.type === 'ui-shader-fill') && (
+                        <div className="space-y-1">
+                          <span className="font-semibold text-slate-400 block">Effect Preset</span>
+                          <select
+                            value={selectedBlock.shaderPreset || 'orbit'}
+                            onChange={(e) =>
+                              handleUpdateBlock({ ...selectedBlock, shaderPreset: e.target.value })
+                            }
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                          >
+                            {selectedBlock.type === 'ui-lottie' ? (
+                              <>
+                                <option value="orbit">Orbit Ring</option>
+                                <option value="pulse">Pulse Glow</option>
+                                <option value="check">Success Check</option>
+                              </>
+                            ) : selectedBlock.type === 'ui-shader-wrap' ? (
+                              <>
+                                <option value="hologram">Hologram</option>
+                                <option value="neon-wave">Neon Wave</option>
+                                <option value="prism">Prism Shimmer</option>
+                                <option value="scanline">CRT Scanline</option>
+                              </>
+                            ) : (
+                              <>
+                                <option value="plasma">Plasma Gradient</option>
+                                <option value="aurora">Aurora Mesh</option>
+                                <option value="liquid-cyan">Liquid Cyan</option>
+                              </>
+                            )}
+                          </select>
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-tooltip' && (
+                        <div className="space-y-1">
+                          <span className="font-semibold text-slate-400 block">Tooltip Placement</span>
+                          <select
+                            value={selectedBlock.tooltipPosition || 'top'}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                tooltipPosition: e.target.value as CanvasBlock['tooltipPosition'],
+                              })
+                            }
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                          >
+                            <option value="top">Top</option>
+                            <option value="bottom">Bottom</option>
+                            <option value="left">Left</option>
+                            <option value="right">Right</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-conditional-builder' && (
+                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-amber-400/20">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-amber-300">Condition Branches</span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  isExpanded: !(selectedBlock.isExpanded !== false),
+                                })
+                              }
+                              className="px-2 py-0.5 rounded bg-white/10 text-[10px] font-bold text-white cursor-pointer"
+                            >
+                              State: {selectedBlock.isExpanded !== false ? 'TRUE' : 'FALSE'}
+                            </button>
+                          </div>
+                          <input
+                            type="text"
+                            value={selectedBlock.conditionTrueText || ''}
+                            onChange={(e) =>
+                              handleUpdateBlock({ ...selectedBlock, conditionTrueText: e.target.value })
+                            }
+                            placeholder="TRUE branch content..."
+                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-emerald-200 outline-none"
+                          />
+                          <input
+                            type="text"
+                            value={selectedBlock.conditionFalseText || ''}
+                            onChange={(e) =>
+                              handleUpdateBlock({ ...selectedBlock, conditionFalseText: e.target.value })
+                            }
+                            placeholder="FALSE branch content..."
+                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-300 outline-none"
+                          />
+                        </div>
+                      )}
+
+                      {(selectedBlock.type === 'ui-sticky-header' ||
+                        selectedBlock.type === 'ui-pdf-viewer' ||
+                        selectedBlock.type === 'ui-google-map' ||
+                        selectedBlock.type === 'ui-genui-chat') && (
+                        <div className="space-y-1 p-2 rounded-lg bg-[#141923] border border-white/10">
+                          <span className="font-semibold text-slate-300 block">
+                            {selectedBlock.type === 'ui-sticky-header'
+                              ? 'Section Groups (Header|item1|item2 per line)'
+                              : selectedBlock.type === 'ui-google-map'
+                              ? 'Map Pins (Name | X% | Y% per line)'
+                              : 'Entries (one per line)'}
+                          </span>
+                          <textarea
+                            rows={3}
+                            value={(selectedBlock.options || []).join('\n')}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                options: e.target.value
+                                  .split('\n')
+                                  .map((r) => r.trim())
+                                  .filter(Boolean),
+                              })
+                            }
+                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 font-mono text-[10px] outline-none"
+                          />
+                        </div>
+                      )}
+
                       {(selectedBlock.type === 'ui-section' ||
                         selectedBlock.type === 'ui-card' ||
                         selectedBlock.type === 'ui-row' ||
                         selectedBlock.type === 'ui-column' ||
                         selectedBlock.type === 'ui-stack' ||
                         selectedBlock.type === 'ui-wrap' ||
-                        selectedBlock.type === 'ui-flex') && (
+                        selectedBlock.type === 'ui-flex' ||
+                        selectedBlock.type === 'ui-blur' ||
+                        selectedBlock.type === 'ui-aspect-ratio' ||
+                        selectedBlock.type === 'ui-shader-wrap' ||
+                        selectedBlock.type === 'ui-transform') && (
                         <div className="space-y-2 p-2 rounded-lg bg-[#141923] border border-white/10">
                           <span className="font-semibold text-slate-300 block">
                             Box Styles (BG, Border, Shadow &amp; Size)
@@ -7842,6 +8242,9 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
                       {/* Quick Button Click Wiring / Navbar Shortcut */}
                       {(selectedBlock.type === 'ui-button' ||
+                        selectedBlock.type === 'ui-icon-button' ||
+                        selectedBlock.type === 'ui-list-tile' ||
+                        selectedBlock.type === 'ui-ad-banner' ||
                         selectedBlock.type === 'logic-click') && (
                         <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-400/25 space-y-1.5">
                           <span className="font-semibold text-amber-300 flex items-center gap-1">

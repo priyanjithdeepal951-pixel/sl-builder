@@ -1671,6 +1671,192 @@ export function generateHtmlExport(
     </div>
   </section>`;
 
+        case 'ui-richtext':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3${customCls}">
+    <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 text-sm leading-relaxed">${content.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>').replace(/\*([^*]+)\*/g, '<em>$1</em>')}</div>
+  </section>`;
+
+        case 'ui-icon-button':
+          return `  <div id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3 ${alignClass}${customCls}">
+    <button type="button" onclick="slShowToast(${escapeHtml(JSON.stringify(b.actionPayload || content))})" style="background:${resolvedAccent};" class="w-11 h-11 rounded-full text-white inline-flex items-center justify-center shadow-lg cursor-pointer">${getVectorIconSvgHtml(
+            b.iconName || 'plus',
+            20
+          )}</button>
+  </div>`;
+
+        case 'ui-list-tile':
+        case 'ui-slidable-tile':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-2${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 flex items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-full bg-sky-500/20 text-sky-300 flex items-center justify-center">${getVectorIconSvgHtml(
+            b.iconName || 'settings',
+            18
+          )}</div>
+        <div>
+          <div style="${textFxCss}" class="text-sm font-bold">${content}</div>
+          ${subtitle ? `<div style="color:${subColor};" class="text-xs">${subtitle}</div>` : ''}
+        </div>
+      </div>
+      ${b.badgeText ? `<span style="background:${resolvedAccent};" class="px-2 py-0.5 rounded-full text-[10px] font-bold text-white">${escapeHtml(b.badgeText)}</span>` : ''}
+    </div>
+  </section>`;
+
+        case 'ui-calendar':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-md mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-3">
+      <div class="text-sm font-bold">${content}</div>
+      <div class="grid grid-cols-7 gap-1 text-center text-xs">${Array.from(
+        { length: 28 },
+        (_, i) =>
+          `<div class="py-1.5 rounded ${
+            i === 11 ? 'bg-indigo-600 text-white font-bold' : 'bg-white/5 text-slate-300'
+          }">${i + 1}</div>`
+      ).join('')}</div>
+    </div>
+  </section>`;
+
+        case 'ui-toggle-icon':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 flex items-center justify-between">
+      <span style="${textFxCss}" class="text-sm font-bold">${content}</span>
+      <button type="button" onclick="this.classList.toggle('text-rose-400')" class="px-3 py-1.5 rounded-full bg-white/10 text-slate-200 inline-flex items-center gap-1.5 cursor-pointer">${getVectorIconSvgHtml(
+            b.iconName || 'heart',
+            16
+          )} <span>${b.counterValue ?? 0}</span></button>
+    </div>
+  </section>`;
+
+        case 'ui-audio-player':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-2">
+      <div style="${textFxCss}" class="text-sm font-bold">${content}</div>
+      <audio controls ${b.videoUrl ? `src="${escapeHtml(b.videoUrl)}"` : ''} class="w-full"></audio>
+    </div>
+  </section>`;
+
+        case 'ui-webview': {
+          const rawWeb = b.actionPayload || b.content || 'https://example.com';
+          const webSrc = /^https?:\/\//i.test(rawWeb) ? rawWeb : `https://${rawWeb}`;
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div class="rounded-2xl overflow-hidden border border-white/15 bg-black">
+      <iframe src="${escapeHtml(webSrc)}" title="${content}" class="w-full h-64 border-0 bg-white"></iframe>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-static-map':
+        case 'ui-google-map':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div class="p-6 rounded-2xl border border-white/15 bg-[#101C2E] text-center space-y-2">
+      <div class="text-sm font-bold text-white">${content}</div>
+      ${subtitle ? `<p class="text-xs text-sky-300 font-mono">${subtitle}</p>` : ''}
+    </div>
+  </section>`;
+
+        case 'ui-ad-banner':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3${customCls}">
+    <div class="p-4 rounded-xl border border-amber-400/30 bg-amber-500/10 flex items-center justify-between gap-3">
+      <span class="px-2 py-0.5 rounded bg-amber-400 text-black text-[10px] font-extrabold">${escapeHtml(b.badgeText || 'AD')}</span>
+      <span class="text-sm font-bold flex-1">${content}</span>
+      <button type="button" onclick="slShowToast(${escapeHtml(JSON.stringify(content))})" style="background:${resolvedAccent};" class="px-3 py-1.5 rounded-lg text-white text-xs font-bold cursor-pointer">${escapeHtml(b.actionPayload || 'Open')}</button>
+    </div>
+  </section>`;
+
+        case 'ui-lottie':
+        case 'ui-rive':
+        case 'ui-shader-wrap':
+        case 'ui-shader-fill':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="background:linear-gradient(135deg,rgba(56,189,248,0.22),rgba(168,85,247,0.25));" class="p-6 ${radiusClass} border border-white/15 space-y-1">
+      <div style="${textFxCss}" class="text-base font-bold">${content}</div>
+      ${subtitle ? `<p style="color:${subColor};" class="text-xs">${subtitle}</p>` : ''}
+    </div>
+  </section>`;
+
+        case 'ui-blur':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="backdrop-filter:blur(${b.blurAmount ?? 12}px); -webkit-backdrop-filter:blur(${b.blurAmount ?? 12}px);" class="p-6 ${radiusClass} border border-white/20 bg-slate-900/50 space-y-1">
+      <div style="${textFxCss}" class="text-base font-bold">${content}</div>
+      ${subtitle ? `<p style="color:${subColor};" class="text-xs">${subtitle}</p>` : ''}
+    </div>
+  </section>`;
+
+        case 'ui-aspect-ratio':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="aspect-ratio:${escapeHtml(b.aspectRatio || '16/9')};" class="w-full ${radiusClass} border border-white/15 bg-white/5 overflow-hidden flex items-center justify-center p-4">
+      ${b.imageUrl ? `<img src="${escapeHtml(b.imageUrl)}" alt="${content}" class="w-full h-full object-cover" />` : `<span class="text-sm font-bold">${content}</span>`}
+    </div>
+  </section>`;
+
+        case 'ui-transform':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="transform:translate(${b.transformTranslateX ?? 0}px,${b.transformTranslateY ?? 0}px) rotate(${b.transformRotate ?? -4}deg) scale(${(b.transformScale ?? 100) / 100});" class="p-5 ${radiusClass} border border-indigo-400/35 bg-indigo-950/35">
+      <div style="${textFxCss}" class="text-sm font-bold">${content}</div>
+      ${subtitle ? `<p style="color:${subColor};" class="text-xs mt-1">${subtitle}</p>` : ''}
+    </div>
+  </section>`;
+
+        case 'ui-media-display':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div class="p-4 ${radiusClass} border border-white/10 bg-white/5 space-y-2">
+      ${b.imageUrl ? `<img src="${escapeHtml(b.imageUrl)}" alt="${content}" class="w-full rounded-xl object-cover max-h-72" />` : ''}
+      <div style="${textFxCss}" class="text-sm font-bold">${content}</div>
+    </div>
+  </section>`;
+
+        case 'ui-pdf-viewer':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div class="p-5 ${radiusClass} border border-white/15 bg-white/5 space-y-2">
+      <div class="text-sm font-bold">${content}</div>
+      <div class="p-4 rounded-lg bg-slate-100 text-slate-900 text-xs">${escapeHtml(b.options?.[0] || subtitle || 'Document Page 1')}</div>
+    </div>
+  </section>`;
+
+        case 'ui-progress-bar': {
+          const pct = Math.max(0, Math.min(100, b.progressValue ?? 75));
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3${customCls}">
+    <div class="p-4 ${radiusClass} border border-white/10 bg-white/5 space-y-2">
+      <div class="flex justify-between text-xs font-bold"><span>${content}</span><span>${pct}%</span></div>
+      <div class="w-full h-2.5 rounded-full bg-white/10 overflow-hidden"><div style="width:${pct}%;background:${resolvedAccent};" class="h-full rounded-full"></div></div>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-language-selector':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3${customCls}">
+    <div class="p-4 ${radiusClass} border border-white/10 bg-white/5 flex items-center justify-between gap-3">
+      <span class="text-sm font-bold">${content}</span>
+      <select class="px-3 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-xs text-white">${(b.options && b.options.length ? b.options : ['English (EN)', 'සිංහල (SI)']).map((l) => `<option>${escapeHtml(l)}</option>`).join('')}</select>
+    </div>
+  </section>`;
+
+        case 'ui-notification-badge':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-3${customCls}">
+    <div class="p-4 ${radiusClass} border border-white/10 bg-white/5 flex items-center justify-between">
+      <span class="text-sm font-bold">${content}</span>
+      <span class="px-2.5 py-0.5 rounded-full bg-rose-500 text-white text-xs font-bold">${escapeHtml(b.badgeText || String(b.counterValue ?? 3))}</span>
+    </div>
+  </section>`;
+
+        case 'ui-chart':
+        case 'ui-mux-broadcast':
+        case 'ui-mouse-region':
+        case 'ui-barcode':
+        case 'ui-tooltip':
+        case 'ui-conditional-builder':
+        case 'ui-sticky-header':
+        case 'ui-markdown':
+        case 'ui-draggable':
+        case 'ui-drag-target':
+        case 'ui-genui-chat':
+          return `  <section id="${elId}" style="${layoutStyle}" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-1.5">
+      <div style="${textFxCss}" class="text-sm font-bold">${content}</div>
+      ${subtitle ? `<p style="color:${subColor};" class="text-xs">${subtitle}</p>` : ''}
+    </div>
+  </section>`;
+
         case 'ui-footer':
           return `  <footer id="${elId}" style="${layoutStyle}font-family: ${fontFam}; background: ${
             bgVal || (isLightPage ? 'rgba(255, 255, 255, 0.85)' : '#0b0e16')
@@ -2979,6 +3165,46 @@ export function generateReactTsxExport(
             <span>{openAccordions[${JSON.stringify(b.id)}] ? '−' : '+'}</span>
           </button>
           {openAccordions[${JSON.stringify(b.id)}] && <p className="px-5 pb-5 text-sm opacity-75">{${safeSub}}</p>}
+        </div>
+      </section>`;
+        case 'ui-richtext':
+        case 'ui-markdown':
+        case 'ui-progress-bar':
+        case 'ui-chart':
+        case 'ui-barcode':
+        case 'ui-calendar':
+        case 'ui-audio-player':
+        case 'ui-webview':
+        case 'ui-static-map':
+        case 'ui-google-map':
+        case 'ui-ad-banner':
+        case 'ui-lottie':
+        case 'ui-blur':
+        case 'ui-aspect-ratio':
+        case 'ui-shader-wrap':
+        case 'ui-shader-fill':
+        case 'ui-transform':
+        case 'ui-media-display':
+        case 'ui-rive':
+        case 'ui-pdf-viewer':
+        case 'ui-language-selector':
+        case 'ui-notification-badge':
+        case 'ui-mux-broadcast':
+        case 'ui-mouse-region':
+        case 'ui-tooltip':
+        case 'ui-conditional-builder':
+        case 'ui-sticky-header':
+        case 'ui-draggable':
+        case 'ui-drag-target':
+        case 'ui-genui-chat':
+        case 'ui-list-tile':
+        case 'ui-slidable-tile':
+        case 'ui-toggle-icon':
+        case 'ui-icon-button':
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-3 w-full">
+        <div className="p-5 rounded-xl bg-white/5 border border-white/10 space-y-1.5"${styleAttr}>
+          <div className="text-sm font-bold">{textOverrides[${JSON.stringify(b.id)}] ?? ${safeTitle}}</div>
+          {${safeSub} && <p className="text-xs opacity-75">{${safeSub}}</p>}
         </div>
       </section>`;
         case 'ui-footer':
