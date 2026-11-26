@@ -222,6 +222,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   const [activeRailItem, setActiveRailItem] = useState<string>('widget-palette');
   const [frequentlyUsedOpen, setFrequentlyUsedOpen] = useState<boolean>(true);
   const [layoutElementsOpen, setLayoutElementsOpen] = useState<boolean>(true);
+  const [baseElementsOpen, setBaseElementsOpen] = useState<boolean>(true);
   const [moreWidgetsOpen, setMoreWidgetsOpen] = useState<boolean>(false);
   const [viewport, setViewport] = useState<ViewportMode>('desktop');
   const [stageSize, setStageSize] = useState<'small' | 'normal' | 'fullscreen'>('normal');
@@ -2780,6 +2781,558 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                               return (
                                 <button
                                   key={item.id}
+                                  type="button"
+                                  draggable
+                                  onDragStart={(e) => handlePaletteDragStart(e, tpl)}
+                                  onClick={() => handleAddTemplateBlock(tpl)}
+                                  title={`Add ${item.id}`}
+                                  className="h-[74px] rounded-[8px] bg-[#1e2127] hover:bg-[#262a33] border border-white/[0.07] hover:border-white/[0.16] px-1.5 flex flex-col items-center justify-center gap-1.5 text-center transition-colors cursor-grab active:cursor-grabbing"
+                                >
+                                  <span className="text-[#c9d1d9] flex items-center justify-center">
+                                    {item.icon}
+                                  </span>
+                                  <span className="text-[11px] font-normal text-[#9aa3b2] truncate w-full leading-tight">
+                                    {item.id}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* BASE ELEMENTS Section (matches reference screenshots) */}
+                      <div className="pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setBaseElementsOpen((o) => !o)}
+                          className="w-full flex items-center justify-between py-1 text-left cursor-pointer group"
+                        >
+                          <span className="text-[11px] font-medium tracking-[0.08em] text-[#9aa3b2] group-hover:text-white uppercase transition-colors">
+                            BASE ELEMENTS
+                          </span>
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 text-[#8b949e] transition-transform duration-150 ${
+                              baseElementsOpen ? 'rotate-0' : '-rotate-90'
+                            }`}
+                          />
+                        </button>
+
+                        {baseElementsOpen && (
+                          <div className="grid grid-cols-3 gap-2 pt-2">
+                            {(
+                              [
+                                {
+                                  id: 'Text',
+                                  tplId: 'tpl-paragraph',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-[20px] h-[20px]">
+                                      <path d="M4 5.5h10v2.2h-3.8V18H7.8V7.7H4V5.5zm9.5 4.5h6.5v2h-2.1v6h-2.3v-6h-2.1v-2z" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'RichText',
+                                  tplId: 'tpl-heading',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <path d="M7 4h7l4 4v11.5a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19.5v-14A1.5 1.5 0 0 1 7.5 4z" />
+                                      <path d="M9 8.5h4M11 8.5v4" />
+                                      <path d="M9 15h6M9 17.8h4.5" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Image',
+                                  tplId: 'tpl-image',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="4.5" y="4.5" width="15" height="11.5" rx="2" />
+                                      <circle cx="9" cy="8.5" r="1.1" />
+                                      <path d="m6 14 3.5-3.2 2.8 2.4 2.2-1.8 3 2.6" />
+                                      <path d="M6.5 19h11" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'CircleImage',
+                                  tplId: 'tpl-avatar',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <circle cx="12" cy="12" r="8" />
+                                      <circle cx="9.2" cy="9.2" r="1.1" />
+                                      <path d="m5.5 15 3.8-3.5 2.7 2.4 2.3-2 3.7 3.3" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Icon',
+                                  tplId: 'tpl-icon',
+                                  icon: <Settings className="w-[20px] h-[20px] stroke-[1.75]" />,
+                                },
+                                {
+                                  id: 'Button',
+                                  tplId: 'tpl-button',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" className="w-[20px] h-[20px]">
+                                      <rect x="3.5" y="5" width="17" height="14" rx="4" stroke="currentColor" strokeWidth="1.7" />
+                                      <text
+                                        x="12"
+                                        y="14"
+                                        textAnchor="middle"
+                                        fill="currentColor"
+                                        fontSize="6.5"
+                                        fontWeight="700"
+                                        fontFamily="system-ui, sans-serif"
+                                        letterSpacing="0.3"
+                                      >
+                                        BTN
+                                      </text>
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'IconButton',
+                                  tplId: 'tpl-button',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <rect x="4.5" y="4.5" width="15" height="15" rx="3.5" />
+                                      <path d="M12 8.8v6.4M8.8 12h6.4" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'ListTile',
+                                  tplId: 'tpl-listview',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <rect x="4.5" y="4.5" width="15" height="15" rx="1.8" />
+                                      <path d="M8 8.5h1M11 8.5h5M8 12h1M11 12h5M8 15.5h1M11 15.5h5" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'SlidableListTile',
+                                  tplId: 'tpl-listview',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <rect x="3.5" y="8" width="12.5" height="8" rx="1.2" fill="currentColor" fillOpacity="0.85" />
+                                      <path d="M5.5 10.7h7M5.5 13.3h4.5" stroke="#1e2127" strokeWidth="1.5" />
+                                      <rect x="17" y="8" width="3.5" height="8" rx="1" />
+                                      <circle cx="18.75" cy="12" r="0.8" fill="currentColor" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'VideoPlayer',
+                                  tplId: 'tpl-video',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="7" y="4.5" width="12.5" height="12.5" rx="2" />
+                                      <path d="M4.5 8v9.5A2 2 0 0 0 6.5 19.5H16" />
+                                      <polygon points="11.5,8.5 16,11 11.5,13.5" fill="currentColor" stroke="none" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'YoutubePlayer',
+                                  tplId: 'tpl-video',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-[20px] h-[20px]">
+                                      <path d="M20.5 7.5a2.4 2.4 0 0 0-1.7-1.7C17.3 5.4 12 5.4 12 5.4s-5.3 0-6.8.4A2.4 2.4 0 0 0 3.5 7.5 25 25 0 0 0 3 12a25 25 0 0 0 .5 4.5 2.4 2.4 0 0 0 1.7 1.7c1.5.4 6.8.4 6.8.4s5.3 0 6.8-.4a2.4 2.4 0 0 0 1.7-1.7A25 25 0 0 0 21 12a25 25 0 0 0-.5-4.5zM10.2 14.8V9.2l4.8 2.8-4.8 2.8z" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Calendar',
+                                  tplId: 'tpl-date-input',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="4.5" y="5.5" width="15" height="14" rx="2" />
+                                      <path d="M8.5 3.5v3M15.5 3.5v3M4.5 9.5h15" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'ToggleIcon',
+                                  tplId: 'tpl-switch',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <path d="M12 19.5s-7-4.4-7-9.6a4.1 4.1 0 0 1 7-2.8 4.1 4.1 0 0 1 7 2.8c0 5.2-7 9.6-7 9.6z" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'AudioPlayer',
+                                  tplId: 'tpl-video',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <path d="M5 10.5v3M8.5 8v8M12 5v14M15.5 8v8M19 10.5v3" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'WebView',
+                                  tplId: 'tpl-link',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="4.5" y="4.5" width="15" height="15" rx="2" />
+                                      <path d="M4.5 9h15" />
+                                      <path d="M7.5 14.5s1.8-2.8 4.5-2.8 4.5 2.8 4.5 2.8-1.8 2.8-4.5 2.8-4.5-2.8-4.5-2.8z" />
+                                      <circle cx="12" cy="14.5" r="1" fill="currentColor" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'StaticMap',
+                                  tplId: 'tpl-device',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <path d="M12 16.5s4.8-4.4 4.8-8.2a4.8 4.8 0 1 0-9.6 0c0 3.8 4.8 8.2 4.8 8.2z" />
+                                      <circle cx="12" cy="8.3" r="1.5" />
+                                      <path d="M6 19.5h12" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'GoogleMap',
+                                  tplId: 'tpl-device',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <polygon points="4,6.5 9.5,4.5 14.5,6.5 20,4.5 20,17.5 14.5,19.5 9.5,17.5 4,19.5" />
+                                      <path d="M9.5 4.5v13M14.5 6.5v13" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'AdBanner',
+                                  tplId: 'tpl-badge',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="7" y="3.8" width="10" height="16.4" rx="2" />
+                                      <path d="M9.5 17h5" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'LottieAnimation',
+                                  tplId: 'tpl-section',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <path d="M4.5 10.5c3.5 0 5.5 3 5.5 6.5 0-4.2 2.2-6.5 4.5-7" />
+                                      <circle cx="16.8" cy="9.2" r="2.3" fill="currentColor" stroke="none" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Blur',
+                                  tplId: 'tpl-section',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-[20px] h-[20px]">
+                                      <circle cx="12" cy="5.5" r="0.9" />
+                                      <circle cx="9.2" cy="6.6" r="1" />
+                                      <circle cx="14.8" cy="6.6" r="1" />
+                                      <circle cx="6.8" cy="9.2" r="1" />
+                                      <circle cx="9.8" cy="9.2" r="1.2" />
+                                      <circle cx="12.6" cy="9.2" r="1.2" />
+                                      <circle cx="15.5" cy="9.2" r="1" />
+                                      <circle cx="6" cy="12" r="1" />
+                                      <circle cx="9" cy="12" r="1.3" />
+                                      <circle cx="12" cy="12" r="1.4" />
+                                      <circle cx="15" cy="12" r="1.3" />
+                                      <circle cx="18" cy="12" r="1" />
+                                      <circle cx="6.8" cy="14.8" r="1" />
+                                      <circle cx="9.8" cy="14.8" r="1.2" />
+                                      <circle cx="12.6" cy="14.8" r="1.2" />
+                                      <circle cx="15.5" cy="14.8" r="1" />
+                                      <circle cx="9.2" cy="17.4" r="1" />
+                                      <circle cx="14.8" cy="17.4" r="1" />
+                                      <circle cx="12" cy="18.5" r="0.9" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'AspectRatio',
+                                  tplId: 'tpl-section',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="4" y="5.5" width="16" height="13" rx="1.8" />
+                                      <path d="M7.5 11.5v-3h3M16.5 12.5v3h-3" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'ShaderWrapper',
+                                  tplId: 'tpl-section',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" className="w-[20px] h-[20px]">
+                                      <rect x="5" y="5" width="14" height="14" rx="2" />
+                                      <path d="M7.5 8.5h1M11.5 8.5h1M15.5 8.5h1M9.5 11.5h1M13.5 11.5h1M7.5 14.5h1M11.5 14.5h1M15.5 14.5h1" strokeWidth="2" strokeLinecap="round" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'ShaderFill',
+                                  tplId: 'tpl-section',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <path d="M5 10l5-5M5 15.5L15.5 5M6.5 19L19 6.5M12 19l7-7M17.5 19L19 17.5" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Transform',
+                                  tplId: 'tpl-section',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <path d="M6.5 4v11.5a1.5 1.5 0 0 0 1.5 1.5h11.5" />
+                                      <path d="M4.5 6l2-2 2 2M17.5 15l2 2-2 2" />
+                                      <path d="M9.5 8.5h5a1 1 0 0 1 1 1v5" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'MediaDisplay',
+                                  tplId: 'tpl-image',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="6.5" y="4.5" width="13" height="11.5" rx="1.8" />
+                                      <path d="M4 8.5v9a2 2 0 0 0 2 2h10.5" />
+                                      <circle cx="10.5" cy="8.5" r="1" />
+                                      <path d="m8 14 3.2-3 2.3 2 1.8-1.6 2.5 2.6" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'RiveAnimation',
+                                  tplId: 'tpl-section',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <path d="M6.5 6.5h6.5a3.5 3.5 0 0 1 0 7H10l5.5 5" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'PdfViewer',
+                                  tplId: 'tpl-file-upload',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" className="w-[20px] h-[20px]">
+                                      <rect x="6.5" y="4" width="12.5" height="13.5" rx="1.8" stroke="currentColor" strokeWidth="1.65" />
+                                      <path d="M4.5 7.5v10.5a2 2 0 0 0 2 2h9.5" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" />
+                                      <text
+                                        x="12.8"
+                                        y="12.7"
+                                        textAnchor="middle"
+                                        fill="currentColor"
+                                        fontSize="5.4"
+                                        fontWeight="700"
+                                        fontFamily="system-ui, sans-serif"
+                                      >
+                                        PDF
+                                      </text>
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'ProgressBar',
+                                  tplId: 'tpl-stat',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" className="w-[20px] h-[20px]">
+                                      <text
+                                        x="12"
+                                        y="9.5"
+                                        textAnchor="middle"
+                                        fill="currentColor"
+                                        fontSize="6"
+                                        fontWeight="700"
+                                        fontFamily="system-ui, sans-serif"
+                                      >
+                                        75%
+                                      </text>
+                                      <rect x="4" y="12.5" width="16" height="4.5" rx="2" stroke="currentColor" strokeWidth="1.5" />
+                                      <rect x="4.8" y="13.3" width="10.5" height="2.9" rx="1.2" fill="currentColor" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'LanguageSelector',
+                                  tplId: 'tpl-select',
+                                  icon: <Globe className="w-[20px] h-[20px] stroke-[1.75]" />,
+                                },
+                                {
+                                  id: 'Badge',
+                                  tplId: 'tpl-badge',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <path d="M18 15.5H6l1.4-2V10a4.6 4.6 0 0 1 7.2-3.8" />
+                                      <path d="M10 18a2.2 2.2 0 0 0 4 0" />
+                                      <circle cx="16.5" cy="7.5" r="3" fill="currentColor" stroke="none" />
+                                      <text x="16.5" y="9.3" textAnchor="middle" fill="#1e2127" fontSize="5" fontWeight="800">
+                                        1
+                                      </text>
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Chart',
+                                  tplId: 'tpl-stat',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <path d="M5 4.5v15h14.5" />
+                                      <path d="m7.5 16 3.5-3.8 3 .8 4-5.5" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'MuxBroadcast',
+                                  tplId: 'tpl-video',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="7" y="4" width="9" height="16" rx="2" />
+                                      <polygon points="10.2,9.5 14,12 10.2,14.5" fill="currentColor" stroke="none" />
+                                      <path d="M18.5 7.5a5.5 5.5 0 0 1 0 6" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Timer',
+                                  tplId: 'tpl-timer',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" className="w-[20px] h-[20px]">
+                                      <path d="M10 4.5h4M12 4.5V7" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+                                      <rect x="4.5" y="7" width="15" height="11.5" rx="3" stroke="currentColor" strokeWidth="1.7" />
+                                      <text
+                                        x="12"
+                                        y="14.7"
+                                        textAnchor="middle"
+                                        fill="currentColor"
+                                        fontSize="5.4"
+                                        fontWeight="700"
+                                        fontFamily="ui-monospace, monospace"
+                                      >
+                                        0:02
+                                      </text>
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'MouseRegion',
+                                  tplId: 'tpl-hat-click',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="4.5" y="5.5" width="15" height="12" rx="1.8" />
+                                      <path d="M4.5 9.5h15" />
+                                      <polygon points="13,12 19,15 16,16 14.5,19" fill="currentColor" stroke="none" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Barcode',
+                                  tplId: 'tpl-badge',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <path d="M5 7V5h2.5M16.5 5H19v2M5 17v2h2.5M16.5 19H19v-2" />
+                                      <path d="M7.5 8.5v7M10 8.5v7M12.5 8.5v7M15 8.5v7M16.8 8.5v7" strokeWidth="1.4" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'DataTable',
+                                  tplId: 'tpl-datatable',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="4" y="5" width="16" height="14" rx="1.8" />
+                                      <path d="M4 9.5h16M4 14h16M9.5 5v14" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Tooltip',
+                                  tplId: 'tpl-feedback',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <path d="M5 6h14a1.5 1.5 0 0 1 1.5 1.5v8A1.5 1.5 0 0 1 19 17h-9l-4.5 3v-3H5a1.5 1.5 0 0 1-1.5-1.5v-8A1.5 1.5 0 0 1 5 6z" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'ConditionalBuilder',
+                                  tplId: 'tpl-if-else',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="4" y="10" width="4.5" height="4.5" rx="0.8" />
+                                      <rect x="14.5" y="6" width="4.5" height="4.5" rx="0.8" />
+                                      <rect x="14.5" y="14" width="4.5" height="4.5" rx="0.8" />
+                                      <path d="M8.5 12.2h3V8.2h3M11.5 12.2v4h3" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'StickyHeader',
+                                  tplId: 'tpl-navbar',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <path d="M5 7h1.5M9.5 7h6M5 12h1.5M9.5 12h8M5 17h1.5M9.5 17h8" />
+                                      <path d="M18 4.5v3M16.5 6h3" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Markdown',
+                                  tplId: 'tpl-paragraph',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" className="w-[20px] h-[20px]">
+                                      <rect x="4" y="5.5" width="16" height="13" rx="2" stroke="currentColor" strokeWidth="1.7" />
+                                      <text
+                                        x="10.2"
+                                        y="14.2"
+                                        textAnchor="middle"
+                                        fill="currentColor"
+                                        fontSize="7.5"
+                                        fontWeight="800"
+                                        fontFamily="system-ui, sans-serif"
+                                      >
+                                        M
+                                      </text>
+                                      <path d="M16 9.5v5m-1.6-1.6L16 14.5l1.6-1.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Draggable',
+                                  tplId: 'tpl-card',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="4.5" y="6.5" width="10" height="11" rx="1.8" strokeDasharray="2.2 2" />
+                                      <rect x="8.5" y="4.5" width="10" height="11" rx="1.8" />
+                                      <circle cx="16.5" cy="14" r="2.2" fill="currentColor" stroke="none" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'DragTarget',
+                                  tplId: 'tpl-section',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="4.5" y="6.5" width="14" height="11.5" rx="2" strokeDasharray="2.4 2" />
+                                      <circle cx="15.8" cy="8.5" r="2.4" />
+                                      <path d="m6.5 15 3.5-3 2.5 2 2-1.5 2.5 2.5" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'GenUI Chat',
+                                  tplId: 'tpl-card',
+                                  icon: <Bot className="w-[20px] h-[20px] stroke-[1.75]" />,
+                                },
+                              ] as const
+                            ).map((item) => {
+                              const tpl =
+                                WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === item.tplId) ||
+                                WEB_STUDIO_BLOCK_TEMPLATES[0];
+                              return (
+                                <button
+                                  key={`base_${item.id}`}
                                   type="button"
                                   draggable
                                   onDragStart={(e) => handlePaletteDragStart(e, tpl)}
