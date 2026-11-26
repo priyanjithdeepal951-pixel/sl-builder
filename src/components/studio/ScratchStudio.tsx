@@ -64,6 +64,7 @@ import {
   NavbarLinkItem,
   PageStyleSettings,
   Project,
+  SiteCloudConfig,
   SitePage,
   ViewportMode,
 } from '../../types/builder';
@@ -78,6 +79,7 @@ import {
 } from '../../data/webStudioBlocks';
 import { PreviewConfirmDialog, WebPreviewRenderer, renderVectorIcon } from './WebPreviewRenderer';
 import { ThemeStyleStudioPanel } from './ThemeStyleStudioPanel';
+import { CloudBackendStudioPanel, DEFAULT_SITE_CLOUD_CONFIG } from './CloudBackendStudioPanel';
 import { GeminiCodingAgentPanel, GeminiAgentAction } from './GeminiCodingAgentPanel';
 import { ICON_LIBRARY } from '../../utils/mediaHelpers';
 import {
@@ -247,6 +249,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   const pendingConfirmActionRef = useRef<(() => void) | null>(null);
   const [canvasDropIndex, setCanvasDropIndex] = useState<number | null>(null);
   const [draggingCanvasBlockId, setDraggingCanvasBlockId] = useState<string | null>(null);
+  const [cloudConfig, setCloudConfig] = useState<SiteCloudConfig>(() => ({
+    firebase: { ...DEFAULT_SITE_CLOUD_CONFIG.firebase, ...(project.cloudConfig?.firebase || {}) },
+    supabase: { ...DEFAULT_SITE_CLOUD_CONFIG.supabase, ...(project.cloudConfig?.supabase || {}) },
+  }));
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -281,6 +287,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     setRunningTimers({});
     setConfirmDialog(null);
     setRuntimeState(INITIAL_RUNTIME_STATE);
+    setCloudConfig({
+      firebase: { ...DEFAULT_SITE_CLOUD_CONFIG.firebase, ...(project.cloudConfig?.firebase || {}) },
+      supabase: { ...DEFAULT_SITE_CLOUD_CONFIG.supabase, ...(project.cloudConfig?.supabase || {}) },
+    });
   }, [project.id]);
 
   // Debounced persistence to App / Firestore
@@ -291,11 +301,12 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         name: projectName,
         blocks: pages[0]?.blocks || [],
         pages,
+        cloudConfig,
         updatedAt: 'Just now',
       });
     }, 350);
     return () => clearTimeout(timer);
-  }, [pages, projectName]);
+  }, [pages, projectName, cloudConfig]);
 
   const activePage = pages.find((p) => p.id === activePageId) || pages[0];
   const blocks = activePage?.blocks || [];
@@ -422,6 +433,109 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
   const handleAddTemplateBlock = (tpl: WebStudioBlockTemplate) => {
     handleInsertTemplateAt(tpl);
+  };
+
+  const handleAddCloudBackendBlocks = (
+    preset: 'firebase-db' | 'firebase-auth' | 'firebase-form' | 'supabase-db' | 'supabase-auth' | 'supabase-form'
+  ) => {
+    const findTpl = (id: string) =>
+      WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === id) || WEB_STUDIO_BLOCK_TEMPLATES[0];
+
+    const isFirebase = preset.startsWith('firebase');
+    if (isFirebase && !cloudConfig.firebase.enabled) {
+      setCloudConfig((prev) => ({
+        ...prev,
+        firebase: { ...prev.firebase, enabled: true },
+      }));
+    } else if (!isFirebase && !cloudConfig.supabase.enabled) {
+      setCloudConfig((prev) => ({
+        ...prev,
+        supabase: { ...prev.supabase, enabled: true },
+      }));
+    }
+
+    const col = cloudConfig.firebase.defaultCollection?.trim() || 'submissions';
+    const tbl = cloudConfig.supabase.defaultTable?.trim() || 'leads';
+    const created: CanvasBlock[] = [];
+
+    if (preset === 'firebase-db') {
+      const dbBlk = createCanvasBlockFromTemplate(findTpl('tpl-cloud-db'));
+      dbBlk.name = 'Firebase Firestore';
+      dbBlk.content = `Firestore [${col}]: Save / Get / Delete`;
+      dbBlk.subtitle = 'Connected to Firebase Firestore SDK on export';
+      dbBlk.action = 'db-save';
+      dbBlk.logicConfig = { ...(dbBlk.logicConfig || {}), collectionName: col, dbOp: 'save' };
+      created.push(dbBlk);
+    } else if (preset === 'firebase-auth') {
+      const authBlk = createCanvasBlockFromTemplate(findTpl('tpl-auth'));
+      authBlk.name = 'Firebase Auth';
+      authBlk.content = 'Firebase Email & Password Auth';
+      authBlk.subtitle = 'Sign Up, Login & Logout via Firebase Auth SDK';
+      authBlk.action = 'auth-signup';
+      created.push(authBlk);
+    } else if (preset === 'firebase-form') {
+      const heading = createCanvasBlockFromTemplate(findTpl('tpl-heading'));
+      heading.content = 'Create Your Account';
+      heading.subtitle = 'Powered by Firebase Auth & Firestore';
+      const email = createCanvasBlockFromTemplate(findTpl('tpl-email-input'));
+      const pass = createCanvasBlockFromTemplate(findTpl('tpl-password-input'));
+      const btn = createCanvasBlockFromTemplate(findTpl('tpl-submit-button'));
+      btn.content = 'Sign Up & Save to Firebase';
+      btn.action = 'db-save';
+      btn.actionPayload = col;
+      const dbBlk = createCanvasBlockFromTemplate(findTpl('tpl-cloud-db'));
+      dbBlk.name = 'Firebase Firestore';
+      dbBlk.content = `Firestore [${col}]: Save / Get / Delete`;
+      dbBlk.subtitle = 'Auto-wired to Firebase Firestore on export';
+      dbBlk.logicConfig = { ...(dbBlk.logicConfig || {}), collectionName: col, dbOp: 'save' };
+      created.push(heading, email, pass, btn, dbBlk);
+    } else if (preset === 'supabase-db') {
+      const dbBlk = createCanvasBlockFromTemplate(findTpl('tpl-cloud-db'));
+      dbBlk.name = 'Supabase Postgres';
+      dbBlk.content = `Supabase [${tbl}]: Insert / Select / Delete`;
+      dbBlk.subtitle = 'Connected to Supabase JS Client on export';
+      dbBlk.action = 'db-save';
+      dbBlk.logicConfig = { ...(dbBlk.logicConfig || {}), collectionName: tbl, dbOp: 'save' };
+      created.push(dbBlk);
+    } else if (preset === 'supabase-auth') {
+      const authBlk = createCanvasBlockFromTemplate(findTpl('tpl-auth'));
+      authBlk.name = 'Supabase Auth';
+      authBlk.content = 'Supabase Email & Password Auth';
+      authBlk.subtitle = 'Sign Up, Login & Logout via Supabase Auth';
+      authBlk.action = 'auth-signup';
+      created.push(authBlk);
+    } else if (preset === 'supabase-form') {
+      const heading = createCanvasBlockFromTemplate(findTpl('tpl-heading'));
+      heading.content = 'Join & Save Lead';
+      heading.subtitle = 'Powered by Supabase Postgres & Auth';
+      const email = createCanvasBlockFromTemplate(findTpl('tpl-email-input'));
+      const pass = createCanvasBlockFromTemplate(findTpl('tpl-password-input'));
+      const btn = createCanvasBlockFromTemplate(findTpl('tpl-submit-button'));
+      btn.content = 'Save to Supabase';
+      btn.action = 'db-save';
+      btn.actionPayload = tbl;
+      const dbBlk = createCanvasBlockFromTemplate(findTpl('tpl-cloud-db'));
+      dbBlk.name = 'Supabase Postgres';
+      dbBlk.content = `Supabase [${tbl}]: Insert / Select / Delete`;
+      dbBlk.subtitle = 'Auto-wired to Supabase JS Client on export';
+      dbBlk.logicConfig = { ...(dbBlk.logicConfig || {}), collectionName: tbl, dbOp: 'save' };
+      created.push(heading, email, pass, btn, dbBlk);
+    }
+
+    if (created.length > 0) {
+      commitBlocks((prev) => [...prev, ...created]);
+      setSelectedBlockId(created[created.length - 1].id);
+      appendConsoleLog(
+        'success',
+        `Added ${isFirebase ? 'Firebase' : 'Supabase'} block preset (${created.length} block${created.length > 1 ? 's' : ''}).`
+      );
+      onToast(
+        lang === 'si'
+          ? `${isFirebase ? 'Firebase' : 'Supabase'} block${created.length > 1 ? 's' : ''} canvas එකට එක් කළා!`
+          : `Added ${isFirebase ? 'Firebase' : 'Supabase'} block${created.length > 1 ? 's' : ''} to canvas!`,
+        'success'
+      );
+    }
   };
 
   const handleMoveBlockToIndex = (draggedId: string, targetIndex: number) => {
@@ -1977,10 +2091,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     setOpenMenu(null);
   };
 
-  const htmlCode = generateHtmlExport(projectName, blocks, pages, activePage?.pageStyle);
+  const htmlCode = generateHtmlExport(projectName, blocks, pages, activePage?.pageStyle, cloudConfig);
   const cssCode = generateCssExport(projectName, blocks, activePage?.pageStyle);
-  const jsCode = generateJsExport(projectName, blocks, pages);
-  const reactCode = generateReactTsxExport(projectName, blocks, activePage?.pageStyle);
+  const jsCode = generateJsExport(projectName, blocks, pages, cloudConfig);
+  const reactCode = generateReactTsxExport(projectName, blocks, activePage?.pageStyle, pages, cloudConfig);
   const flaskCode = generateFlaskExport(projectName, blocks);
 
   const activeJsPanelCode =
@@ -2483,9 +2597,9 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                       <button
                         type="button"
                         onClick={() => setActiveRailItem('cloud-sync')}
-                        title="Cloud Sync"
-                        aria-label="Cloud Sync"
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                        title="Firebase & Supabase"
+                        aria-label="Firebase & Supabase"
+                        className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                           activeRailItem === 'cloud-sync'
                             ? 'bg-white/[0.07] border border-white/[0.14] text-white'
                             : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
@@ -2495,6 +2609,9 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                           <path d="M6.5 18h11a4 4 0 0 0 .8-7.92A5.5 5.5 0 0 0 7.7 8.5 4.2 4.2 0 0 0 6.5 18Z" />
                           <path d="m9.8 13.5 1.8 1.8 3.2-3.4" />
                         </svg>
+                        {(cloudConfig.firebase.enabled || cloudConfig.supabase.enabled) && (
+                          <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                        )}
                       </button>
 
                       <button
@@ -3935,7 +4052,17 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                     />
                   )}
 
-                  {activeRailItem !== 'widget-palette' && activeRailItem !== 'theme-palette' && (
+                  {activeRailItem === 'cloud-sync' && (
+                    <CloudBackendStudioPanel
+                      lang={lang}
+                      cloudConfig={cloudConfig}
+                      onChangeCloudConfig={setCloudConfig}
+                      onAddBackendBlocks={handleAddCloudBackendBlocks}
+                      onToast={onToast}
+                    />
+                  )}
+
+                  {activeRailItem !== 'widget-palette' && activeRailItem !== 'theme-palette' && activeRailItem !== 'cloud-sync' && (
                     <>
                       <div className="flex items-center justify-between pb-1">
                         <span className="text-xs font-bold text-slate-200">
@@ -7653,7 +7780,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             projectName,
                             pg.blocks,
                             pages,
-                            pg.pageStyle
+                            pg.pageStyle,
+                            cloudConfig
                           );
                           const blob = new Blob([code], { type: 'text/html' });
                           const url = URL.createObjectURL(blob);

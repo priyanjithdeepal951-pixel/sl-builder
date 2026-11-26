@@ -391,6 +391,35 @@ export interface SitePage {
   pageStyle?: PageStyleSettings;
 }
 
+export interface SiteFirebaseConfig {
+  enabled: boolean;
+  apiKey: string;
+  authDomain: string;
+  projectId: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
+  appId?: string;
+  defaultCollection?: string;
+  enableFirestore?: boolean;
+  enableAuth?: boolean;
+  enableStorage?: boolean;
+}
+
+export interface SiteSupabaseConfig {
+  enabled: boolean;
+  url: string;
+  anonKey: string;
+  defaultTable?: string;
+  enableDatabase?: boolean;
+  enableAuth?: boolean;
+  enableStorage?: boolean;
+}
+
+export interface SiteCloudConfig {
+  firebase: SiteFirebaseConfig;
+  supabase: SiteSupabaseConfig;
+}
+
 export interface Project {
   id: string;
   userId?: string;
@@ -401,6 +430,7 @@ export interface Project {
   blocks: CanvasBlock[];
   pages?: SitePage[];
   studioState?: StudioWorkspaceState;
+  cloudConfig?: SiteCloudConfig;
   thumbnailColor?: string;
   description?: string;
   collaboratorUids?: string[];

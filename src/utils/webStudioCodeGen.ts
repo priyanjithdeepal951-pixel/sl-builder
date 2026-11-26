@@ -1,4 +1,4 @@
-import { CanvasBlock, PageStyleSettings, SitePage } from '../types/builder';
+import { CanvasBlock, PageStyleSettings, SiteCloudConfig, SitePage } from '../types/builder';
 import {
   getAnimationCount,
   getAnimationSpeedMultiplier,
@@ -335,11 +335,53 @@ function buildLiveAnimationCssAndHtml(pageStyle?: PageStyleSettings): {
   };
 }
 
+function buildCloudInitScriptsHtml(cloudConfig?: SiteCloudConfig): string {
+  const parts: string[] = [];
+  const fb = cloudConfig?.firebase;
+  if (fb?.enabled && fb.apiKey && fb.projectId) {
+    const fbObj = {
+      apiKey: fb.apiKey,
+      authDomain: fb.authDomain || `${fb.projectId}.firebaseapp.com`,
+      projectId: fb.projectId,
+      ...(fb.storageBucket ? { storageBucket: fb.storageBucket } : {}),
+      ...(fb.messagingSenderId ? { messagingSenderId: fb.messagingSenderId } : {}),
+      ...(fb.appId ? { appId: fb.appId } : {}),
+    };
+    parts.push(`
+  <!-- Firebase SDK Integration -->
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  ${fb.enableAuth !== false ? '<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>' : ''}
+  ${fb.enableFirestore !== false ? '<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>' : ''}
+  <script>
+    if (window.firebase && !window.firebase.apps.length) {
+      window.slFirebaseApp = window.firebase.initializeApp(${JSON.stringify(fbObj)});
+      ${fb.enableFirestore !== false ? 'if (window.firebase.firestore) window.slFirebaseDb = window.firebase.firestore();' : ''}
+      ${fb.enableAuth !== false ? 'if (window.firebase.auth) window.slFirebaseAuth = window.firebase.auth();' : ''}
+    }
+  </script>`);
+  }
+
+  const sb = cloudConfig?.supabase;
+  if (sb?.enabled && sb.url && sb.anonKey) {
+    parts.push(`
+  <!-- Supabase SDK Integration -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script>
+    if (window.supabase && window.supabase.createClient) {
+      window.slSupabase = window.supabase.createClient(${JSON.stringify(sb.url)}, ${JSON.stringify(sb.anonKey)});
+    }
+  </script>`);
+  }
+
+  return parts.join('\n');
+}
+
 export function generateHtmlExport(
   projectName: string,
   blocks: CanvasBlock[],
   pages?: SitePage[],
-  pageStyle?: PageStyleSettings
+  pageStyle?: PageStyleSettings,
+  cloudConfig?: SiteCloudConfig
 ): string {
   const isLightPage = isLightPageBackground(pageStyle);
   const pageBg = resolvePageBackgroundCss(pageStyle);
@@ -2249,6 +2291,12 @@ ${renderedBlocks}
         try { data = JSON.parse(jsonVal); } catch (e) {}
         rows.push({ id: 'doc_' + Date.now().toString(36), data: data });
         localStorage.setItem(storeKey, JSON.stringify(rows));
+        if (window.slFirebaseDb) {
+          window.slFirebaseDb.collection(col).add(Object.assign({ createdAt: new Date().toISOString() }, data)).catch(function(){});
+        }
+        if (window.slSupabase) {
+          window.slSupabase.from(col).insert([data]).then(function(){}, function(){});
+        }
         slShowToast('Saved to [' + col + '] (' + rows.length + ' total)');
       }
       var el = document.getElementById('sl-db-res-' + blockId);
@@ -2758,7 +2806,7 @@ ${renderedBlocks}
           : ''
       }
     });
-  </script>
+  </script>${buildCloudInitScriptsHtml(cloudConfig)}
 </body>
 </html>`;
 }
@@ -2767,7 +2815,8 @@ export function generateReactTsxExport(
   projectName: string,
   blocks: CanvasBlock[],
   pageStyle?: PageStyleSettings,
-  pages?: SitePage[]
+  pages?: SitePage[],
+  cloudConfig?: SiteCloudConfig
 ): string {
   const pageBg = resolvePageBackgroundCss(pageStyle);
   const pageTextColor = pageStyle?.textColor || '#f1f5f9';
@@ -3382,10 +3431,31 @@ export function generateReactTsxExport(
     })
     .join('\n\n');
 
-  return `import React, { useState } from 'react';
+  const hasFb = Boolean(cloudConfig?.firebase?.enabled && cloudConfig.firebase.apiKey && cloudConfig.firebase.projectId);
+  const hasSb = Boolean(cloudConfig?.supabase?.enabled && cloudConfig.supabase.url && cloudConfig.supabase.anonKey);
+  const cloudImports = [
+    hasFb ? `import { initializeApp } from 'firebase/app';\nimport { getFirestore } from 'firebase/firestore';\nimport { getAuth } from 'firebase/auth';` : '',
+    hasSb ? `import { createClient } from '@supabase/supabase-js';` : '',
+  ].filter(Boolean).join('\n');
+  const cloudInit = [
+    hasFb
+      ? `const firebaseApp = initializeApp(${JSON.stringify({
+          apiKey: cloudConfig!.firebase.apiKey,
+          authDomain: cloudConfig!.firebase.authDomain || `${cloudConfig!.firebase.projectId}.firebaseapp.com`,
+          projectId: cloudConfig!.firebase.projectId,
+          storageBucket: cloudConfig!.firebase.storageBucket || '',
+          appId: cloudConfig!.firebase.appId || '',
+        })});\nexport const db = getFirestore(firebaseApp);\nexport const auth = getAuth(firebaseApp);`
+      : '',
+    hasSb
+      ? `export const supabase = createClient(${JSON.stringify(cloudConfig!.supabase.url)}, ${JSON.stringify(cloudConfig!.supabase.anonKey)});`
+      : '',
+  ].filter(Boolean).join('\n\n');
 
+  return `import React, { useState } from 'react';
+${cloudImports ? `${cloudImports}\n` : ''}
 // Generated by BlockCraft Studio WebStudio for "${projectName}" (Animation: ${pageStyle?.liveAnimation || 'none'})
-export function GeneratedApp() {
+${cloudInit ? `${cloudInit}\n\n` : ''}export function GeneratedApp() {
   const [counter, setCounter] = useState<number>(${defaultCounter});
   const [toast, setToast] = useState<string | null>(null);
   const [inputs, setInputs] = useState<Record<string, string>>({});
@@ -3603,7 +3673,8 @@ ${blockRules}`;
 export function generateJsExport(
   projectName: string,
   blocks: CanvasBlock[],
-  pages?: SitePage[]
+  pages?: SitePage[],
+  cloudConfig?: SiteCloudConfig
 ): string {
   const onLoadHats = blocks.filter((b) => b.type === 'logic-onload');
   const onInputHats = blocks.filter((b) => b.type === 'logic-oninput');
@@ -3619,8 +3690,17 @@ export function generateJsExport(
     )
     .join('\n');
 
+  const cloudComments = [
+    cloudConfig?.firebase?.enabled && cloudConfig.firebase.projectId
+      ? `// Firebase Connected: projectId=${cloudConfig.firebase.projectId} (collection=${cloudConfig.firebase.defaultCollection || 'submissions'})`
+      : '',
+    cloudConfig?.supabase?.enabled && cloudConfig.supabase.url
+      ? `// Supabase Connected: ${cloudConfig.supabase.url} (table=${cloudConfig.supabase.defaultTable || 'leads'})`
+      : '',
+  ].filter(Boolean).join('\n');
+
   return `// BlockCraft Studio WebStudio — Complete Runtime script.js for "${projectName}"
-${navCommentLines ? `${navCommentLines}\n` : ''}
+${navCommentLines ? `${navCommentLines}\n` : ''}${cloudComments ? `${cloudComments}\n` : ''}
 window.slRuntime = {
   vars: { score: 0, isLoggedIn: false, userName: 'Creator' },
   lists: { tasks: ['Design Layout', 'Wire Logic', 'Export App'] },
