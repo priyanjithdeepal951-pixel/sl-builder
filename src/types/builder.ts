@@ -10,7 +10,21 @@ export type BlockType =
   | 'ui-section'
   | 'ui-row'
   | 'ui-column'
+  | 'ui-stack'
+  | 'ui-listview'
   | 'ui-grid'
+  | 'ui-spacer'
+  | 'ui-divider'
+  | 'ui-vertical-divider'
+  | 'ui-pageview'
+  | 'ui-carousel'
+  | 'ui-wrap'
+  | 'ui-form'
+  | 'ui-staggered'
+  | 'ui-flippable-card'
+  | 'ui-swipeable-stack'
+  | 'ui-datatable'
+  | 'ui-flex'
   | 'ui-card'
   | 'ui-modal'
   | 'ui-link'
@@ -72,6 +86,7 @@ export interface BlockStyle {
   customBgHex?: string;
   bgGradient?: string;
   borderColor?: string;
+  borderWidth?: string;
   boxShadow?: string;
   templateId?: string;
   fontFamily?: 'sans' | 'serif' | 'mono' | 'display' | 'rounded';
@@ -241,6 +256,13 @@ export interface CanvasBlock {
   authorRole?: string;
   authorAvatar?: string;
   isExpanded?: boolean;
+  children?: CanvasBlock[];
+  direction?: 'row' | 'column' | 'horizontal' | 'vertical';
+  flexRatios?: string;
+  spacerSize?: number;
+  backTitle?: string;
+  backSubtitle?: string;
+  columnsHeader?: string;
   logicConfig?: BlockLogicConfig;
 }
 

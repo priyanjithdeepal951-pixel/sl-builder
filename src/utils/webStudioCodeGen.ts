@@ -345,6 +345,47 @@ export function generateHtmlExport(
   const resolvedAccent = pageStyle?.accentColor || '#4f46e5';
   const animBundle = buildLiveAnimationCssAndHtml(pageStyle);
 
+  const renderChildHtml = (child: CanvasBlock, extraCss = ''): string => {
+    const cText = escapeHtml(child.content || child.name);
+    const cSub = child.subtitle ? escapeHtml(child.subtitle) : '';
+    const bgCss = child.style?.customBgHex ? `background-color:${child.style.customBgHex};` : '';
+    const txtCss = child.style?.customTextHex ? `color:${child.style.customTextHex};` : '';
+    const styleAttr = bgCss || txtCss || extraCss ? ` style="${bgCss}${txtCss}${extraCss}"` : '';
+
+    if (child.type === 'ui-spacer') {
+      const sz = child.spacerSize ?? 16;
+      return `<div style="height:${sz}px;width:${sz}px;${extraCss}"></div>`;
+    }
+    if (child.type === 'ui-divider') {
+      return `<hr style="border:0;border-top:${escapeHtml(
+        child.style?.borderWidth || '1px'
+      )} solid ${escapeHtml(child.style?.borderColor || 'rgba(255,255,255,0.2)')};width:100%;margin:4px 0;${extraCss}" />`;
+    }
+    if (child.type === 'ui-vertical-divider') {
+      return `<div style="border-left:${escapeHtml(
+        child.style?.borderWidth || '1px'
+      )} solid ${escapeHtml(child.style?.borderColor || 'rgba(255,255,255,0.22)')};min-height:28px;align-self:stretch;margin:0 4px;"></div>`;
+    }
+    if (child.type === 'ui-button') {
+      return `<button type="button" onclick="slShowToast(${escapeHtml(
+        JSON.stringify(child.actionPayload || cText)
+      )})" style="background-color:${escapeHtml(
+        child.style?.customBgHex || resolvedAccent
+      )};${txtCss}${extraCss}" class="px-4 py-2 rounded-lg text-xs font-semibold text-white cursor-pointer">${cText}</button>`;
+    }
+    if (child.type === 'ui-image') {
+      return child.imageUrl
+        ? `<img src="${escapeHtml(child.imageUrl)}" alt="${cText}"${styleAttr} class="w-full h-28 object-cover rounded-lg" />`
+        : `<div${styleAttr} class="h-24 rounded-lg bg-slate-900 border border-white/10 flex items-center justify-center text-xs text-sky-300">${cText}</div>`;
+    }
+    if (child.type === 'ui-badge') {
+      return `<span${styleAttr} class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-300">${cText}</span>`;
+    }
+    return `<div${styleAttr} class="px-3.5 py-2.5 rounded-lg bg-[#090B10] border border-white/10 text-xs text-slate-200"><div class="font-semibold text-white">${cText}</div>${
+      cSub ? `<div class="text-[11px] text-slate-400 mt-0.5">${cSub}</div>` : ''
+    }</div>`;
+  };
+
   const renderedBlocks = blocks
     .map((b) => {
       const content = escapeHtml(b.content || b.name);
@@ -368,7 +409,9 @@ export function generateHtmlExport(
       const bgVal = b.style?.bgGradient || getCssBgColor(b.style?.bgColor, b.style?.customBgHex);
       const surfaceFxCss = `${bgVal ? `background: ${bgVal};` : ''}${
         b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''
-      }${b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''}`;
+      }${b.style?.borderWidth ? ` border-width: ${b.style.borderWidth};` : ''}${
+        b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''
+      }`;
       const textFxCss = `${
         b.style?.textGradient
           ? `background-image: ${b.style.textGradient}; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;`
@@ -516,57 +559,134 @@ export function generateHtmlExport(
   </div>`;
         }
 
-        case 'ui-section':
+        case 'ui-section': {
+          const childrenHtml =
+            b.children && b.children.length > 0
+              ? `<div class="pt-3 space-y-2.5 text-left">${b.children
+                  .map((c) => renderChildHtml(c))
+                  .join('')}</div>`
+              : '';
           return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-6${customCls}">
     <div style="${surfaceFxCss}" class="p-7 ${radiusClass} border border-white/10 bg-white/5 ${alignClass} space-y-2">
       ${
         b.badgeText === undefined || b.badgeText !== ''
           ? `<span class="text-[10px] font-mono uppercase tracking-widest text-sky-400 block">${escapeHtml(
-              b.badgeText || 'Section Container'
+              b.badgeText || 'Container'
             )}</span>`
           : ''
       }
       <h2 style="${textFxCss}" class="text-2xl font-bold">${content}</h2>
       ${subtitle ? `<p style="color:${subColor};" class="text-sm">${subtitle}</p>` : ''}
+      ${childrenHtml}
     </div>
   </section>`;
+        }
 
         case 'ui-row': {
-          const cols = (parsedOptions.length ? parsedOptions : ['Col A', 'Col B', 'Col C'])
-            .map(
-              (c) =>
-                `<div style="${textFxCss}" class="flex-1 min-w-[140px] p-4 rounded-xl bg-[#090B10] border border-white/10 text-sm font-semibold text-center">${escapeHtml(
-                  c
-                )}</div>`
-            )
-            .join('');
+          const inner =
+            b.children && b.children.length > 0
+              ? b.children
+                  .map((c) =>
+                    renderChildHtml(c, c.type === 'ui-vertical-divider' ? 'flex:0 0 auto;' : 'flex:1 1 0%;min-width:120px;')
+                  )
+                  .join('')
+              : (parsedOptions.length ? parsedOptions : ['Widget 1', 'Widget 2', 'Widget 3'])
+                  .map(
+                    (c) =>
+                      `<div style="${textFxCss}" class="flex-1 min-w-[140px] p-4 rounded-xl bg-[#090B10] border border-white/10 text-sm font-semibold text-center">${escapeHtml(
+                        c
+                      )}</div>`
+                  )
+                  .join('');
           return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-2.5">
       ${subtitle ? `<div style="color:${subColor};" class="text-xs font-mono">${subtitle}</div>` : ''}
-      <div class="flex flex-wrap gap-3">${cols}</div>
+      <div class="flex flex-wrap sm:flex-nowrap items-center gap-3">${inner}</div>
     </div>
   </section>`;
         }
 
         case 'ui-column': {
-          const rows = (parsedOptions.length ? parsedOptions : ['Item 1', 'Item 2', 'Item 3'])
-            .map(
-              (c) =>
-                `<div style="${textFxCss}" class="w-full p-4 rounded-xl bg-[#090B10] border border-white/10 text-sm">${escapeHtml(
-                  c
-                )}</div>`
-            )
-            .join('');
+          const inner =
+            b.children && b.children.length > 0
+              ? b.children.map((c) => renderChildHtml(c)).join('')
+              : (parsedOptions.length ? parsedOptions : ['Top Widget', 'Middle Widget', 'Bottom Widget'])
+                  .map(
+                    (c) =>
+                      `<div style="${textFxCss}" class="w-full p-4 rounded-xl bg-[#090B10] border border-white/10 text-sm">${escapeHtml(
+                        c
+                      )}</div>`
+                  )
+                  .join('');
           return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-2.5">
       ${subtitle ? `<div style="color:${subColor};" class="text-xs font-mono">${subtitle}</div>` : ''}
-      <div class="flex flex-col gap-3">${rows}</div>
+      <div class="flex flex-col gap-3">${inner}</div>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-stack': {
+          const childrenHtml =
+            b.children && b.children.length > 0
+              ? `<div class="pt-2 flex flex-wrap gap-2">${b.children.map((c) => renderChildHtml(c)).join('')}</div>`
+              : '';
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}min-height:${escapeHtml(
+            b.style?.height && b.style.height !== 'auto' ? b.style.height : '180px'
+          )};" class="relative overflow-hidden ${radiusClass} border border-white/15 flex flex-col justify-end p-6">
+      ${
+        b.imageUrl
+          ? `<img src="${escapeHtml(b.imageUrl)}" alt="${content}" class="absolute inset-0 w-full h-full object-cover" />`
+          : `<div class="absolute inset-0 bg-gradient-to-br from-indigo-700/70 via-slate-900 to-sky-700/60"></div>`
+      }
+      <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/15"></div>
+      ${
+        b.badgeText !== ''
+          ? `<span style="background:${escapeHtml(resolvedAccent)};" class="absolute top-4 right-4 z-10 px-3 py-1 rounded-full text-xs font-bold text-white">${escapeHtml(
+              b.badgeText || 'LIVE'
+            )}</span>`
+          : ''
+      }
+      <div class="relative z-10 space-y-1.5">
+        <h3 style="${textFxCss}" class="text-xl font-bold">${content}</h3>
+        ${subtitle ? `<p style="color:${subColor};" class="text-sm">${subtitle}</p>` : ''}
+        ${childrenHtml}
+      </div>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-listview': {
+          const isHoriz = b.direction === 'horizontal';
+          const items = (
+            parsedOptions.length
+              ? parsedOptions
+              : ['Alex Rivera · Hey, UI update looks great!', 'Sarah Chen · Ready to publish build', 'Design Team · Synced']
+          )
+            .map((raw) => {
+              const [t, s] = raw.split('·').map((x) => x.trim());
+              return `<div class="${
+                isHoriz ? 'min-w-[210px] shrink-0' : 'w-full'
+              } p-3.5 rounded-xl bg-[#090B10] border border-white/10 flex items-center gap-3">
+                <div style="background:${escapeHtml(resolvedAccent)};" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0">${escapeHtml(
+                (t || 'U').slice(0, 2).toUpperCase()
+              )}</div>
+                <div class="min-w-0 flex-1"><div class="text-sm font-semibold text-white truncate">${escapeHtml(
+                  t
+                )}</div>${s ? `<div class="text-xs text-slate-400 truncate">${escapeHtml(s)}</div>` : ''}</div>
+              </div>`;
+            })
+            .join('');
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5">
+      <div class="${isHoriz ? 'flex flex-row gap-3 overflow-x-auto pb-2' : 'flex flex-col gap-2 max-h-72 overflow-y-auto'}">${items}</div>
     </div>
   </section>`;
         }
 
         case 'ui-grid': {
-          const cells = (parsedOptions.length ? parsedOptions : ['Cell 1', 'Cell 2', 'Cell 3', 'Cell 4'])
+          const cells = (parsedOptions.length ? parsedOptions : ['Gallery 01', 'Gallery 02', 'Gallery 03', 'Gallery 04'])
             .map(
               (c) =>
                 `<div style="${textFxCss}" class="p-4 rounded-xl bg-[#090B10] border border-white/10 text-sm font-semibold">${escapeHtml(
@@ -579,6 +699,230 @@ export function generateHtmlExport(
       ${subtitle ? `<div style="color:${subColor};" class="text-xs font-mono">${subtitle}</div>` : ''}
       <div class="grid grid-cols-1 ${b.gridColumns === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'} gap-4">${cells}</div>
     </div>
+  </section>`;
+        }
+
+        case 'ui-spacer':
+          return `  <div id="${elId}" style="height:${b.spacerSize ?? 32}px;" aria-hidden="true"></div>`;
+
+        case 'ui-divider':
+          return `  <div id="${elId}" class="max-w-5xl mx-auto px-6 py-3">
+    <hr style="border:0;border-top:${escapeHtml(
+      b.style?.borderWidth || '1px'
+    )} solid ${escapeHtml(b.style?.borderColor || 'rgba(255,255,255,0.18)')};" />
+  </div>`;
+
+        case 'ui-vertical-divider':
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 flex items-stretch gap-4">
+      <div class="flex-1 flex items-center justify-center text-sm">${escapeHtml(
+        parsedOptions[0] || 'Left Panel Content'
+      )}</div>
+      <div style="border-left:${escapeHtml(b.style?.borderWidth || '1px')} solid ${escapeHtml(
+            b.style?.borderColor || 'rgba(255,255,255,0.22)'
+          )};min-height:40px;"></div>
+      <div class="flex-1 flex items-center justify-center text-sm">${escapeHtml(
+        parsedOptions[1] || 'Right Panel Content'
+      )}</div>
+    </div>
+  </section>`;
+
+        case 'ui-pageview': {
+          const slides = parsedOptions.length
+            ? parsedOptions
+            : ['Welcome to Studio · Drag & drop layouts effortlessly', 'Interactive Logic · Connect events & live data', 'Instant Export · Ship clean production code'];
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-6 ${radiusClass} border border-white/15 bg-white/5 space-y-4 text-center" data-sl-pageview='${escapeHtml(
+            JSON.stringify(slides)
+          )}' data-sl-page-idx="0">
+      <div class="min-h-[100px] flex flex-col items-center justify-center gap-1">
+        <h3 class="sl-pv-title text-lg font-bold text-white">${escapeHtml(
+          (slides[0] || '').split('·')[0].trim()
+        )}</h3>
+        <p class="sl-pv-sub text-sm text-slate-300">${escapeHtml(
+          ((slides[0] || '').split('·')[1] || '').trim()
+        )}</p>
+      </div>
+      <div class="flex items-center justify-between">
+        <button type="button" onclick="slStepPageView(this, -1)" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold cursor-pointer">&larr; Prev</button>
+        <span class="sl-pv-ind text-xs font-mono text-sky-300">Page 1 / ${slides.length}</span>
+        <button type="button" onclick="slStepPageView(this, 1)" class="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-semibold cursor-pointer">Next &rarr;</button>
+      </div>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-carousel': {
+          const items = parsedOptions.length ? parsedOptions : ['Slide 1', 'Slide 2', 'Slide 3', 'Slide 4'];
+          const slidesHtml = items
+            .map(
+              (lbl, idx) =>
+                `<div class="min-w-[260px] snap-center p-5 rounded-xl bg-[#090B10] border border-white/10 space-y-2"><div class="h-24 rounded-lg bg-gradient-to-tr from-indigo-500/25 to-sky-500/20"></div><div class="text-sm font-bold text-white">${escapeHtml(
+                  lbl
+                )}</div><div class="text-xs text-slate-400">Slide #${idx + 1}</div></div>`
+            )
+            .join('');
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 space-y-3">
+      <div class="flex items-center justify-between text-xs font-mono text-sky-300">
+        <span>Carousel Slider</span>
+        <div class="flex gap-1.5">
+          <button type="button" onclick="this.closest('section').querySelector('.sl-carousel-track').scrollBy({left:-280,behavior:'smooth'})" class="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 cursor-pointer">&larr;</button>
+          <button type="button" onclick="this.closest('section').querySelector('.sl-carousel-track').scrollBy({left:280,behavior:'smooth'})" class="px-2.5 py-1 rounded bg-white/10 hover:bg-white/20 cursor-pointer">&rarr;</button>
+        </div>
+      </div>
+      <div class="sl-carousel-track flex gap-3 overflow-x-auto snap-x snap-mandatory pb-1">${slidesHtml}</div>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-wrap': {
+          const inner =
+            b.children && b.children.length > 0
+              ? b.children.map((c) => renderChildHtml(c)).join('')
+              : (parsedOptions.length ? parsedOptions : ['UI Design', 'React', 'Tailwind CSS', 'TypeScript'])
+                  .map(
+                    (tag) =>
+                      `<span style="${textFxCss}" class="px-3.5 py-1.5 rounded-full bg-[#090B10] border border-white/15 text-xs font-medium">${escapeHtml(
+                        tag
+                      )}</span>`
+                  )
+                  .join('');
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 flex flex-wrap gap-2">${inner}</div>
+  </section>`;
+        }
+
+        case 'ui-form':
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-3xl mx-auto px-6 py-4${customCls}">
+    <form onsubmit="return slValidateDemoForm(event, this)" style="${surfaceFxCss}" class="p-6 ${radiusClass} border border-white/15 bg-white/5 space-y-3" novalidate>
+      <div><h3 class="text-base font-bold text-white">${content}</h3>${
+            subtitle ? `<p class="text-xs text-slate-400 mt-0.5">${subtitle}</p>` : ''
+          }</div>
+      <div><input type="text" name="name" placeholder="Full Name *" class="w-full px-3.5 py-2 rounded-lg bg-[#090B10] border border-white/15 text-sm text-white" /><div class="sl-err-name text-xs text-rose-400 mt-1 hidden"></div></div>
+      <div><input type="email" name="email" placeholder="Email Address *" class="w-full px-3.5 py-2 rounded-lg bg-[#090B10] border border-white/15 text-sm text-white" /><div class="sl-err-email text-xs text-rose-400 mt-1 hidden"></div></div>
+      <div><input type="password" name="password" placeholder="Password (min 6 chars) *" class="w-full px-3.5 py-2 rounded-lg bg-[#090B10] border border-white/15 text-sm text-white" /><div class="sl-err-password text-xs text-rose-400 mt-1 hidden"></div></div>
+      <div class="sl-form-ok hidden p-2.5 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-xs text-emerald-300 font-semibold">Form validated &amp; submitted successfully!</div>
+      <button type="submit" style="background:${escapeHtml(resolvedAccent)};" class="w-full py-2.5 rounded-lg text-sm font-bold text-white cursor-pointer">${escapeHtml(
+            b.badgeText || 'Validate & Submit'
+          )}</button>
+    </form>
+  </section>`;
+
+        case 'ui-staggered': {
+          const heights = ['h-28', 'h-44', 'h-32', 'h-48', 'h-28', 'h-40'];
+          const tiles = (
+            parsedOptions.length
+              ? parsedOptions
+              : ['Architecture Concept', 'Minimal UI Kit', 'Typography Study', 'Color Tokens', 'Motion Curve', 'Dark Theme']
+          )
+            .map(
+              (tile, idx) =>
+                `<div class="break-inside-avoid rounded-xl p-4 bg-[#090B10] border border-white/10 flex flex-col justify-between ${
+                  heights[idx % heights.length]
+                }"><span class="text-xs font-mono text-indigo-300">#${idx + 1}</span><span class="text-sm font-semibold text-white">${escapeHtml(
+                  tile
+                )}</span></div>`
+            )
+            .join('');
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5">
+      <div class="${b.gridColumns === 3 ? 'columns-1 sm:columns-3' : 'columns-1 sm:columns-2'} gap-3 space-y-3">${tiles}</div>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-flippable-card':
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div onclick="var inner=this.querySelector('.sl-flip-inner');inner.dataset.flipped=inner.dataset.flipped==='1'?'0':'1';inner.style.transform=inner.dataset.flipped==='1'?'rotateY(180deg)':'rotateY(0deg)';" style="perspective:1000px;" class="cursor-pointer">
+      <div class="sl-flip-inner relative min-h-[150px]" style="transform-style:preserve-3d;transition:transform 0.5s ease;">
+        <div style="${surfaceFxCss}backface-visibility:hidden;" class="absolute inset-0 p-6 ${radiusClass} border border-white/15 bg-[#121726] flex flex-col justify-between">
+          <div class="flex justify-between text-xs"><span class="font-mono text-sky-400">FRONT SIDE</span><span class="px-2 py-0.5 rounded-full bg-white/10 text-slate-300">${escapeHtml(
+            b.badgeText || 'Click to Flip'
+          )}</span></div>
+          <div><h3 class="text-lg font-bold text-white">${content}</h3>${
+            subtitle ? `<p class="text-sm text-slate-400 mt-1">${subtitle}</p>` : ''
+          }</div>
+        </div>
+        <div style="backface-visibility:hidden;transform:rotateY(180deg);" class="absolute inset-0 p-6 ${radiusClass} border border-indigo-400/35 bg-indigo-950/90 flex flex-col justify-between">
+          <div class="flex justify-between text-xs"><span class="font-mono text-indigo-300">BACK SIDE</span><span class="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-200">Flip Back</span></div>
+          <div><h3 class="text-lg font-bold text-white">${escapeHtml(
+            b.backTitle || 'Back Side · Revealed Answer'
+          )}</h3><p class="text-sm text-slate-300 mt-1">${escapeHtml(
+            b.backSubtitle || 'Tap again to flip back to the front side.'
+          )}</p></div>
+        </div>
+      </div>
+    </div>
+  </section>`;
+
+        case 'ui-swipeable-stack': {
+          const cards = parsedOptions.length ? parsedOptions : ['Card 1 · Design', 'Card 2 · Prototype', 'Card 3 · Launch'];
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-3" data-sl-swipe-cards='${escapeHtml(
+            JSON.stringify(cards)
+          )}' data-sl-swipe-idx="0">
+      <div class="flex justify-between text-xs font-mono text-sky-300"><span>SwipeableStack</span><span class="sl-sw-count">0 / ${
+            cards.length
+          } swiped</span></div>
+      <div class="sl-sw-card p-6 rounded-2xl bg-gradient-to-br from-[#1b2234] to-[#0c1018] border border-white/15 min-h-[120px] flex flex-col justify-between">
+        <span class="sl-sw-num text-xs font-mono text-sky-400">Card #1</span>
+        <div class="sl-sw-title text-base font-bold text-white">${escapeHtml(cards[0] || '')}</div>
+      </div>
+      <div class="flex justify-center gap-2">
+        <button type="button" onclick="slSwipeStackNext(this)" class="px-3.5 py-1.5 rounded-lg bg-rose-500/20 border border-rose-400/30 text-rose-200 text-xs font-semibold cursor-pointer">&larr; Swipe Left</button>
+        <button type="button" onclick="slSwipeStackNext(this)" class="px-3.5 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-semibold cursor-pointer">Swipe Right &rarr;</button>
+        <button type="button" onclick="slSwipeStackReset(this)" class="px-3 py-1.5 rounded-lg bg-white/10 text-slate-200 text-xs font-semibold cursor-pointer">Reset</button>
+      </div>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-datatable': {
+          const headers = (b.columnsHeader || 'Name | Role | Status')
+            .split('|')
+            .map((h) => h.trim())
+            .filter(Boolean);
+          const rows = (
+            parsedOptions.length ? parsedOptions : ['Deepal P. | Architect | Active', 'Maya Lin | UI Lead | Active']
+          ).map((r) => r.split('|').map((c) => c.trim()));
+          const thHtml = headers.map((h) => `<th class="py-2.5 px-3 text-left font-semibold">${escapeHtml(h)}</th>`).join('');
+          const trHtml = rows
+            .map(
+              (cells) =>
+                `<tr class="border-t border-white/10">${headers
+                  .map((_, i) => `<td class="py-2.5 px-3 text-slate-200">${escapeHtml(cells[i] || '—')}</td>`)
+                  .join('')}</tr>`
+            )
+            .join('');
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 overflow-x-auto">
+      <table class="w-full text-sm border-collapse">
+        <thead><tr class="text-sky-300 border-b border-white/15">${thHtml}</tr></thead>
+        <tbody>${trHtml}</tbody>
+      </table>
+    </div>
+  </section>`;
+        }
+
+        case 'ui-flex': {
+          const isCol = b.direction === 'column' || b.direction === 'vertical';
+          const ratios = (b.flexRatios || '1:2:1').split(/[:,\s]+/).map((n) => Math.max(1, Number(n) || 1));
+          const inner =
+            b.children && b.children.length > 0
+              ? b.children.map((c, i) => renderChildHtml(c, `flex:${ratios[i] ?? 1} 1 0%;`)).join('')
+              : (parsedOptions.length ? parsedOptions : ['Pane 1 (1x)', 'Pane 2 (2x)', 'Pane 3 (1x)'])
+                  .map(
+                    (item, i) =>
+                      `<div style="flex:${ratios[i] ?? 1} 1 0%;${textFxCss}" class="min-w-0 p-4 rounded-xl bg-[#090B10] border border-white/10 text-sm font-semibold text-center">${escapeHtml(
+                        item
+                      )}</div>`
+                  )
+                  .join('');
+          return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
+    <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 flex ${
+            isCol ? 'flex-col' : 'flex-row'
+          } gap-3">${inner}</div>
   </section>`;
         }
 
@@ -1719,6 +2063,75 @@ ${renderedBlocks}
       });
     });
 
+    function slStepPageView(btn, delta) {
+      var wrap = btn.closest('[data-sl-pageview]');
+      if (!wrap) return;
+      var slides = [];
+      try { slides = JSON.parse(wrap.getAttribute('data-sl-pageview') || '[]'); } catch(e) {}
+      if (!slides.length) return;
+      var idx = Math.max(0, Math.min(slides.length - 1, (parseInt(wrap.getAttribute('data-sl-page-idx') || '0', 10) || 0) + delta));
+      wrap.setAttribute('data-sl-page-idx', String(idx));
+      var parts = String(slides[idx] || '').split('·');
+      var tEl = wrap.querySelector('.sl-pv-title');
+      var sEl = wrap.querySelector('.sl-pv-sub');
+      var iEl = wrap.querySelector('.sl-pv-ind');
+      if (tEl) tEl.textContent = (parts[0] || '').trim();
+      if (sEl) sEl.textContent = (parts[1] || '').trim();
+      if (iEl) iEl.textContent = 'Page ' + (idx + 1) + ' / ' + slides.length;
+    }
+
+    function slValidateDemoForm(ev, form) {
+      ev.preventDefault();
+      var name = (form.querySelector('input[name="name"]').value || '').trim();
+      var email = (form.querySelector('input[name="email"]').value || '').trim();
+      var pw = (form.querySelector('input[name="password"]').value || '');
+      var en = form.querySelector('.sl-err-name');
+      var ee = form.querySelector('.sl-err-email');
+      var ep = form.querySelector('.sl-err-password');
+      var okBox = form.querySelector('.sl-form-ok');
+      var ok = true;
+      if (!name) { en.textContent = 'Name is required'; en.classList.remove('hidden'); ok = false; } else { en.classList.add('hidden'); }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { ee.textContent = 'Valid email required'; ee.classList.remove('hidden'); ok = false; } else { ee.classList.add('hidden'); }
+      if (pw.length < 6) { ep.textContent = 'Min 6 characters'; ep.classList.remove('hidden'); ok = false; } else { ep.classList.add('hidden'); }
+      if (ok) { okBox.classList.remove('hidden'); slShowToast('Form validated & submitted!'); } else { okBox.classList.add('hidden'); }
+      return false;
+    }
+
+    function slSwipeStackNext(btn) {
+      var box = btn.closest('[data-sl-swipe-cards]');
+      if (!box) return;
+      var cards = [];
+      try { cards = JSON.parse(box.getAttribute('data-sl-swipe-cards') || '[]'); } catch(e) {}
+      var idx = (parseInt(box.getAttribute('data-sl-swipe-idx') || '0', 10) || 0) + 1;
+      if (idx > cards.length) idx = cards.length;
+      box.setAttribute('data-sl-swipe-idx', String(idx));
+      var cEl = box.querySelector('.sl-sw-count');
+      var nEl = box.querySelector('.sl-sw-num');
+      var tEl = box.querySelector('.sl-sw-title');
+      if (cEl) cEl.textContent = idx + ' / ' + cards.length + ' swiped';
+      if (idx >= cards.length) {
+        if (nEl) nEl.textContent = 'DONE';
+        if (tEl) tEl.textContent = 'All cards swiped! Click Reset.';
+      } else {
+        if (nEl) nEl.textContent = 'Card #' + (idx + 1);
+        if (tEl) tEl.textContent = cards[idx];
+      }
+    }
+
+    function slSwipeStackReset(btn) {
+      var box = btn.closest('[data-sl-swipe-cards]');
+      if (!box) return;
+      var cards = [];
+      try { cards = JSON.parse(box.getAttribute('data-sl-swipe-cards') || '[]'); } catch(e) {}
+      box.setAttribute('data-sl-swipe-idx', '0');
+      var cEl = box.querySelector('.sl-sw-count');
+      var nEl = box.querySelector('.sl-sw-num');
+      var tEl = box.querySelector('.sl-sw-title');
+      if (cEl) cEl.textContent = '0 / ' + cards.length + ' swiped';
+      if (nEl) nEl.textContent = 'Card #1';
+      if (tEl) tEl.textContent = cards[0] || '';
+    }
+
     document.querySelectorAll('.sl-file-input').forEach(function(inp) {
       inp.addEventListener('change', function() {
         var file = inp.files && inp.files[0];
@@ -2054,12 +2467,30 @@ export function generateReactTsxExport(
       if (b.style?.customBgHex) blockStyleObj.backgroundColor = b.style.customBgHex;
       if (b.style?.bgGradient) blockStyleObj.background = b.style.bgGradient;
       if (b.style?.borderColor) blockStyleObj.borderColor = b.style.borderColor;
+      if (b.style?.borderWidth) blockStyleObj.borderWidth = b.style.borderWidth;
       if (b.style?.boxShadow) blockStyleObj.boxShadow = b.style.boxShadow;
       if (b.style?.textShadow) blockStyleObj.textShadow = b.style.textShadow;
       if (b.style?.width && b.style.width !== 'auto') blockStyleObj.width = b.style.width;
       if (b.style?.height && b.style.height !== 'auto') blockStyleObj.minHeight = b.style.height;
       const styleAttr =
         Object.keys(blockStyleObj).length > 0 ? ` style={${JSON.stringify(blockStyleObj)}}` : '';
+
+      const renderChildJsx = (child: CanvasBlock, extraFlex?: string): string => {
+        const cTitle = JSON.stringify(child.content || child.name);
+        if (child.type === 'ui-spacer') {
+          return `<div style={{ height: ${child.spacerSize ?? 16}, width: ${child.spacerSize ?? 16} }} />`;
+        }
+        if (child.type === 'ui-divider') {
+          return `<hr className="w-full border-0 border-t border-white/20 my-1" />`;
+        }
+        if (child.type === 'ui-vertical-divider') {
+          return `<div className="border-l border-white/20 min-h-[28px] self-stretch mx-1" />`;
+        }
+        if (child.type === 'ui-button') {
+          return `<button type="button" onClick={() => showToast(${cTitle})} className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-xs font-semibold cursor-pointer"${extraFlex ? ` style={{ flex: ${JSON.stringify(extraFlex)} }}` : ''}>{${cTitle}}</button>`;
+        }
+        return `<div className="px-3.5 py-2 rounded-lg bg-white/5 border border-white/10 text-sm"${extraFlex ? ` style={{ flex: ${JSON.stringify(extraFlex)} }}` : ''}>{${cTitle}}</div>`;
+      };
 
       switch (b.type) {
         case 'ui-navbar': {
@@ -2138,9 +2569,10 @@ export function generateReactTsxExport(
         case 'ui-section':
           return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
         <div className="p-6 rounded-2xl border border-white/15 bg-white/5 space-y-2"${styleAttr}>
-          <div className="text-[11px] font-mono uppercase tracking-wider text-sky-300">{${JSON.stringify(b.badgeText || 'Section Container')}}</div>
+          <div className="text-[11px] font-mono uppercase tracking-wider text-sky-300">{${JSON.stringify(b.badgeText || 'Container')}}</div>
           <h3 className="text-lg font-bold">{textOverrides[${JSON.stringify(b.id)}] ?? ${safeTitle}}</h3>
           {${safeSub} && <p className="text-sm opacity-75">{${safeSub}}</p>}
+          ${b.children && b.children.length > 0 ? `<div className="pt-2 space-y-2">${b.children.map((c) => renderChildJsx(c)).join('\n          ')}</div>` : ''}
         </div>
       </section>`;
         case 'ui-row':
@@ -2151,13 +2583,155 @@ export function generateReactTsxExport(
             b.type === 'ui-column'
               ? 'flex flex-col gap-3'
               : b.type === 'ui-row'
-              ? 'flex flex-wrap gap-3'
+              ? 'flex flex-wrap gap-3 items-center'
               : `grid grid-cols-1 ${b.gridColumns === 3 ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4`;
           return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
         <div className="${gridClass}"${styleAttr}>
-          {${JSON.stringify(items)}.map((item, i) => (
+          ${
+            b.children && b.children.length > 0 && b.type !== 'ui-grid'
+              ? b.children.map((c) => renderChildJsx(c, b.type === 'ui-row' && c.type !== 'ui-vertical-divider' ? '1 1 0%' : undefined)).join('\n          ')
+              : `{${JSON.stringify(items)}.map((item, i) => (
             <div key={i} className="p-4 rounded-xl bg-white/5 border border-white/10 font-semibold">{item}</div>
+          ))}`
+          }
+        </div>
+      </section>`;
+        }
+        case 'ui-stack':
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="relative overflow-hidden rounded-2xl border border-white/15 min-h-[180px] flex flex-col justify-end p-6"${styleAttr}>
+          ${b.imageUrl ? `<img src=${JSON.stringify(b.imageUrl)} alt={${safeTitle}} className="absolute inset-0 w-full h-full object-cover" />` : `<div className="absolute inset-0 bg-gradient-to-br from-indigo-700/70 via-slate-900 to-sky-700/60" />`}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/15" />
+          <div className="relative z-10 space-y-1.5">
+            <h3 className="text-xl font-bold text-white">{${safeTitle}}</h3>
+            {${safeSub} && <p className="text-sm text-slate-200">{${safeSub}}</p>}
+            ${b.children && b.children.length > 0 ? `<div className="pt-2 flex flex-wrap gap-2">${b.children.map((c) => renderChildJsx(c)).join('\n            ')}</div>` : ''}
+          </div>
+        </div>
+      </section>`;
+        case 'ui-listview': {
+          const items = parseOptionsList(b.content, b.options, ['Item 1 · Description', 'Item 2 · Description']);
+          const isH = b.direction === 'horizontal';
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="${isH ? 'flex flex-row gap-3 overflow-x-auto pb-2' : 'flex flex-col gap-2 max-h-64 overflow-y-auto'}"${styleAttr}>
+          {${JSON.stringify(items)}.map((item, i) => (
+            <div key={i} className="${isH ? 'min-w-[200px] shrink-0' : 'w-full'} p-3.5 rounded-xl bg-white/5 border border-white/10 text-sm font-medium">{item}</div>
           ))}
+        </div>
+      </section>`;
+        }
+        case 'ui-spacer':
+          return `      <div id=${JSON.stringify(elId)} style={{ height: ${b.spacerSize ?? 32} }} aria-hidden="true" />`;
+        case 'ui-divider':
+          return `      <div id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-3 w-full"><hr style={{ borderColor: ${JSON.stringify(b.style?.borderColor || 'rgba(255,255,255,0.2)')}, borderTopWidth: ${JSON.stringify(b.style?.borderWidth || '1px')} }} className="w-full border-0 border-t" /></div>`;
+        case 'ui-vertical-divider': {
+          const lr = parseOptionsList(b.content, b.options, ['Left Section', 'Right Section']);
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="p-4 rounded-xl bg-white/5 border border-white/10 flex items-stretch gap-4"${styleAttr}>
+          <div className="flex-1 text-sm flex items-center justify-center">{${JSON.stringify(lr[0] || 'Left')}}</div>
+          <div style={{ borderColor: ${JSON.stringify(b.style?.borderColor || 'rgba(255,255,255,0.22)')}, borderLeftWidth: ${JSON.stringify(b.style?.borderWidth || '1px')} }} className="border-l self-stretch min-h-[36px]" />
+          <div className="flex-1 text-sm flex items-center justify-center">{${JSON.stringify(lr[1] || 'Right')}}</div>
+        </div>
+      </section>`;
+        }
+        case 'ui-pageview': {
+          const slides = parseOptionsList(b.content, b.options, ['Welcome · Step 1', 'Features · Step 2', 'Launch · Step 3']);
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="p-6 rounded-2xl bg-white/5 border border-white/15 space-y-4 text-center"${styleAttr}>
+          <div className="text-lg font-bold">{${JSON.stringify(slides)}[tabIdx[${JSON.stringify(`${b.id}_pv`)}] ?? 0]}</div>
+          <div className="flex justify-between items-center">
+            <button type="button" onClick={() => setTabIdx((p) => ({ ...p, [${JSON.stringify(`${b.id}_pv`)}]: Math.max(0, (p[${JSON.stringify(`${b.id}_pv`)}] ?? 0) - 1) }))} className="px-3 py-1 rounded bg-white/10 text-xs cursor-pointer">Prev</button>
+            <span className="text-xs font-mono opacity-70">{(tabIdx[${JSON.stringify(`${b.id}_pv`)}] ?? 0) + 1} / ${slides.length}</span>
+            <button type="button" onClick={() => setTabIdx((p) => ({ ...p, [${JSON.stringify(`${b.id}_pv`)}]: Math.min(${slides.length - 1}, (p[${JSON.stringify(`${b.id}_pv`)}] ?? 0) + 1) }))} className="px-3 py-1 rounded bg-white/10 text-xs cursor-pointer">Next</button>
+          </div>
+        </div>
+      </section>`;
+        }
+        case 'ui-carousel': {
+          const slides = parseOptionsList(b.content, b.options, ['Slide 1', 'Slide 2', 'Slide 3']);
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2"${styleAttr}>
+          {${JSON.stringify(slides)}.map((s, idx) => (
+            <div key={idx} className="min-w-[260px] snap-center p-5 rounded-xl bg-white/5 border border-white/10 font-bold">{s}</div>
+          ))}
+        </div>
+      </section>`;
+        }
+        case 'ui-wrap': {
+          const tags = parseOptionsList(b.content, b.options, ['UI Design', 'React', 'Tailwind CSS', 'TypeScript']);
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="p-4 rounded-xl bg-white/5 border border-white/10 flex flex-wrap gap-2"${styleAttr}>
+          ${
+            b.children && b.children.length > 0
+              ? b.children.map((c) => renderChildJsx(c)).join('\n          ')
+              : `{${JSON.stringify(tags)}.map((tag, i) => <span key={i} className="px-3 py-1 rounded-full bg-black/40 border border-white/15 text-xs font-medium">{tag}</span>)}`
+          }
+        </div>
+      </section>`;
+        }
+        case 'ui-form':
+          return `      <section id=${JSON.stringify(elId)} className="max-w-3xl mx-auto px-6 py-4 w-full">
+        <form onSubmit={(e) => { e.preventDefault(); const n = inputs[${JSON.stringify(`${b.id}_name`)}] || ''; const em = inputs[${JSON.stringify(`${b.id}_email`)}] || ''; const pw = inputs[${JSON.stringify(`${b.id}_pw`)}] || ''; if (!n.trim() || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(em) || pw.length < 6) { showToast('Check Name, valid Email & 6+ char Password'); return; } handleSubmitForm('Validated & Submitted!'); }} className="p-5 rounded-2xl bg-white/5 border border-white/15 space-y-3"${styleAttr}>
+          <h3 className="text-base font-bold">{${safeTitle}}</h3>
+          <input type="text" placeholder="Full Name *" value={inputs[${JSON.stringify(`${b.id}_name`)}] || ''} onChange={(e) => setInputs((p) => ({ ...p, [${JSON.stringify(`${b.id}_name`)}]: e.target.value }))} className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/15 text-sm" />
+          <input type="email" placeholder="Email Address *" value={inputs[${JSON.stringify(`${b.id}_email`)}] || ''} onChange={(e) => setInputs((p) => ({ ...p, [${JSON.stringify(`${b.id}_email`)}]: e.target.value }))} className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/15 text-sm" />
+          <input type="password" placeholder="Password (6+ chars) *" value={inputs[${JSON.stringify(`${b.id}_pw`)}] || ''} onChange={(e) => setInputs((p) => ({ ...p, [${JSON.stringify(`${b.id}_pw`)}]: e.target.value }))} className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/15 text-sm" />
+          <button type="submit" className="w-full py-2.5 rounded-lg bg-indigo-600 text-white text-sm font-bold cursor-pointer">{${JSON.stringify(b.badgeText || 'Validate & Submit')}}</button>
+        </form>
+      </section>`;
+        case 'ui-staggered': {
+          const tiles = parseOptionsList(b.content, b.options, ['Tile 1', 'Tile 2', 'Tile 3', 'Tile 4']);
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="${b.gridColumns === 3 ? 'columns-1 md:columns-3' : 'columns-1 md:columns-2'} gap-4 space-y-4"${styleAttr}>
+          {${JSON.stringify(tiles)}.map((t, i) => (
+            <div key={i} className="break-inside-avoid p-5 rounded-xl bg-white/5 border border-white/10 font-semibold">{t}</div>
+          ))}
+        </div>
+      </section>`;
+        }
+        case 'ui-flippable-card':
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <button type="button" onClick={() => setOpenAccordions((p) => ({ ...p, [${JSON.stringify(b.id)}]: !p[${JSON.stringify(b.id)}] }))} className="w-full text-left p-6 rounded-2xl bg-white/5 border border-white/15 space-y-2 cursor-pointer"${styleAttr}>
+          <div className="text-xs font-mono text-sky-400">{openAccordions[${JSON.stringify(b.id)}] ? 'BACK SIDE' : 'FRONT SIDE'}</div>
+          <h3 className="text-lg font-bold">{openAccordions[${JSON.stringify(b.id)}] ? ${JSON.stringify(b.backTitle || 'Back Side')} : ${safeTitle}}</h3>
+          <p className="text-sm opacity-75">{openAccordions[${JSON.stringify(b.id)}] ? ${JSON.stringify(b.backSubtitle || 'Tap to flip back')} : ${safeSub}}</p>
+        </button>
+      </section>`;
+        case 'ui-swipeable-stack': {
+          const cards = parseOptionsList(b.content, b.options, ['Card 1', 'Card 2', 'Card 3']);
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3"${styleAttr}>
+          <div className="p-5 rounded-xl bg-black/30 border border-white/10 font-bold">{${JSON.stringify(cards)}[tabIdx[${JSON.stringify(`${b.id}_sw`)}] ?? 0] ?? 'All cards swiped!'}</div>
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setTabIdx((p) => ({ ...p, [${JSON.stringify(`${b.id}_sw`)}]: Math.min(${cards.length}, (p[${JSON.stringify(`${b.id}_sw`)}] ?? 0) + 1) }))} className="px-3 py-1.5 rounded bg-indigo-600 text-white text-xs font-semibold cursor-pointer">Swipe Next</button>
+            <button type="button" onClick={() => setTabIdx((p) => ({ ...p, [${JSON.stringify(`${b.id}_sw`)}]: 0 }))} className="px-3 py-1.5 rounded bg-white/10 text-xs cursor-pointer">Reset</button>
+          </div>
+        </div>
+      </section>`;
+        }
+        case 'ui-datatable': {
+          const headers = (b.columnsHeader || 'Name | Role | Status').split('|').map((s) => s.trim()).filter(Boolean);
+          const rows = parseOptionsList(b.content, b.options, ['Deepal P. | Architect | Active']).map((r) => r.split('|').map((c) => c.trim()));
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full overflow-x-auto">
+        <table className="w-full text-left border-collapse text-sm rounded-xl bg-white/5 border border-white/10"${styleAttr}>
+          <thead><tr className="border-b border-white/15 text-sky-300">{${JSON.stringify(headers)}.map((h, i) => <th key={i} className="p-3">{h}</th>)}</tr></thead>
+          <tbody>{${JSON.stringify(rows)}.map((row, r) => <tr key={r} className="border-t border-white/10">{row.map((cell, c) => <td key={c} className="p-3">{cell}</td>)}</tr>)}</tbody>
+        </table>
+      </section>`;
+        }
+        case 'ui-flex': {
+          const isCol = b.direction === 'column' || b.direction === 'vertical';
+          const ratios = (b.flexRatios || '1:2:1').split(/[:,\s]+/).map((n) => Math.max(1, Number(n) || 1));
+          const items = parseOptionsList(b.content, b.options, ['Pane 1', 'Pane 2', 'Pane 3']);
+          return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
+        <div className="flex ${isCol ? 'flex-col' : 'flex-row'} gap-3"${styleAttr}>
+          ${
+            b.children && b.children.length > 0
+              ? b.children.map((c, i) => renderChildJsx(c, `${ratios[i] ?? 1} 1 0%`)).join('\n          ')
+              : `{${JSON.stringify(items)}.map((item, i) => (
+            <div key={i} style={{ flex: \`\${${JSON.stringify(ratios)}[i] ?? 1} 1 0%\` }} className="p-4 rounded-xl bg-white/5 border border-white/10 font-semibold text-center">{item}</div>
+          ))}`
+          }
         </div>
       </section>`;
         }

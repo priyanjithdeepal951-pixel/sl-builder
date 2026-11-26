@@ -220,6 +220,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   const [htmlViewMode, setHtmlViewMode] = useState<'visual' | 'code'>('visual');
   const [activeCategory, setActiveCategory] = useState<WebStudioCategoryId>('layout');
   const [activeRailItem, setActiveRailItem] = useState<string>('widget-palette');
+  const [frequentlyUsedOpen, setFrequentlyUsedOpen] = useState<boolean>(true);
   const [layoutElementsOpen, setLayoutElementsOpen] = useState<boolean>(true);
   const [moreWidgetsOpen, setMoreWidgetsOpen] = useState<boolean>(false);
   const [viewport, setViewport] = useState<ViewportMode>('desktop');
@@ -559,6 +560,64 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
   const handleUpdateBlock = (updated: CanvasBlock) => {
     commitBlocks((prev) => prev.map((b) => (b.id === updated.id ? updated : b)), false);
+  };
+
+  const handleAddChildWidget = (containerId: string, tplId: string) => {
+    const tpl = WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === tplId);
+    if (!tpl) return;
+    const child = createCanvasBlockFromTemplate(tpl);
+    commitBlocks((prev) =>
+      prev.map((b) =>
+        b.id === containerId ? { ...b, children: [...(b.children || []), child] } : b
+      )
+    );
+    onToast(`Added ${tpl.name} inside container`, 'success');
+  };
+
+  const handleDropChildInContainer = (
+    containerId: string,
+    payload: {
+      tplId?: string;
+      blockType?: string;
+      imageDataUrl?: string;
+      fileName?: string;
+    }
+  ) => {
+    if (payload.imageDataUrl) {
+      const imgTpl =
+        WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === 'tpl-image') ||
+        WEB_STUDIO_BLOCK_TEMPLATES[0];
+      const created = createCanvasBlockFromTemplate(imgTpl);
+      created.imageUrl = payload.imageDataUrl;
+      created.content =
+        (payload.fileName || 'Uploaded Photo').replace(/\.[^.]+$/, '') || 'Uploaded Photo';
+      commitBlocks((prev) =>
+        prev.map((b) =>
+          b.id === containerId ? { ...b, children: [...(b.children || []), created] } : b
+        )
+      );
+      setSelectedBlockId(containerId);
+      onToast(`Added photo "${payload.fileName || 'image'}" inside container`, 'success');
+      return;
+    }
+
+    const tpl =
+      (payload.tplId
+        ? WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === payload.tplId)
+        : undefined) ||
+      (payload.blockType
+        ? WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.type === payload.blockType)
+        : undefined);
+    if (!tpl) return;
+
+    const child = createCanvasBlockFromTemplate(tpl);
+    commitBlocks((prev) =>
+      prev.map((b) =>
+        b.id === containerId ? { ...b, children: [...(b.children || []), child] } : b
+      )
+    );
+    setSelectedBlockId(containerId);
+    onToast(`Added ${tpl.name} inside container`, 'success');
   };
 
   const handleDeleteBlock = (id: string) => {
@@ -2348,8 +2407,134 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                 <aside className="w-[264px] lg:w-[278px] bg-[#181a1f] border-r border-white/[0.08] overflow-y-auto px-3 py-3 shrink-0 space-y-3 select-none">
                   {activeRailItem === 'widget-palette' ? (
                     <>
-                      {/* LAYOUT ELEMENTS Section (matches reference screenshot) */}
+                      {/* FREQUENTLY USED ELEMENTS Section */}
                       <div>
+                        <button
+                          type="button"
+                          onClick={() => setFrequentlyUsedOpen((o) => !o)}
+                          className="w-full flex items-center justify-between py-1 text-left cursor-pointer group"
+                        >
+                          <span className="text-[11px] font-medium tracking-[0.08em] text-[#9aa3b2] group-hover:text-white uppercase transition-colors">
+                            FREQUENTLY USED ELEMENTS
+                          </span>
+                          <ChevronDown
+                            className={`w-3.5 h-3.5 text-[#8b949e] transition-transform duration-150 ${
+                              frequentlyUsedOpen ? 'rotate-0' : '-rotate-90'
+                            }`}
+                          />
+                        </button>
+
+                        {frequentlyUsedOpen && (
+                          <div className="grid grid-cols-3 gap-2 pt-2">
+                            {(
+                              [
+                                {
+                                  id: 'Text',
+                                  tplId: 'tpl-paragraph',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-[20px] h-[20px]">
+                                      <path d="M4 5.5h10v2.2h-3.8V18H7.8V7.7H4V5.5zm9.5 4.5h6.5v2h-2.1v6h-2.3v-6h-2.1v-2z" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Column',
+                                  tplId: 'tpl-column',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <path d="M6 5v14" />
+                                      <rect x="9.5" y="4.5" width="5" height="4" rx="0.8" />
+                                      <rect x="9.5" y="10" width="5" height="4" rx="0.8" />
+                                      <rect x="9.5" y="15.5" width="5" height="4" rx="0.8" />
+                                      <path d="M18 5v14" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Row',
+                                  tplId: 'tpl-row',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" className="w-[20px] h-[20px]">
+                                      <path d="M5 6h14" />
+                                      <rect x="4.5" y="9.5" width="4" height="5" rx="0.8" />
+                                      <rect x="10" y="9.5" width="4" height="5" rx="0.8" />
+                                      <rect x="15.5" y="9.5" width="4" height="5" rx="0.8" />
+                                      <path d="M5 18h14" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Container',
+                                  tplId: 'tpl-section',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" className="w-[20px] h-[20px]">
+                                      <rect x="4.5" y="4.5" width="15" height="15" rx="2" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Image',
+                                  tplId: 'tpl-image',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
+                                      <rect x="4.5" y="4.5" width="15" height="11.5" rx="2" />
+                                      <circle cx="9" cy="8.5" r="1.1" />
+                                      <path d="m6 14 3.5-3.2 2.8 2.4 2.2-1.8 3 2.6" />
+                                      <path d="M6.5 19h11" />
+                                    </svg>
+                                  ),
+                                },
+                                {
+                                  id: 'Button',
+                                  tplId: 'tpl-button',
+                                  icon: (
+                                    <svg viewBox="0 0 24 24" fill="none" className="w-[20px] h-[20px]">
+                                      <rect x="3.5" y="5" width="17" height="14" rx="4" stroke="currentColor" strokeWidth="1.7" />
+                                      <text
+                                        x="12"
+                                        y="14"
+                                        textAnchor="middle"
+                                        fill="currentColor"
+                                        fontSize="6.5"
+                                        fontWeight="700"
+                                        fontFamily="system-ui, sans-serif"
+                                        letterSpacing="0.3"
+                                      >
+                                        BTN
+                                      </text>
+                                    </svg>
+                                  ),
+                                },
+                              ] as const
+                            ).map((item) => {
+                              const tpl =
+                                WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === item.tplId) ||
+                                WEB_STUDIO_BLOCK_TEMPLATES[0];
+                              return (
+                                <button
+                                  key={`freq-${item.id}`}
+                                  type="button"
+                                  draggable
+                                  onDragStart={(e) => handlePaletteDragStart(e, tpl)}
+                                  onClick={() => handleAddTemplateBlock(tpl)}
+                                  title={`Add ${item.id}`}
+                                  className="h-[74px] rounded-[8px] bg-[#1e2127] hover:bg-[#262a33] border border-white/[0.07] hover:border-white/[0.16] px-1.5 flex flex-col items-center justify-center gap-1.5 text-center transition-colors cursor-grab active:cursor-grabbing"
+                                >
+                                  <span className="text-[#c9d1d9] flex items-center justify-center">
+                                    {item.icon}
+                                  </span>
+                                  <span className="text-[11px] font-normal text-[#9aa3b2] truncate w-full leading-tight">
+                                    {item.id}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* LAYOUT ELEMENTS Section (matches reference screenshot) */}
+                      <div className="pt-1">
                         <button
                           type="button"
                           onClick={() => setLayoutElementsOpen((o) => !o)}
@@ -2406,7 +2591,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Stack',
-                                  tplId: 'tpl-column',
+                                  tplId: 'tpl-stack',
                                   icon: <Layers className="w-[20px] h-[20px] stroke-[1.75]" />,
                                 },
                                 {
@@ -2421,7 +2606,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'ListView',
-                                  tplId: 'tpl-sidebar',
+                                  tplId: 'tpl-listview',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" className="w-[20px] h-[20px]">
                                       <path d="M5 7h14" />
@@ -2437,7 +2622,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Spacer',
-                                  tplId: 'tpl-section',
+                                  tplId: 'tpl-spacer',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <path d="M5 5h14" />
@@ -2450,12 +2635,12 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Divider',
-                                  tplId: 'tpl-footer',
+                                  tplId: 'tpl-divider',
                                   icon: <Minus className="w-[20px] h-[20px] stroke-[2]" />,
                                 },
                                 {
                                   id: 'VerticalDivider',
-                                  tplId: 'tpl-sidebar',
+                                  tplId: 'tpl-vertical-divider',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="w-[20px] h-[20px]">
                                       <path d="M12 5v14" />
@@ -2469,7 +2654,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'PageView',
-                                  tplId: 'tpl-image',
+                                  tplId: 'tpl-pageview',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="5" y="4" width="14" height="12" rx="2" />
@@ -2485,7 +2670,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Carousel',
-                                  tplId: 'tpl-testimonial',
+                                  tplId: 'tpl-carousel',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="7" y="6" width="10" height="12" rx="1.5" />
@@ -2510,7 +2695,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Wrap',
-                                  tplId: 'tpl-row',
+                                  tplId: 'tpl-wrap',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="4" y="6" width="6" height="4.5" rx="0.8" />
@@ -2523,7 +2708,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Form Validation',
-                                  tplId: 'tpl-text-input',
+                                  tplId: 'tpl-form-validation',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="w-[20px] h-[20px]">
                                       <path d="M5 6.5h14" />
@@ -2536,7 +2721,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'StaggeredView',
-                                  tplId: 'tpl-grid',
+                                  tplId: 'tpl-staggered',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="5" y="4.5" width="6" height="8" rx="1" />
@@ -2548,7 +2733,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'FlippableCard',
-                                  tplId: 'tpl-card',
+                                  tplId: 'tpl-flippable-card',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="6" y="4.5" width="12" height="9.5" rx="1.5" />
@@ -2560,7 +2745,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'SwipeableStack',
-                                  tplId: 'tpl-card',
+                                  tplId: 'tpl-swipeable-stack',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.65" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="5" y="7" width="8.5" height="10.5" rx="1.2" transform="rotate(-12 9 12)" />
@@ -2572,7 +2757,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'DataTable',
-                                  tplId: 'tpl-pricing',
+                                  tplId: 'tpl-datatable',
                                   icon: (
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" className="w-[20px] h-[20px]">
                                       <rect x="4" y="5" width="16" height="14" rx="1.8" />
@@ -2584,7 +2769,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 },
                                 {
                                   id: 'Flex',
-                                  tplId: 'tpl-row',
+                                  tplId: 'tpl-flex',
                                   icon: <Move className="w-[20px] h-[20px] stroke-[1.75]" />,
                                 },
                               ] as const
@@ -2964,7 +3149,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
                                     {(blk.type === 'ui-image' ||
                                       blk.type === 'ui-avatar' ||
-                                      blk.type === 'ui-card') && (
+                                      blk.type === 'ui-card' ||
+                                      blk.type === 'ui-stack') && (
                                       <div
                                         className="flex items-center gap-2 pt-0.5"
                                         onClick={(e) => e.stopPropagation()}
@@ -3156,7 +3342,15 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                       blk.type === 'ui-tabbar' ||
                                       blk.type === 'ui-row' ||
                                       blk.type === 'ui-column' ||
+                                      blk.type === 'ui-listview' ||
                                       blk.type === 'ui-grid' ||
+                                      blk.type === 'ui-pageview' ||
+                                      blk.type === 'ui-carousel' ||
+                                      blk.type === 'ui-wrap' ||
+                                      blk.type === 'ui-staggered' ||
+                                      blk.type === 'ui-swipeable-stack' ||
+                                      blk.type === 'ui-flex' ||
+                                      blk.type === 'ui-vertical-divider' ||
                                       blk.type === 'ui-select' ||
                                       (blk.type === 'ui-checkbox' &&
                                         blk.controlVariant === 'radio')) && (
@@ -5980,6 +6174,9 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                   onDropAtStageIndex={(payload, idx) => {
                     handleDropPayloadAtIndex(payload, idx);
                   }}
+                  onDropChildInContainer={(containerId, payload) => {
+                    handleDropChildInContainer(containerId, payload);
+                  }}
                   onDismissSubmission={() =>
                     setRuntimeState((prev) => ({ ...prev, lastSubmission: null }))
                   }
@@ -6092,7 +6289,15 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         selectedBlock.type === 'ui-tabbar' ||
                         selectedBlock.type === 'ui-row' ||
                         selectedBlock.type === 'ui-column' ||
+                        selectedBlock.type === 'ui-listview' ||
                         selectedBlock.type === 'ui-grid' ||
+                        selectedBlock.type === 'ui-pageview' ||
+                        selectedBlock.type === 'ui-carousel' ||
+                        selectedBlock.type === 'ui-wrap' ||
+                        selectedBlock.type === 'ui-staggered' ||
+                        selectedBlock.type === 'ui-swipeable-stack' ||
+                        selectedBlock.type === 'ui-flex' ||
+                        selectedBlock.type === 'ui-vertical-divider' ||
                         selectedBlock.type === 'ui-select' ||
                         (selectedBlock.type === 'ui-checkbox' &&
                           selectedBlock.controlVariant === 'radio')) && (
@@ -6428,6 +6633,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         selectedBlock.type === 'ui-pricing' ||
                         selectedBlock.type === 'ui-modal' ||
                         selectedBlock.type === 'ui-section' ||
+                        selectedBlock.type === 'ui-stack' ||
+                        selectedBlock.type === 'ui-card' ||
+                        selectedBlock.type === 'ui-form' ||
+                        selectedBlock.type === 'ui-flippable-card' ||
                         selectedBlock.type === 'logic-click' ||
                         selectedBlock.type === 'logic-if') && (
                         <div className="space-y-1">
@@ -6445,7 +6654,13 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                 : selectedBlock.type === 'ui-modal'
                                 ? 'Open Dialog'
                                 : selectedBlock.type === 'ui-section'
-                                ? 'Section Container'
+                                ? 'Container'
+                                : selectedBlock.type === 'ui-stack'
+                                ? 'LIVE'
+                                : selectedBlock.type === 'ui-form'
+                                ? 'Validate & Submit'
+                                : selectedBlock.type === 'ui-flippable-card'
+                                ? 'Click to Flip'
                                 : selectedBlock.type === 'logic-if'
                                 ? 'Eval'
                                 : 'Fire')
@@ -6460,7 +6675,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
                       {(selectedBlock.type === 'ui-image' ||
                         selectedBlock.type === 'ui-avatar' ||
-                        selectedBlock.type === 'ui-card') && (
+                        selectedBlock.type === 'ui-card' ||
+                        selectedBlock.type === 'ui-stack') && (
                         <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-sky-500/20">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-semibold text-sky-300 flex items-center gap-1">
@@ -6608,7 +6824,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         </div>
                       )}
 
-                      {selectedBlock.type === 'ui-grid' && (
+                      {(selectedBlock.type === 'ui-grid' || selectedBlock.type === 'ui-staggered') && (
                         <div className="space-y-1">
                           <span className="font-semibold text-slate-400 block">Grid Columns</span>
                           <select
@@ -6624,6 +6840,367 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             <option value={2}>2 Columns</option>
                             <option value={3}>3 Columns</option>
                           </select>
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-spacer' && (
+                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-white/10">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-slate-300">Spacer Gap (px)</span>
+                            <span className="font-mono text-sky-400">{selectedBlock.spacerSize ?? 32}px</span>
+                          </div>
+                          <input
+                            type="range"
+                            min={4}
+                            max={160}
+                            step={4}
+                            value={selectedBlock.spacerSize ?? 32}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                spacerSize: Number(e.target.value),
+                                content: `${Number(e.target.value)}px Empty Space`,
+                              })
+                            }
+                            className="w-full accent-[#4C97FF] cursor-pointer"
+                          />
+                        </div>
+                      )}
+
+                      {(selectedBlock.type === 'ui-divider' ||
+                        selectedBlock.type === 'ui-vertical-divider') && (
+                        <div className="grid grid-cols-2 gap-1.5 p-2 rounded-lg bg-[#141923] border border-white/10">
+                          <label className="flex items-center justify-between px-2 py-1 rounded bg-[#0A0D13] border border-white/10 cursor-pointer">
+                            <span className="text-slate-400">Line Color</span>
+                            <input
+                              type="color"
+                              value={
+                                selectedBlock.style?.borderColor?.startsWith('#')
+                                  ? selectedBlock.style.borderColor
+                                  : '#334155'
+                              }
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: { ...selectedBlock.style, borderColor: e.target.value },
+                                })
+                              }
+                              className="w-5 h-4 bg-transparent border-0 cursor-pointer p-0"
+                            />
+                          </label>
+                          <select
+                            value={selectedBlock.style?.borderWidth || '1px'}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                style: { ...selectedBlock.style, borderWidth: e.target.value },
+                              })
+                            }
+                            className="px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                          >
+                            <option value="1px">Thickness: 1px</option>
+                            <option value="2px">Thickness: 2px</option>
+                            <option value="3px">Thickness: 3px</option>
+                            <option value="4px">Thickness: 4px</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-listview' && (
+                        <div className="space-y-1">
+                          <span className="font-semibold text-slate-400 block">Scroll Direction</span>
+                          <select
+                            value={selectedBlock.direction || 'vertical'}
+                            onChange={(e) =>
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                direction: e.target.value as 'vertical' | 'horizontal',
+                              })
+                            }
+                            className="w-full px-2.5 py-1.5 rounded-lg bg-[#141923] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                          >
+                            <option value="vertical">Vertical Scroll</option>
+                            <option value="horizontal">Horizontal Scroll</option>
+                          </select>
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-flex' && (
+                        <div className="grid grid-cols-2 gap-1.5 p-2 rounded-lg bg-[#141923] border border-white/10">
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-semibold text-slate-400 block">Direction</span>
+                            <select
+                              value={selectedBlock.direction || 'row'}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  direction: e.target.value as 'row' | 'column',
+                                })
+                              }
+                              className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                            >
+                              <option value="row">Row (Horizontal)</option>
+                              <option value="column">Column (Vertical)</option>
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <span className="text-[10px] font-semibold text-slate-400 block">Flex Ratios</span>
+                            <input
+                              type="text"
+                              value={selectedBlock.flexRatios || '1:2:1'}
+                              onChange={(e) =>
+                                handleUpdateBlock({ ...selectedBlock, flexRatios: e.target.value })
+                              }
+                              placeholder="1:2:1"
+                              className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-sky-300 font-mono outline-none focus:border-[#4C97FF]"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-flippable-card' && (
+                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-indigo-400/20">
+                          <span className="font-semibold text-indigo-300 block">Back Side Content</span>
+                          <input
+                            type="text"
+                            value={selectedBlock.backTitle || ''}
+                            onChange={(e) =>
+                              handleUpdateBlock({ ...selectedBlock, backTitle: e.target.value })
+                            }
+                            placeholder="Back title..."
+                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none focus:border-[#4C97FF]"
+                          />
+                          <input
+                            type="text"
+                            value={selectedBlock.backSubtitle || ''}
+                            onChange={(e) =>
+                              handleUpdateBlock({ ...selectedBlock, backSubtitle: e.target.value })
+                            }
+                            placeholder="Back description..."
+                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-300 outline-none focus:border-[#4C97FF]"
+                          />
+                        </div>
+                      )}
+
+                      {selectedBlock.type === 'ui-datatable' && (
+                        <div className="space-y-1.5 p-2 rounded-lg bg-[#141923] border border-sky-500/20">
+                          <span className="font-semibold text-sky-300 block">Table Columns (use |)</span>
+                          <input
+                            type="text"
+                            value={selectedBlock.columnsHeader || 'Name | Role | Status'}
+                            onChange={(e) =>
+                              handleUpdateBlock({ ...selectedBlock, columnsHeader: e.target.value })
+                            }
+                            placeholder="Name | Role | Status"
+                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 font-mono outline-none focus:border-[#4C97FF]"
+                          />
+                          <span className="font-semibold text-slate-400 block">Rows (one row per line, use | for cells)</span>
+                          <textarea
+                            rows={3}
+                            value={(selectedBlock.options || []).join('\n')}
+                            onChange={(e) => {
+                              const rows = e.target.value
+                                .split('\n')
+                                .map((r) => r.trim())
+                                .filter(Boolean);
+                              handleUpdateBlock({
+                                ...selectedBlock,
+                                options: rows,
+                                content: rows[0] || selectedBlock.content,
+                              });
+                            }}
+                            placeholder="Deepal P. | Architect | Active"
+                            className="w-full px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 font-mono text-[10px] outline-none focus:border-[#4C97FF]"
+                          />
+                        </div>
+                      )}
+
+                      {(selectedBlock.type === 'ui-section' ||
+                        selectedBlock.type === 'ui-card' ||
+                        selectedBlock.type === 'ui-row' ||
+                        selectedBlock.type === 'ui-column' ||
+                        selectedBlock.type === 'ui-stack' ||
+                        selectedBlock.type === 'ui-wrap' ||
+                        selectedBlock.type === 'ui-flex') && (
+                        <div className="space-y-2 p-2 rounded-lg bg-[#141923] border border-white/10">
+                          <span className="font-semibold text-slate-300 block">
+                            Box Styles (BG, Border, Shadow &amp; Size)
+                          </span>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <label className="flex items-center justify-between px-2 py-1 rounded bg-[#0A0D13] border border-white/10 cursor-pointer">
+                              <span className="text-slate-400">Bg</span>
+                              <input
+                                type="color"
+                                value={selectedBlock.style?.customBgHex || '#151924'}
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    style: {
+                                      ...selectedBlock.style,
+                                      customBgHex: e.target.value,
+                                      bgGradient: undefined,
+                                    },
+                                  })
+                                }
+                                className="w-5 h-4 bg-transparent border-0 cursor-pointer p-0"
+                              />
+                            </label>
+                            <label className="flex items-center justify-between px-2 py-1 rounded bg-[#0A0D13] border border-white/10 cursor-pointer">
+                              <span className="text-slate-400">Border</span>
+                              <input
+                                type="color"
+                                value={
+                                  selectedBlock.style?.borderColor?.startsWith('#')
+                                    ? selectedBlock.style.borderColor
+                                    : '#334155'
+                                }
+                                onChange={(e) =>
+                                  handleUpdateBlock({
+                                    ...selectedBlock,
+                                    style: { ...selectedBlock.style, borderColor: e.target.value },
+                                  })
+                                }
+                                className="w-5 h-4 bg-transparent border-0 cursor-pointer p-0"
+                              />
+                            </label>
+                            <select
+                              value={selectedBlock.style?.borderWidth || '1px'}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: { ...selectedBlock.style, borderWidth: e.target.value },
+                                })
+                              }
+                              className="px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                            >
+                              <option value="0px">Border: 0px</option>
+                              <option value="1px">Border: 1px</option>
+                              <option value="2px">Border: 2px</option>
+                              <option value="4px">Border: 4px</option>
+                            </select>
+                            <select
+                              value={selectedBlock.style?.boxShadow || ''}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: {
+                                    ...selectedBlock.style,
+                                    boxShadow: e.target.value || undefined,
+                                  },
+                                })
+                              }
+                              className="px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                            >
+                              <option value="">Shadow: None</option>
+                              <option value="0 6px 18px rgba(0,0,0,0.35)">Shadow: Soft</option>
+                              <option value="0 14px 35px rgba(0,0,0,0.55)">Shadow: Elevated</option>
+                              <option value="0 0 24px rgba(77,151,255,0.35)">Shadow: Glow</option>
+                            </select>
+                            <select
+                              value={selectedBlock.style?.width || '100%'}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: { ...selectedBlock.style, width: e.target.value },
+                                })
+                              }
+                              className="px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                            >
+                              <option value="100%">Width: 100%</option>
+                              <option value="85%">Width: 85%</option>
+                              <option value="65%">Width: 65%</option>
+                              <option value="auto">Width: Auto</option>
+                            </select>
+                            <select
+                              value={selectedBlock.style?.height || 'auto'}
+                              onChange={(e) =>
+                                handleUpdateBlock({
+                                  ...selectedBlock,
+                                  style: { ...selectedBlock.style, height: e.target.value },
+                                })
+                              }
+                              className="px-2 py-1 rounded bg-[#0A0D13] border border-white/10 text-slate-200 outline-none cursor-pointer"
+                            >
+                              <option value="auto">Height: Auto</option>
+                              <option value="140px">Height: 140px</option>
+                              <option value="200px">Height: 200px</option>
+                              <option value="280px">Height: 280px</option>
+                            </select>
+                          </div>
+
+                          <div className="pt-1 border-t border-white/10 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="font-semibold text-sky-300">
+                                Child Widgets ({selectedBlock.children?.length || 0})
+                              </span>
+                              <span className="text-[9px] text-slate-500">or drag onto preview</span>
+                            </div>
+                            {selectedBlock.children && selectedBlock.children.length > 0 && (
+                              <div className="space-y-1 max-h-28 overflow-y-auto">
+                                {selectedBlock.children.map((ch, idx) => (
+                                  <div
+                                    key={ch.id || idx}
+                                    className="flex items-center gap-1 bg-[#0A0D13] border border-white/10 rounded px-2 py-1"
+                                  >
+                                    <span className="text-[9px] font-mono text-sky-400 shrink-0">
+                                      {ch.type.replace('ui-', '')}
+                                    </span>
+                                    <input
+                                      type="text"
+                                      value={ch.content}
+                                      onChange={(e) => {
+                                        const nextChildren = (selectedBlock.children || []).map(
+                                          (item, i) =>
+                                            i === idx ? { ...item, content: e.target.value } : item
+                                        );
+                                        handleUpdateBlock({
+                                          ...selectedBlock,
+                                          children: nextChildren,
+                                        });
+                                      }}
+                                      className="flex-1 min-w-0 bg-transparent text-[10px] text-white outline-none"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextChildren = (selectedBlock.children || []).filter(
+                                          (_, i) => i !== idx
+                                        );
+                                        handleUpdateBlock({
+                                          ...selectedBlock,
+                                          children: nextChildren,
+                                        });
+                                      }}
+                                      className="text-rose-400 hover:text-rose-300 text-[10px] px-1 cursor-pointer"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <div className="flex flex-wrap gap-1">
+                              {[
+                                { label: '+ Text', tplId: 'tpl-paragraph' },
+                                { label: '+ Button', tplId: 'tpl-button' },
+                                { label: '+ Image', tplId: 'tpl-image' },
+                                { label: '+ Badge', tplId: 'tpl-badge' },
+                                { label: '+ Icon', tplId: 'tpl-icon' },
+                                { label: '+ Spacer', tplId: 'tpl-spacer' },
+                                { label: '+ Divider', tplId: 'tpl-divider' },
+                                { label: '+ V-Line', tplId: 'tpl-vertical-divider' },
+                              ].map((btn) => (
+                                <button
+                                  key={btn.tplId}
+                                  type="button"
+                                  onClick={() => handleAddChildWidget(selectedBlock.id, btn.tplId)}
+                                  className="px-1.5 py-0.5 rounded bg-sky-500/15 hover:bg-sky-500/25 border border-sky-400/30 text-[9px] font-semibold text-sky-200 cursor-pointer"
+                                >
+                                  {btn.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       )}
 

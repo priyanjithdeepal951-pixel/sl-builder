@@ -3,6 +3,8 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Server,
   Play,
   RotateCcw,
@@ -105,6 +107,15 @@ interface WebPreviewRendererProps {
       fileName?: string;
     },
     index: number
+  ) => void;
+  onDropChildInContainer?: (
+    containerId: string,
+    payload: {
+      tplId?: string;
+      blockType?: string;
+      imageDataUrl?: string;
+      fileName?: string;
+    }
   ) => void;
   onDismissSubmission?: () => void;
 }
@@ -247,6 +258,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
   runningTimers = {},
   onToggleTimer,
   onDropAtStageIndex,
+  onDropChildInContainer,
   onDismissSubmission,
 }) => {
   const [apiResponses, setApiResponses] = useState<Record<string, string>>({});
@@ -265,6 +277,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
   const [sidebarActiveIdx, setSidebarActiveIdx] = useState<Record<string, number>>({});
   const [inlineEditBlockId, setInlineEditBlockId] = useState<string | null>(null);
   const [stageDropIdx, setStageDropIdx] = useState<number | null>(null);
+  const [dragOverContainerId, setDragOverContainerId] = useState<string | null>(null);
+  const [flippedCards, setFlippedCards] = useState<Record<string, boolean>>({});
+  const [swipeIndex, setSwipeIndex] = useState<Record<string, number>>({});
+  const [swipeDragX, setSwipeDragX] = useState<Record<string, number>>({});
+  const [formDrafts, setFormDrafts] = useState<
+    Record<string, { name: string; email: string; password: string }>
+  >({});
+  const [formErrors, setFormErrors] = useState<
+    Record<string, { name?: string; email?: string; password?: string; submitted?: boolean }>
+  >({});
+  const pageDragStartX = React.useRef<Record<string, number | null>>({});
+  const carouselRefs = React.useRef<Record<string, HTMLDivElement | null>>({});
 
   React.useEffect(() => {
     return () => {
@@ -351,6 +375,155 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
     );
   }
 
+  const handleContainerDragOver = (e: React.DragEvent, containerId: string) => {
+    if (!onDropChildInContainer) return;
+    const hasTpl =
+      e.dataTransfer.types.includes('application/x-slbuilder-tpl-id') ||
+      e.dataTransfer.types.includes('application/x-slbuilder-type') ||
+      e.dataTransfer.types.includes('Files');
+    if (!hasTpl) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (dragOverContainerId !== containerId) {
+      setDragOverContainerId(containerId);
+    }
+  };
+
+  const handleContainerDrop = async (e: React.DragEvent, containerId: string) => {
+    if (!onDropChildInContainer) return;
+    const tplId = e.dataTransfer.getData('application/x-slbuilder-tpl-id');
+    const blockType = e.dataTransfer.getData('application/x-slbuilder-type');
+    const file = e.dataTransfer.files?.[0];
+    if (!tplId && !blockType && !(file && file.type.startsWith('image/'))) {
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverContainerId(null);
+    setStageDropIdx(null);
+
+    if (file && file.type.startsWith('image/')) {
+      try {
+        const dataUrl = await readAndCompressImageFile(file);
+        onDropChildInContainer(containerId, { imageDataUrl: dataUrl, fileName: file.name });
+      } catch {
+        // ignore invalid file
+      }
+      return;
+    }
+
+    onDropChildInContainer(containerId, { tplId, blockType });
+  };
+
+  const renderChildWidget = (
+    child: CanvasBlock,
+    parentBlock: CanvasBlock,
+    childIdx: number,
+    extraStyle?: React.CSSProperties
+  ): React.ReactNode => {
+    const childBg = child.style?.customBgHex || (child.style?.bgColor === 'bg-transparent' ? 'transparent' : undefined);
+    const childColor = child.style?.customTextHex;
+    const removeChild = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      const nextChildren = (parentBlock.children || []).filter((c) => c.id !== child.id);
+      onUpdateBlock({ ...parentBlock, children: nextChildren });
+    };
+
+    return (
+      <div
+        key={child.id || `child_${childIdx}`}
+        style={{
+          backgroundColor: childBg,
+          color: childColor,
+          borderColor: child.style?.borderColor,
+          boxShadow: child.style?.boxShadow,
+          ...extraStyle,
+        }}
+        className="group/child relative min-w-0"
+      >
+        {onDropAtStageIndex && (
+          <button
+            type="button"
+            onClick={removeChild}
+            title="Remove child widget"
+            className="opacity-0 group-hover/child:opacity-100 absolute -top-1.5 -right-1.5 z-20 w-4 h-4 rounded-full bg-rose-600 text-white flex items-center justify-center text-[9px] shadow cursor-pointer transition-opacity"
+          >
+            <X className="w-2.5 h-2.5" />
+          </button>
+        )}
+
+        {child.type === 'ui-spacer' ? (
+          <div
+            style={{
+              height: `${child.spacerSize ?? 16}px`,
+              width: `${child.spacerSize ?? 16}px`,
+            }}
+            className="border border-dashed border-white/10 rounded flex items-center justify-center text-[9px] font-mono text-slate-500"
+          >
+            {child.spacerSize ?? 16}px
+          </div>
+        ) : child.type === 'ui-divider' ? (
+          <hr
+            style={{
+              borderColor: child.style?.borderColor || 'rgba(255,255,255,0.2)',
+              borderTopWidth: child.style?.borderWidth || '1px',
+            }}
+            className="w-full border-0 border-t my-1"
+          />
+        ) : child.type === 'ui-vertical-divider' ? (
+          <div
+            style={{
+              borderColor: child.style?.borderColor || 'rgba(255,255,255,0.22)',
+              borderLeftWidth: child.style?.borderWidth || '1px',
+            }}
+            className="h-full min-h-[28px] border-l mx-1 self-stretch"
+          />
+        ) : child.type === 'ui-button' ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onTriggerAction(child, formInputs);
+            }}
+            style={{ backgroundColor: child.style?.customBgHex || resolvedAccent }}
+            className="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white shadow cursor-pointer hover:opacity-90 transition-opacity"
+          >
+            {child.content || 'Button'}
+          </button>
+        ) : child.type === 'ui-image' ? (
+          <div className="rounded-lg overflow-hidden border border-white/10 bg-[#090B10]">
+            {child.imageUrl ? (
+              <img src={child.imageUrl} alt={child.content} className="w-full h-24 object-cover" />
+            ) : (
+              <div className="h-20 flex items-center justify-center gap-1.5 text-[11px] text-sky-300 bg-gradient-to-br from-slate-800/80 to-indigo-950/60">
+                <ImageIcon className="w-4 h-4" />
+                <span>{child.content || 'Image'}</span>
+              </div>
+            )}
+          </div>
+        ) : child.type === 'ui-icon' ? (
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/5 border border-white/10 text-sky-300 text-xs">
+            {renderVectorIcon(child.iconName, 'w-4 h-4')}
+            <span>{child.content}</span>
+          </div>
+        ) : child.type === 'ui-badge' ? (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-500/20 border border-indigo-400/30 text-indigo-300">
+            {child.content}
+          </span>
+        ) : child.type === 'ui-heading' ? (
+          <h4 className="text-sm font-bold text-white">{child.content}</h4>
+        ) : (
+          <div className="px-3 py-2 rounded-lg bg-[#090B10]/90 border border-white/10 text-xs text-slate-200">
+            <p className="font-semibold text-white truncate">{child.content}</p>
+            {child.subtitle && (
+              <p className="text-[10px] text-slate-400 truncate mt-0.5">{child.subtitle}</p>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const inlineEditBlock = inlineEditBlockId
     ? blocks.find((b) => b.id === inlineEditBlockId) || null
     : null;
@@ -359,7 +532,16 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
     tp === 'ui-tabbar' ||
     tp === 'ui-row' ||
     tp === 'ui-column' ||
+    tp === 'ui-listview' ||
     tp === 'ui-grid' ||
+    tp === 'ui-pageview' ||
+    tp === 'ui-carousel' ||
+    tp === 'ui-wrap' ||
+    tp === 'ui-staggered' ||
+    tp === 'ui-swipeable-stack' ||
+    tp === 'ui-datatable' ||
+    tp === 'ui-flex' ||
+    tp === 'ui-vertical-divider' ||
     tp === 'ui-select' ||
     (tp === 'ui-checkbox' && variant === 'radio');
 
@@ -748,18 +930,29 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                 </div>
               )}
 
-              {/* 1e. SECTION CONTAINER */}
+              {/* 1e. CONTAINER (SECTION / BOX) */}
               {block.type === 'ui-section' && (
                 <div className="px-5 py-2">
                   <section
-                    style={surfaceStyle}
+                    onDragOver={(e) => handleContainerDragOver(e, block.id)}
+                    onDragLeave={() => dragOverContainerId === block.id && setDragOverContainerId(null)}
+                    onDrop={(e) => void handleContainerDrop(e, block.id)}
+                    style={{
+                      ...surfaceStyle,
+                      borderWidth: block.style?.borderWidth || '1px',
+                      borderStyle: block.children?.length ? 'solid' : 'dashed',
+                    }}
                     className={`${customPad || 'p-5'} ${customRadius} ${
                       customBg || 'bg-white/[0.03]'
-                    } border border-dashed border-white/15 ${alignClass} space-y-1.5`}
+                    } ${
+                      dragOverContainerId === block.id
+                        ? 'ring-2 ring-[#4D97FF] border-[#4D97FF]'
+                        : 'border-white/15'
+                    } ${alignClass} space-y-2 transition-all`}
                   >
                     {(block.badgeText === undefined || block.badgeText !== '') && (
                       <span className="text-[9px] font-mono uppercase tracking-widest text-sky-400 block">
-                        {block.badgeText || 'Section Container'}
+                        {block.badgeText || 'Container'}
                       </span>
                     )}
                     <h3
@@ -775,6 +968,11 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         {block.subtitle}
                       </p>
                     )}
+                    {block.children && block.children.length > 0 && (
+                      <div className="pt-2 space-y-2">
+                        {block.children.map((child, cIdx) => renderChildWidget(child, block, cIdx))}
+                      </div>
+                    )}
                   </section>
                 </div>
               )}
@@ -783,31 +981,47 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
               {block.type === 'ui-row' && (
                 <div className="px-5 py-1.5">
                   <div
-                    style={surfaceStyle}
+                    onDragOver={(e) => handleContainerDragOver(e, block.id)}
+                    onDragLeave={() => dragOverContainerId === block.id && setDragOverContainerId(null)}
+                    onDrop={(e) => void handleContainerDrop(e, block.id)}
+                    style={{
+                      ...surfaceStyle,
+                      borderWidth: block.style?.borderWidth || '1px',
+                    }}
                     className={`${customPad || 'p-3.5'} ${customRadius} ${
                       customBg || 'bg-white/[0.04]'
-                    } border border-white/10 space-y-2`}
+                    } border ${
+                      dragOverContainerId === block.id
+                        ? 'border-[#4D97FF] ring-2 ring-[#4D97FF]/50'
+                        : 'border-white/10'
+                    } space-y-2`}
                   >
                     <div className="flex items-center gap-1.5 text-[10px] font-mono text-sky-400">
                       <Columns3 className="w-3 h-3" />
                       <span style={subtitleStyle}>
-                        {block.subtitle || `Flex Row (${parsedOptions.length || 3} items)`}
+                        {block.subtitle || `Row (${block.children?.length || parsedOptions.length || 3} items)`}
                       </span>
                     </div>
-                    <div className="flex flex-wrap sm:flex-nowrap gap-2">
-                      {(parsedOptions.length > 0 ? parsedOptions : ['Col A', 'Col B', 'Col C']).map(
-                        (item, idx) => (
-                          <div
-                            key={`${item}_${idx}`}
-                            style={primaryStyle}
-                            className={`flex-1 min-w-[80px] p-2.5 rounded-lg bg-[#090B10] border border-white/10 text-[11px] font-semibold ${
-                              customTextColor || 'text-white'
-                            } text-center`}
-                          >
-                            {item}
-                          </div>
-                        )
-                      )}
+                    <div className="flex flex-row items-center flex-wrap sm:flex-nowrap gap-2 overflow-x-auto">
+                      {block.children && block.children.length > 0
+                        ? block.children.map((child, cIdx) =>
+                            renderChildWidget(child, block, cIdx, {
+                              flex: child.type === 'ui-vertical-divider' ? '0 0 auto' : '1 1 0%',
+                            })
+                          )
+                        : (parsedOptions.length > 0 ? parsedOptions : ['Widget 1', 'Widget 2', 'Widget 3']).map(
+                            (item, idx) => (
+                              <div
+                                key={`${item}_${idx}`}
+                                style={primaryStyle}
+                                className={`flex-1 min-w-[80px] p-2.5 rounded-lg bg-[#090B10] border border-white/10 text-[11px] font-semibold ${
+                                  customTextColor || 'text-white'
+                                } text-center`}
+                              >
+                                {item}
+                              </div>
+                            )
+                          )}
                     </div>
                   </div>
                 </div>
@@ -817,35 +1031,170 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
               {block.type === 'ui-column' && (
                 <div className="px-5 py-1.5">
                   <div
-                    style={surfaceStyle}
+                    onDragOver={(e) => handleContainerDragOver(e, block.id)}
+                    onDragLeave={() => dragOverContainerId === block.id && setDragOverContainerId(null)}
+                    onDrop={(e) => void handleContainerDrop(e, block.id)}
+                    style={{
+                      ...surfaceStyle,
+                      borderWidth: block.style?.borderWidth || '1px',
+                    }}
                     className={`${customPad || 'p-3.5'} ${customRadius} ${
                       customBg || 'bg-white/[0.04]'
-                    } border border-white/10 space-y-2`}
+                    } border ${
+                      dragOverContainerId === block.id
+                        ? 'border-[#4D97FF] ring-2 ring-[#4D97FF]/50'
+                        : 'border-white/10'
+                    } space-y-2`}
                   >
                     <div style={subtitleStyle} className="text-[10px] font-mono text-sky-400">
                       {block.subtitle || 'Vertical Column Stack'}
                     </div>
-                    <div className="flex flex-col gap-1.5">
-                      {(parsedOptions.length > 0
-                        ? parsedOptions
-                        : ['Row Item 1', 'Row Item 2', 'Row Item 3']
-                      ).map((item, idx) => (
-                        <div
-                          key={`${item}_${idx}`}
-                          style={primaryStyle}
-                          className={`w-full px-3 py-2 rounded-lg bg-[#090B10] border border-white/10 text-[11px] ${
-                            customTextColor || 'text-slate-200'
-                          }`}
-                        >
-                          {item}
-                        </div>
-                      ))}
+                    <div className="flex flex-col gap-2">
+                      {block.children && block.children.length > 0
+                        ? block.children.map((child, cIdx) => renderChildWidget(child, block, cIdx))
+                        : (parsedOptions.length > 0
+                            ? parsedOptions
+                            : ['Top Widget', 'Middle Widget', 'Bottom Widget']
+                          ).map((item, idx) => (
+                            <div
+                              key={`${item}_${idx}`}
+                              style={primaryStyle}
+                              className={`w-full px-3 py-2 rounded-lg bg-[#090B10] border border-white/10 text-[11px] ${
+                                customTextColor || 'text-slate-200'
+                              }`}
+                            >
+                              {item}
+                            </div>
+                          ))}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* 1h. RESPONSIVE GRID */}
+              {/* 1g2. STACK (OVERLAPPING LAYERS) */}
+              {block.type === 'ui-stack' && (
+                <div className="px-5 py-1.5">
+                  <div
+                    onDragOver={(e) => handleContainerDragOver(e, block.id)}
+                    onDragLeave={() => dragOverContainerId === block.id && setDragOverContainerId(null)}
+                    onDrop={(e) => void handleContainerDrop(e, block.id)}
+                    style={{
+                      ...surfaceStyle,
+                      minHeight: block.style?.height && block.style.height !== 'auto' ? block.style.height : '180px',
+                    }}
+                    className={`relative overflow-hidden ${customRadius} border ${
+                      dragOverContainerId === block.id
+                        ? 'border-[#4D97FF] ring-2 ring-[#4D97FF]/50'
+                        : 'border-white/15'
+                    } flex flex-col justify-end p-4`}
+                  >
+                    {/* Base Layer: Image or Gradient */}
+                    {block.imageUrl ? (
+                      <img
+                        src={block.imageUrl}
+                        alt={displayContent}
+                        className="absolute inset-0 w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 bg-gradient-to-br from-indigo-700/70 via-slate-900 to-sky-700/60" />
+                    )}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/15" />
+
+                    {/* Top-Right Overlapping Badge Layer */}
+                    {block.badgeText !== '' && (
+                      <span
+                        style={{ backgroundColor: resolvedAccent }}
+                        className="absolute top-3 right-3 z-10 px-2.5 py-0.5 rounded-full text-[10px] font-bold text-white shadow"
+                      >
+                        {block.badgeText || 'LIVE'}
+                      </span>
+                    )}
+
+                    {/* Top-Left Overlapping Icon Layer */}
+                    <div className="absolute top-3 left-3 z-10 w-8 h-8 rounded-xl bg-black/45 backdrop-blur-md border border-white/20 flex items-center justify-center text-white">
+                      {renderVectorIcon(block.iconName || 'sparkles', 'w-4 h-4')}
+                    </div>
+
+                    {/* Foreground Overlapping Text / Children */}
+                    <div className="relative z-10 space-y-1.5 pt-10">
+                      <h4
+                        style={primaryStyle}
+                        className={`${customFont || 'text-sm'} ${customWeight || 'font-bold'} ${
+                          customTextColor || 'text-white'
+                        }`}
+                      >
+                        {displayContent}
+                      </h4>
+                      {block.subtitle && (
+                        <p style={subtitleStyle} className="text-[11px] text-slate-200/90">
+                          {block.subtitle}
+                        </p>
+                      )}
+                      {block.children && block.children.length > 0 && (
+                        <div className="pt-1.5 flex flex-wrap items-center gap-2">
+                          {block.children.map((child, cIdx) => renderChildWidget(child, block, cIdx))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 1g3. LISTVIEW (SCROLLABLE LIST) */}
+              {block.type === 'ui-listview' && (
+                <div className="px-5 py-1.5">
+                  <div
+                    style={surfaceStyle}
+                    className={`${customPad || 'p-3'} ${customRadius} ${
+                      customBg || 'bg-white/[0.04]'
+                    } border border-white/10 space-y-2`}
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-mono text-sky-400">
+                      <span>ListView · {block.direction === 'horizontal' ? 'Horizontal Scroll' : 'Vertical Scroll'}</span>
+                      <span className="text-slate-500">{parsedOptions.length || 5} items</span>
+                    </div>
+                    <div
+                      className={
+                        block.direction === 'horizontal'
+                          ? 'flex flex-row gap-2.5 overflow-x-auto pb-1.5'
+                          : 'flex flex-col gap-1.5 max-h-56 overflow-y-auto pr-1'
+                      }
+                    >
+                      {(parsedOptions.length > 0
+                        ? parsedOptions
+                        : ['Alex Rivera · Hey there!', 'Sarah Chen · Ready to deploy', 'Design Team · Synced']
+                      ).map((raw, idx) => {
+                        const [titlePart, subPart] = raw.split('·').map((s) => s.trim());
+                        const initials = (titlePart || 'U').slice(0, 2).toUpperCase();
+                        return (
+                          <div
+                            key={`${raw}_${idx}`}
+                            className={`${
+                              block.direction === 'horizontal' ? 'min-w-[180px] shrink-0' : 'w-full'
+                            } px-3 py-2 rounded-xl bg-[#090B10] border border-white/10 flex items-center gap-2.5 hover:border-white/25 transition-colors`}
+                          >
+                            <div
+                              style={{ backgroundColor: resolvedAccent }}
+                              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                            >
+                              {initials}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="text-[11px] font-semibold text-white truncate">{titlePart}</p>
+                              {subPart && (
+                                <p className="text-[10px] text-slate-400 truncate">{subPart}</p>
+                              )}
+                            </div>
+                            <ChevronRight className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 1h. GRIDVIEW (SCROLLABLE GRID) */}
               {block.type === 'ui-grid' && (
                 <div className="px-5 py-1.5">
                   <div
@@ -857,30 +1206,786 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                     <div className="flex items-center justify-between text-[10px] font-mono text-sky-400">
                       <span style={subtitleStyle} className="flex items-center gap-1">
                         <LayoutGrid className="w-3 h-3" />
-                        {block.subtitle || `Grid (${block.gridColumns === 3 ? '3 Columns' : '2 Columns'})`}
+                        {block.subtitle || `GridView (${block.gridColumns === 3 ? '3 Columns' : '2 Columns'})`}
                       </span>
                     </div>
                     <div
-                      className={`grid gap-2 ${
+                      className={`grid gap-2 max-h-64 overflow-y-auto pr-0.5 ${
                         block.gridColumns === 3 ? 'grid-cols-3' : 'grid-cols-2'
                       }`}
                     >
                       {(parsedOptions.length > 0
                         ? parsedOptions
-                        : ['Grid Card 1', 'Grid Card 2', 'Grid Card 3', 'Grid Card 4']
+                        : ['Gallery 01', 'Gallery 02', 'Gallery 03', 'Gallery 04']
                       ).map((cell, idx) => (
                         <div
                           key={`${cell}_${idx}`}
                           style={primaryStyle}
-                          className={`p-2.5 rounded-lg bg-[#090B10] border border-white/10 text-[11px] font-semibold ${
+                          className={`p-3 rounded-xl bg-[#090B10] border border-white/10 text-[11px] font-semibold ${
                             customTextColor || 'text-white'
-                          }`}
+                          } flex flex-col gap-1.5`}
                         >
-                          {cell}
+                          <div className="h-12 rounded-lg bg-gradient-to-br from-indigo-500/25 via-sky-500/15 to-transparent border border-white/5 flex items-center justify-center text-sky-300">
+                            <ImageIcon className="w-4 h-4 opacity-70" />
+                          </div>
+                          <span className="truncate">{cell}</span>
                         </div>
                       ))}
                     </div>
                   </div>
+                </div>
+              )}
+
+              {/* 1h2. SPACER */}
+              {block.type === 'ui-spacer' && (
+                <div className="px-5">
+                  <div
+                    style={{ height: `${block.spacerSize ?? 32}px` }}
+                    className={`w-full flex items-center justify-center transition-colors ${
+                      isSelected
+                        ? 'border border-dashed border-sky-400/50 bg-sky-500/5 rounded-lg'
+                        : 'border border-dashed border-transparent hover:border-white/10 rounded-lg'
+                    }`}
+                  >
+                    {isSelected && (
+                      <span className="text-[9px] font-mono text-sky-300 bg-[#090B10]/90 px-2 py-0.5 rounded">
+                        Spacer · {block.spacerSize ?? 32}px
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 1h3. DIVIDER (HORIZONTAL LINE) */}
+              {block.type === 'ui-divider' && (
+                <div className="px-5 py-2">
+                  <hr
+                    style={{
+                      borderColor: block.style?.borderColor || 'rgba(255,255,255,0.18)',
+                      borderTopWidth: block.style?.borderWidth || '1px',
+                    }}
+                    className="w-full border-0 border-t"
+                  />
+                </div>
+              )}
+
+              {/* 1h4. VERTICAL DIVIDER */}
+              {block.type === 'ui-vertical-divider' && (
+                <div className="px-5 py-1.5">
+                  <div
+                    style={surfaceStyle}
+                    className={`${customPad || 'p-3.5'} ${customRadius} ${
+                      customBg || 'bg-white/[0.03]'
+                    } border border-white/10 flex items-stretch gap-3`}
+                  >
+                    <div className="flex-1 text-xs text-slate-200 flex items-center justify-center py-2">
+                      {parsedOptions[0] || 'Left Panel Content'}
+                    </div>
+                    <div
+                      style={{
+                        borderColor: block.style?.borderColor || 'rgba(255,255,255,0.22)',
+                        borderLeftWidth: block.style?.borderWidth || '1px',
+                      }}
+                      className="border-l self-stretch min-h-[36px]"
+                    />
+                    <div className="flex-1 text-xs text-slate-200 flex items-center justify-center py-2">
+                      {parsedOptions[1] || 'Right Panel Content'}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 1h5. PAGEVIEW (SWIPEABLE ONBOARDING PAGES) */}
+              {block.type === 'ui-pageview' && (
+                <div className="px-5 py-1.5">
+                  {(() => {
+                    const slides =
+                      parsedOptions.length > 0
+                        ? parsedOptions
+                        : [
+                            'Welcome to Studio · Drag & drop layouts effortlessly',
+                            'Interactive Logic · Connect events & live data',
+                            'Instant Export · Ship clean production code',
+                          ];
+                    const activeSlide = Math.max(
+                      0,
+                      Math.min(slides.length - 1, block.counterValue ?? 0)
+                    );
+                    const [slideTitle, slideSub] = slides[activeSlide].split('·').map((s) => s.trim());
+                    return (
+                      <div
+                        style={surfaceStyle}
+                        onPointerDown={(e) => {
+                          pageDragStartX.current[block.id] = e.clientX;
+                        }}
+                        onPointerUp={(e) => {
+                          const startX = pageDragStartX.current[block.id];
+                          pageDragStartX.current[block.id] = null;
+                          if (startX == null) return;
+                          const dx = e.clientX - startX;
+                          if (dx < -40 && activeSlide < slides.length - 1) {
+                            onUpdateBlock({ ...block, counterValue: activeSlide + 1 });
+                          } else if (dx > 40 && activeSlide > 0) {
+                            onUpdateBlock({ ...block, counterValue: activeSlide - 1 });
+                          }
+                        }}
+                        className={`${customPad || 'p-4'} ${customRadius} ${
+                          customBg || 'bg-gradient-to-br from-indigo-950/60 via-[#121726] to-slate-900'
+                        } border border-white/15 space-y-3 select-none`}
+                      >
+                        <div className="flex items-center justify-between text-[10px] font-mono text-sky-300">
+                          <span>PageView (Swipe left/right)</span>
+                          <span>
+                            Page {activeSlide + 1} / {slides.length}
+                          </span>
+                        </div>
+                        <div className="min-h-[84px] rounded-xl bg-[#090B10]/70 border border-white/10 p-4 flex flex-col items-center justify-center text-center space-y-1.5">
+                          <h4 className="text-sm font-bold text-white">{slideTitle}</h4>
+                          {slideSub && <p className="text-[11px] text-slate-300">{slideSub}</p>}
+                        </div>
+                        <div className="flex items-center justify-between gap-2">
+                          <button
+                            type="button"
+                            disabled={activeSlide === 0}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateBlock({ ...block, counterValue: Math.max(0, activeSlide - 1) });
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 text-[10px] font-semibold text-white cursor-pointer flex items-center gap-1"
+                          >
+                            <ChevronLeft className="w-3 h-3" /> Prev
+                          </button>
+                          <div className="flex items-center gap-1.5">
+                            {slides.map((_, sIdx) => (
+                              <button
+                                key={sIdx}
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onUpdateBlock({ ...block, counterValue: sIdx });
+                                }}
+                                className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                                  sIdx === activeSlide ? 'w-5 bg-[#4D97FF]' : 'w-1.5 bg-white/25'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                          <button
+                            type="button"
+                            disabled={activeSlide === slides.length - 1}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onUpdateBlock({
+                                ...block,
+                                counterValue: Math.min(slides.length - 1, activeSlide + 1),
+                              });
+                            }}
+                            className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-30 text-[10px] font-semibold text-white cursor-pointer flex items-center gap-1"
+                          >
+                            Next <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* 1h6. CAROUSEL (HORIZONTAL IMAGE / CARD SLIDER) */}
+              {block.type === 'ui-carousel' && (
+                <div className="px-5 py-1.5">
+                  {(() => {
+                    const items =
+                      parsedOptions.length > 0
+                        ? parsedOptions
+                        : ['Slide 1', 'Slide 2', 'Slide 3', 'Slide 4'];
+                    const activeIdx = Math.max(0, Math.min(items.length - 1, block.counterValue ?? 0));
+                    const scrollToSlide = (idx: number) => {
+                      onUpdateBlock({ ...block, counterValue: idx });
+                      const container = carouselRefs.current[block.id];
+                      const el = container?.children?.[idx] as HTMLElement | undefined;
+                      el?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+                    };
+                    return (
+                      <div
+                        style={surfaceStyle}
+                        className={`${customPad || 'p-3'} ${customRadius} ${
+                          customBg || 'bg-white/[0.04]'
+                        } border border-white/10 space-y-2.5`}
+                      >
+                        <div className="flex items-center justify-between text-[10px] font-mono text-sky-400">
+                          <span>Carousel Slider</span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                scrollToSlide((activeIdx - 1 + items.length) % items.length);
+                              }}
+                              className="p-1 rounded bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                            >
+                              <ChevronLeft className="w-3 h-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                scrollToSlide((activeIdx + 1) % items.length);
+                              }}
+                              className="p-1 rounded bg-white/10 hover:bg-white/20 text-white cursor-pointer"
+                            >
+                              <ChevronRight className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                        <div
+                          ref={(el) => {
+                            carouselRefs.current[block.id] = el;
+                          }}
+                          className="flex gap-2.5 overflow-x-auto snap-x snap-mandatory pb-1"
+                        >
+                          {items.map((slideLabel, idx) => (
+                            <div
+                              key={`${slideLabel}_${idx}`}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                scrollToSlide(idx);
+                              }}
+                              className={`min-w-[78%] snap-center rounded-xl p-4 border transition-all cursor-pointer ${
+                                idx === activeIdx
+                                  ? 'border-[#4D97FF] bg-gradient-to-br from-indigo-900/60 to-slate-900'
+                                  : 'border-white/10 bg-[#090B10]'
+                              }`}
+                            >
+                              <div className="h-20 rounded-lg bg-gradient-to-tr from-sky-500/20 via-indigo-500/20 to-purple-500/20 border border-white/10 mb-2 flex items-center justify-center text-sky-300">
+                                <ImageIcon className="w-5 h-5" />
+                              </div>
+                              <p className="text-xs font-bold text-white truncate">{slideLabel}</p>
+                              <p className="text-[10px] text-slate-400">Slide #{idx + 1}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* 1h7. WRAP (AUTO WRAPPING FLOW) */}
+              {block.type === 'ui-wrap' && (
+                <div className="px-5 py-1.5">
+                  <div
+                    onDragOver={(e) => handleContainerDragOver(e, block.id)}
+                    onDragLeave={() => dragOverContainerId === block.id && setDragOverContainerId(null)}
+                    onDrop={(e) => void handleContainerDrop(e, block.id)}
+                    style={surfaceStyle}
+                    className={`${customPad || 'p-3.5'} ${customRadius} ${
+                      customBg || 'bg-white/[0.04]'
+                    } border ${
+                      dragOverContainerId === block.id
+                        ? 'border-[#4D97FF] ring-2 ring-[#4D97FF]/50'
+                        : 'border-white/10'
+                    } space-y-2`}
+                  >
+                    <div className="text-[10px] font-mono text-sky-400">
+                      {block.subtitle || 'Wrap (Auto wraps items to next line)'}
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {block.children && block.children.length > 0
+                        ? block.children.map((child, cIdx) => renderChildWidget(child, block, cIdx))
+                        : (parsedOptions.length > 0
+                            ? parsedOptions
+                            : ['UI Design', 'React', 'Tailwind', 'TypeScript', 'Firebase', 'Mobile']
+                          ).map((chip, idx) => (
+                            <span
+                              key={`${chip}_${idx}`}
+                              style={primaryStyle}
+                              className="px-3 py-1 rounded-full bg-[#090B10] border border-white/15 text-[11px] font-medium text-slate-200"
+                            >
+                              {chip}
+                            </span>
+                          ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 1h8. FORM VALIDATION */}
+              {block.type === 'ui-form' && (
+                <div className="px-5 py-1.5">
+                  {(() => {
+                    const draft = formDrafts[block.id] || { name: '', email: '', password: '' };
+                    const errs = formErrors[block.id] || {};
+                    const handleValidateForm = (e: React.FormEvent) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const nextErrs: {
+                        name?: string;
+                        email?: string;
+                        password?: string;
+                        submitted?: boolean;
+                      } = {};
+                      if (!draft.name.trim()) {
+                        nextErrs.name = 'Name is required (cannot be empty)';
+                      }
+                      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())) {
+                        nextErrs.email = 'Please enter a valid email address';
+                      }
+                      if (!draft.password || draft.password.length < 6) {
+                        nextErrs.password = 'Password must be at least 6 characters';
+                      }
+                      if (!nextErrs.name && !nextErrs.email && !nextErrs.password) {
+                        nextErrs.submitted = true;
+                        onTriggerAction(block, {
+                          ...formInputs,
+                          [`${block.id}_name`]: draft.name,
+                          [`${block.id}_email`]: draft.email,
+                        });
+                      }
+                      setFormErrors((prev) => ({ ...prev, [block.id]: nextErrs }));
+                    };
+
+                    return (
+                      <form
+                        onSubmit={handleValidateForm}
+                        onClick={(e) => e.stopPropagation()}
+                        style={surfaceStyle}
+                        className={`${customPad || 'p-4'} ${customRadius} ${
+                          customBg || 'bg-white/[0.04]'
+                        } border border-white/15 space-y-2.5`}
+                      >
+                        <div>
+                          <h4 className="text-xs font-bold text-white">{displayContent}</h4>
+                          {block.subtitle && (
+                            <p className="text-[10px] text-slate-400">{block.subtitle}</p>
+                          )}
+                        </div>
+                        <div className="space-y-1">
+                          <input
+                            type="text"
+                            value={draft.name}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFormDrafts((p) => ({ ...p, [block.id]: { ...draft, name: val } }));
+                            }}
+                            placeholder="Full Name *"
+                            className="w-full px-3 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-xs text-white outline-none focus:border-[#4D97FF]"
+                          />
+                          {errs.name && <p className="text-[10px] text-rose-400">{errs.name}</p>}
+                        </div>
+                        <div className="space-y-1">
+                          <input
+                            type="email"
+                            value={draft.email}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFormDrafts((p) => ({ ...p, [block.id]: { ...draft, email: val } }));
+                            }}
+                            placeholder="Email Address * (e.g. user@mail.com)"
+                            className="w-full px-3 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-xs text-white outline-none focus:border-[#4D97FF]"
+                          />
+                          {errs.email && <p className="text-[10px] text-rose-400">{errs.email}</p>}
+                        </div>
+                        <div className="space-y-1">
+                          <input
+                            type="password"
+                            value={draft.password}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setFormDrafts((p) => ({
+                                ...p,
+                                [block.id]: { ...draft, password: val },
+                              }));
+                            }}
+                            placeholder="Password * (min 6 chars)"
+                            className="w-full px-3 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-xs text-white outline-none focus:border-[#4D97FF]"
+                          />
+                          {errs.password && (
+                            <p className="text-[10px] text-rose-400">{errs.password}</p>
+                          )}
+                        </div>
+                        {errs.submitted && (
+                          <div className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-400/30 text-[11px] font-semibold text-emerald-300 flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Form validated &amp; submitted successfully!</span>
+                          </div>
+                        )}
+                        <button
+                          type="submit"
+                          style={{ backgroundColor: resolvedAccent }}
+                          className="w-full py-2 rounded-lg text-xs font-bold text-white cursor-pointer hover:opacity-90 transition-opacity"
+                        >
+                          {block.badgeText || 'Validate & Submit'}
+                        </button>
+                      </form>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* 1h9. STAGGEREDVIEW (PINTEREST MASONRY) */}
+              {block.type === 'ui-staggered' && (
+                <div className="px-5 py-1.5">
+                  <div
+                    style={surfaceStyle}
+                    className={`${customPad || 'p-3'} ${customRadius} ${
+                      customBg || 'bg-white/[0.04]'
+                    } border border-white/10 space-y-2`}
+                  >
+                    <div className="text-[10px] font-mono text-sky-400">
+                      StaggeredView (Masonry Grid)
+                    </div>
+                    <div className={`${block.gridColumns === 3 ? 'columns-3' : 'columns-2'} gap-2 space-y-2`}>
+                      {(parsedOptions.length > 0
+                        ? parsedOptions
+                        : ['Tile 1', 'Tile 2', 'Tile 3', 'Tile 4', 'Tile 5', 'Tile 6']
+                      ).map((tile, idx) => {
+                        const heights = ['h-24', 'h-36', 'h-28', 'h-40', 'h-24', 'h-32'];
+                        return (
+                          <div
+                            key={`${tile}_${idx}`}
+                            className={`break-inside-avoid rounded-xl p-3 bg-[#090B10] border border-white/10 flex flex-col justify-between ${
+                              heights[idx % heights.length]
+                            }`}
+                          >
+                            <div className="w-6 h-6 rounded-lg bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-300 text-[10px] font-bold">
+                              {idx + 1}
+                            </div>
+                            <span className="text-[11px] font-semibold text-white leading-tight">
+                              {tile}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 1h10. FLIPPABLE CARD (3D FRONT & BACK) */}
+              {block.type === 'ui-flippable-card' && (
+                <div className="px-5 py-1.5">
+                  {(() => {
+                    const isFlipped = Boolean(flippedCards[block.id]);
+                    return (
+                      <div
+                        style={{ perspective: '1000px' }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectBlock(block.id);
+                          setFlippedCards((p) => ({ ...p, [block.id]: !isFlipped }));
+                        }}
+                        className="cursor-pointer"
+                      >
+                        <div
+                          style={{
+                            transformStyle: 'preserve-3d',
+                            transform: isFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)',
+                            transition: 'transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)',
+                          }}
+                          className="relative min-h-[136px]"
+                        >
+                          {/* Front */}
+                          <div
+                            style={{
+                              ...surfaceStyle,
+                              backfaceVisibility: 'hidden',
+                            }}
+                            className={`absolute inset-0 ${customPad || 'p-5'} ${customRadius} ${
+                              customBg || 'bg-gradient-to-br from-[#161c2c] to-[#0d111a]'
+                            } border border-white/15 flex flex-col justify-between`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[9px] font-mono uppercase tracking-wider text-sky-400">
+                                Front Side
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-white/10 text-[9px] text-slate-300">
+                                {block.badgeText || 'Click to Flip'}
+                              </span>
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-white">{displayContent}</h4>
+                              {block.subtitle && (
+                                <p className="text-[11px] text-slate-400 mt-1">{block.subtitle}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Back */}
+                          <div
+                            style={{
+                              ...surfaceStyle,
+                              backfaceVisibility: 'hidden',
+                              transform: 'rotateY(180deg)',
+                            }}
+                            className={`absolute inset-0 ${customPad || 'p-5'} ${customRadius} bg-gradient-to-br from-indigo-950/90 to-slate-900 border border-indigo-400/35 flex flex-col justify-between`}
+                          >
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-[9px] font-mono uppercase tracking-wider text-indigo-300">
+                                Back Side
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full bg-indigo-500/20 text-[9px] text-indigo-200">
+                                Flip Back
+                              </span>
+                            </div>
+                            <div>
+                              <h4 className="text-sm font-bold text-white">
+                                {block.backTitle || 'Back Side · Revealed Answer'}
+                              </h4>
+                              <p className="text-[11px] text-slate-300 mt-1">
+                                {block.backSubtitle ||
+                                  'Tap again to flip back to the front side.'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* 1h11. SWIPEABLE STACK */}
+              {block.type === 'ui-swipeable-stack' && (
+                <div className="px-5 py-1.5">
+                  {(() => {
+                    const cards =
+                      parsedOptions.length > 0
+                        ? parsedOptions
+                        : ['Card 1 · Design', 'Card 2 · Prototype', 'Card 3 · Launch'];
+                    const topIdx = swipeIndex[block.id] ?? 0;
+                    const remaining = cards.slice(topIdx);
+                    const dragOffset = swipeDragX[block.id] ?? 0;
+
+                    const advanceCard = () => {
+                      setSwipeDragX((p) => ({ ...p, [block.id]: 0 }));
+                      setSwipeIndex((p) => ({ ...p, [block.id]: topIdx + 1 }));
+                    };
+
+                    return (
+                      <div
+                        style={surfaceStyle}
+                        className={`${customPad || 'p-4'} ${customRadius} ${
+                          customBg || 'bg-white/[0.04]'
+                        } border border-white/10 space-y-3`}
+                      >
+                        <div className="flex items-center justify-between text-[10px] font-mono text-sky-400">
+                          <span>SwipeableStack</span>
+                          <span>
+                            {Math.min(topIdx, cards.length)} / {cards.length} swiped
+                          </span>
+                        </div>
+
+                        {remaining.length === 0 ? (
+                          <div className="h-32 rounded-xl bg-[#090B10] border border-dashed border-white/15 flex flex-col items-center justify-center gap-2 text-center p-4">
+                            <p className="text-xs text-slate-300 font-semibold">
+                              All cards swiped!
+                            </p>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSwipeIndex((p) => ({ ...p, [block.id]: 0 }));
+                              }}
+                              className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold cursor-pointer"
+                            >
+                              Reset Stack
+                            </button>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="relative h-36 select-none">
+                              {remaining
+                                .slice(0, 3)
+                                .reverse()
+                                .map((cardLabel, revIdx, arr) => {
+                                  const layerIdx = arr.length - 1 - revIdx;
+                                  const isTop = layerIdx === 0;
+                                  return (
+                                    <div
+                                      key={`${cardLabel}_${topIdx + layerIdx}`}
+                                      onPointerDown={
+                                        isTop
+                                          ? (e) => {
+                                              pageDragStartX.current[block.id] = e.clientX;
+                                            }
+                                          : undefined
+                                      }
+                                      onPointerMove={
+                                        isTop
+                                          ? (e) => {
+                                              const sx = pageDragStartX.current[block.id];
+                                              if (sx != null) {
+                                                setSwipeDragX((p) => ({
+                                                  ...p,
+                                                  [block.id]: e.clientX - sx,
+                                                }));
+                                              }
+                                            }
+                                          : undefined
+                                      }
+                                      onPointerUp={
+                                        isTop
+                                          ? () => {
+                                              const sx = pageDragStartX.current[block.id];
+                                              pageDragStartX.current[block.id] = null;
+                                              if (sx != null && Math.abs(dragOffset) > 45) {
+                                                advanceCard();
+                                              } else {
+                                                setSwipeDragX((p) => ({ ...p, [block.id]: 0 }));
+                                              }
+                                            }
+                                          : undefined
+                                      }
+                                      style={{
+                                        transform: isTop
+                                          ? `translateX(${dragOffset}px) rotate(${dragOffset * 0.05}deg)`
+                                          : `translateY(${layerIdx * 8}px) scale(${1 - layerIdx * 0.04})`,
+                                        zIndex: 10 - layerIdx,
+                                        transition: isTop && dragOffset !== 0 ? 'none' : 'transform 0.25s ease',
+                                      }}
+                                      className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#1b2234] to-[#0c1018] border border-white/15 p-4 shadow-xl flex flex-col justify-between cursor-grab active:cursor-grabbing"
+                                    >
+                                      <span className="text-[10px] font-mono text-sky-400">
+                                        Card #{topIdx + layerIdx + 1}
+                                      </span>
+                                      <div>
+                                        <p className="text-sm font-bold text-white">{cardLabel}</p>
+                                        <p className="text-[10px] text-slate-400 mt-0.5">
+                                          Drag card or click Swipe below
+                                        </p>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                            </div>
+                            <div className="flex items-center justify-center gap-2 pt-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  advanceCard();
+                                }}
+                                className="px-3 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/30 text-rose-200 text-[11px] font-semibold cursor-pointer"
+                              >
+                                &larr; Swipe Left
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  advanceCard();
+                                }}
+                                className="px-3 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-400/30 text-emerald-200 text-[11px] font-semibold cursor-pointer"
+                              >
+                                Swipe Right &rarr;
+                              </button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* 1h12. DATATABLE */}
+              {block.type === 'ui-datatable' && (
+                <div className="px-5 py-1.5">
+                  {(() => {
+                    const headers = (block.columnsHeader || 'Name | Role | Status')
+                      .split('|')
+                      .map((h) => h.trim())
+                      .filter(Boolean);
+                    const rows = (
+                      parsedOptions.length > 0
+                        ? parsedOptions
+                        : ['Deepal P. | Architect | Active', 'Maya Lin | UI Lead | Active']
+                    ).map((r) => r.split('|').map((c) => c.trim()));
+                    return (
+                      <div
+                        style={surfaceStyle}
+                        className={`${customPad || 'p-3'} ${customRadius} ${
+                          customBg || 'bg-white/[0.04]'
+                        } border border-white/10 overflow-x-auto`}
+                      >
+                        <table className="w-full text-left border-collapse text-[11px]">
+                          <thead>
+                            <tr className="border-b border-white/15 text-sky-300 font-semibold">
+                              {headers.map((h, i) => (
+                                <th key={i} className="py-2 px-2.5 whitespace-nowrap">
+                                  {h}
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-white/10">
+                            {rows.map((cells, rIdx) => (
+                              <tr key={rIdx} className="hover:bg-white/[0.03]">
+                                {headers.map((_, cIdx) => (
+                                  <td key={cIdx} className="py-2 px-2.5 text-slate-200 whitespace-nowrap">
+                                    {cells[cIdx] || '—'}
+                                  </td>
+                                ))}
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* 1h13. FLEX (PROPORTIONAL RATIO ROW/COLUMN) */}
+              {block.type === 'ui-flex' && (
+                <div className="px-5 py-1.5">
+                  {(() => {
+                    const isCol = block.direction === 'column' || block.direction === 'vertical';
+                    const ratios = (block.flexRatios || '1:2:1')
+                      .split(/[:,\s]+/)
+                      .map((n) => Math.max(1, Number(n) || 1));
+                    return (
+                      <div
+                        onDragOver={(e) => handleContainerDragOver(e, block.id)}
+                        onDragLeave={() => dragOverContainerId === block.id && setDragOverContainerId(null)}
+                        onDrop={(e) => void handleContainerDrop(e, block.id)}
+                        style={surfaceStyle}
+                        className={`${customPad || 'p-3.5'} ${customRadius} ${
+                          customBg || 'bg-white/[0.04]'
+                        } border ${
+                          dragOverContainerId === block.id
+                            ? 'border-[#4D97FF] ring-2 ring-[#4D97FF]/50'
+                            : 'border-white/10'
+                        } space-y-2`}
+                      >
+                        <div className="flex items-center justify-between text-[10px] font-mono text-sky-400">
+                          <span>Flex ({isCol ? 'Column' : 'Row'})</span>
+                          <span>Ratio: {block.flexRatios || '1:2:1'}</span>
+                        </div>
+                        <div className={`flex gap-2 ${isCol ? 'flex-col' : 'flex-row items-stretch'}`}>
+                          {block.children && block.children.length > 0
+                            ? block.children.map((child, cIdx) =>
+                                renderChildWidget(child, block, cIdx, {
+                                  flex: `${ratios[cIdx] ?? 1} 1 0%`,
+                                })
+                              )
+                            : (parsedOptions.length > 0
+                                ? parsedOptions
+                                : ['Pane 1 (1x)', 'Pane 2 (2x)', 'Pane 3 (1x)']
+                              ).map((item, idx) => (
+                                <div
+                                  key={`${item}_${idx}`}
+                                  style={{ ...primaryStyle, flex: `${ratios[idx] ?? 1} 1 0%` }}
+                                  className="min-w-0 p-2.5 rounded-lg bg-[#090B10] border border-white/10 text-[11px] font-semibold text-white text-center truncate"
+                                >
+                                  {item}
+                                </div>
+                              ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1062,23 +2167,48 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
               {block.type === 'ui-card' && (
                 <div className="px-5 py-1.5">
                   <div
-                    style={surfaceStyle}
-                    className={`${customPad || 'p-3.5'} ${customRadius} ${
+                    onDragOver={(e) => handleContainerDragOver(e, block.id)}
+                    onDragLeave={() => dragOverContainerId === block.id && setDragOverContainerId(null)}
+                    onDrop={(e) => void handleContainerDrop(e, block.id)}
+                    style={{
+                      boxShadow: block.style?.boxShadow || '0 14px 34px rgba(0, 0, 0, 0.4)',
+                      ...surfaceStyle,
+                    }}
+                    className={`${customPad || 'p-4'} ${customRadius || 'rounded-2xl'} ${
                       customBg || 'bg-white/[0.04]'
-                    } border border-white/10 space-y-1 ${alignClass}`}
+                    } border border-white/10 space-y-2 ${alignClass}`}
                   >
-                    <h3
-                      style={primaryStyle}
-                      className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
-                        customTextColor || 'text-white'
-                      }`}
-                    >
-                      {displayContent}
-                    </h3>
+                    {block.imageUrl && (
+                      <img
+                        src={block.imageUrl}
+                        alt={displayContent}
+                        className="w-full h-32 object-cover rounded-xl border border-white/10"
+                      />
+                    )}
+                    <div className="flex items-center justify-between gap-2">
+                      <h3
+                        style={primaryStyle}
+                        className={`${customFont || 'text-xs'} ${customWeight || 'font-bold'} ${
+                          customTextColor || 'text-white'
+                        }`}
+                      >
+                        {displayContent}
+                      </h3>
+                      {block.badgeText && (
+                        <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 shrink-0">
+                          {block.badgeText}
+                        </span>
+                      )}
+                    </div>
                     {block.subtitle && (
                       <p style={subtitleStyle} className="text-[11px] text-slate-400 leading-relaxed">
                         {block.subtitle}
                       </p>
+                    )}
+                    {block.children && block.children.length > 0 && (
+                      <div className="pt-1 space-y-2">
+                        {block.children.map((child, cIdx) => renderChildWidget(child, block, cIdx))}
+                      </div>
                     )}
                   </div>
                 </div>
