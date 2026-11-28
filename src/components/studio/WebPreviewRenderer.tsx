@@ -94,6 +94,7 @@ import {
 } from '../../utils/studioRuntime';
 import { readAndCompressImageFile } from '../../utils/imageUpload';
 import { ICON_LIBRARY, parseVideoUrl } from '../../utils/mediaHelpers';
+import { MultiTextItemsEditor, supportsMultiTextBoxes } from './MultiTextItemsEditor';
 
 export interface PreviewConfirmDialog {
   id: string;
@@ -1828,6 +1829,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       ).map((raw, idx) => {
                         const [titlePart, subPart] = raw.split('·').map((s) => s.trim());
                         const initials = (titlePart || 'U').slice(0, 2).toUpperCase();
+                        const itemPhoto = block.itemImages?.[idx];
                         return (
                           <div
                             key={`${raw}_${idx}`}
@@ -1835,12 +1837,20 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                               block.direction === 'horizontal' ? 'min-w-[180px] shrink-0' : 'w-full'
                             } px-3 py-2 rounded-xl bg-[#090B10] border border-white/10 flex items-center gap-2.5 hover:border-white/25 transition-colors`}
                           >
-                            <div
-                              style={{ backgroundColor: resolvedAccent }}
-                              className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
-                            >
-                              {initials}
-                            </div>
+                            {itemPhoto ? (
+                              <img
+                                src={itemPhoto}
+                                alt={titlePart || ''}
+                                className="w-8 h-8 rounded-full object-cover border border-white/20 shrink-0"
+                              />
+                            ) : (
+                              <div
+                                style={{ backgroundColor: resolvedAccent }}
+                                className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white shrink-0"
+                              >
+                                {initials}
+                              </div>
+                            )}
                             <div className="min-w-0 flex-1">
                               <p className="text-[11px] font-semibold text-white truncate">{titlePart}</p>
                               {subPart && (
@@ -1879,20 +1889,31 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       {(parsedOptions.length > 0
                         ? parsedOptions
                         : ['Gallery 01', 'Gallery 02', 'Gallery 03', 'Gallery 04']
-                      ).map((cell, idx) => (
-                        <div
-                          key={`${cell}_${idx}`}
-                          style={primaryStyle}
-                          className={`p-3 rounded-xl bg-[#090B10] border border-white/10 text-[11px] font-semibold ${
-                            customTextColor || 'text-white'
-                          } flex flex-col gap-1.5`}
-                        >
-                          <div className="h-12 rounded-lg bg-gradient-to-br from-indigo-500/25 via-sky-500/15 to-transparent border border-white/5 flex items-center justify-center text-sky-300">
-                            <ImageIcon className="w-4 h-4 opacity-70" />
+                      ).map((cell, idx) => {
+                        const itemPhoto = block.itemImages?.[idx];
+                        return (
+                          <div
+                            key={`${cell}_${idx}`}
+                            style={primaryStyle}
+                            className={`p-2.5 rounded-xl bg-[#090B10] border border-white/10 text-[11px] font-semibold ${
+                              customTextColor || 'text-white'
+                            } flex flex-col gap-1.5`}
+                          >
+                            {itemPhoto ? (
+                              <img
+                                src={itemPhoto}
+                                alt={cell}
+                                className="w-full h-24 rounded-lg object-cover border border-white/10"
+                              />
+                            ) : (
+                              <div className="h-14 rounded-lg bg-gradient-to-br from-indigo-500/25 via-sky-500/15 to-transparent border border-white/5 flex items-center justify-center text-sky-300">
+                                <ImageIcon className="w-4 h-4 opacity-70" />
+                              </div>
+                            )}
+                            <span className="truncate px-0.5">{cell}</span>
                           </div>
-                          <span className="truncate">{cell}</span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
@@ -1974,6 +1995,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                       Math.min(slides.length - 1, block.counterValue ?? 0)
                     );
                     const [slideTitle, slideSub] = slides[activeSlide].split('·').map((s) => s.trim());
+                    const activePhoto = block.itemImages?.[activeSlide];
                     return (
                       <div
                         style={surfaceStyle}
@@ -2001,7 +2023,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                             Page {activeSlide + 1} / {slides.length}
                           </span>
                         </div>
-                        <div className="min-h-[84px] rounded-xl bg-[#090B10]/70 border border-white/10 p-4 flex flex-col items-center justify-center text-center space-y-1.5">
+                        <div className="min-h-[84px] rounded-xl bg-[#090B10]/70 border border-white/10 p-3 flex flex-col items-center justify-center text-center space-y-2">
+                          {activePhoto && (
+                            <img
+                              src={activePhoto}
+                              alt={slideTitle}
+                              className="w-full max-h-40 rounded-lg object-cover border border-white/10"
+                            />
+                          )}
                           <h4 className="text-sm font-bold text-white">{slideTitle}</h4>
                           {slideSub && <p className="text-[11px] text-slate-300">{slideSub}</p>}
                         </div>
@@ -2106,26 +2135,37 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           }}
                           className="flex gap-2.5 overflow-x-auto snap-x snap-mandatory pb-1"
                         >
-                          {items.map((slideLabel, idx) => (
-                            <div
-                              key={`${slideLabel}_${idx}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                scrollToSlide(idx);
-                              }}
-                              className={`min-w-[78%] snap-center rounded-xl p-4 border transition-all cursor-pointer ${
-                                idx === activeIdx
-                                  ? 'border-[#4D97FF] bg-gradient-to-br from-indigo-900/60 to-slate-900'
-                                  : 'border-white/10 bg-[#090B10]'
-                              }`}
-                            >
-                              <div className="h-20 rounded-lg bg-gradient-to-tr from-sky-500/20 via-indigo-500/20 to-purple-500/20 border border-white/10 mb-2 flex items-center justify-center text-sky-300">
-                                <ImageIcon className="w-5 h-5" />
+                          {items.map((slideLabel, idx) => {
+                            const slidePhoto = block.itemImages?.[idx];
+                            return (
+                              <div
+                                key={`${slideLabel}_${idx}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  scrollToSlide(idx);
+                                }}
+                                className={`min-w-[78%] snap-center rounded-xl p-3.5 border transition-all cursor-pointer ${
+                                  idx === activeIdx
+                                    ? 'border-[#4D97FF] bg-gradient-to-br from-indigo-900/60 to-slate-900'
+                                    : 'border-white/10 bg-[#090B10]'
+                                }`}
+                              >
+                                {slidePhoto ? (
+                                  <img
+                                    src={slidePhoto}
+                                    alt={slideLabel}
+                                    className="w-full h-32 rounded-lg object-cover border border-white/15 mb-2"
+                                  />
+                                ) : (
+                                  <div className="h-24 rounded-lg bg-gradient-to-tr from-sky-500/20 via-indigo-500/20 to-purple-500/20 border border-white/10 mb-2 flex items-center justify-center text-sky-300">
+                                    <ImageIcon className="w-5 h-5" />
+                                  </div>
+                                )}
+                                <p className="text-xs font-bold text-white truncate">{slideLabel}</p>
+                                <p className="text-[10px] text-slate-400">Slide #{idx + 1}</p>
                               </div>
-                              <p className="text-xs font-bold text-white truncate">{slideLabel}</p>
-                              <p className="text-[10px] text-slate-400">Slide #{idx + 1}</p>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -2314,7 +2354,31 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                         : ['Tile 1', 'Tile 2', 'Tile 3', 'Tile 4', 'Tile 5', 'Tile 6']
                       ).map((tile, idx) => {
                         const heights = ['h-24', 'h-36', 'h-28', 'h-40', 'h-24', 'h-32'];
-                        return (
+                        const photoHeights = ['h-28', 'h-40', 'h-32', 'h-44', 'h-28', 'h-36'];
+                        const tilePhoto = block.itemImages?.[idx];
+                        return tilePhoto ? (
+                          <div
+                            key={`${tile}_${idx}`}
+                            className={`break-inside-avoid relative overflow-hidden rounded-xl border border-white/15 flex flex-col justify-end p-2.5 ${
+                              photoHeights[idx % photoHeights.length]
+                            }`}
+                          >
+                            <img
+                              src={tilePhoto}
+                              alt={tile}
+                              className="absolute inset-0 w-full h-full object-cover"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+                            <div className="relative z-10 flex items-center justify-between gap-1.5">
+                              <span className="text-[11px] font-semibold text-white leading-tight drop-shadow">
+                                {tile}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-black/50 text-[9px] font-mono text-sky-300 shrink-0">
+                                #{idx + 1}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
                           <div
                             key={`${tile}_${idx}`}
                             className={`break-inside-avoid rounded-xl p-3 bg-[#090B10] border border-white/10 flex flex-col justify-between ${
@@ -2474,13 +2538,18 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                           </div>
                         ) : (
                           <>
-                            <div className="relative h-36 select-none">
+                            <div
+                              className={`relative select-none ${
+                                block.itemImages?.some(Boolean) ? 'h-48' : 'h-36'
+                              }`}
+                            >
                               {remaining
                                 .slice(0, 3)
                                 .reverse()
                                 .map((cardLabel, revIdx, arr) => {
                                   const layerIdx = arr.length - 1 - revIdx;
                                   const isTop = layerIdx === 0;
+                                  const cardPhoto = block.itemImages?.[topIdx + layerIdx];
                                   return (
                                     <div
                                       key={`${cardLabel}_${topIdx + layerIdx}`}
@@ -2524,14 +2593,24 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                                         zIndex: 10 - layerIdx,
                                         transition: isTop && dragOffset !== 0 ? 'none' : 'transform 0.25s ease',
                                       }}
-                                      className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#1b2234] to-[#0c1018] border border-white/15 p-4 shadow-xl flex flex-col justify-between cursor-grab active:cursor-grabbing"
+                                      className="absolute inset-0 overflow-hidden rounded-2xl bg-gradient-to-br from-[#1b2234] to-[#0c1018] border border-white/15 p-4 shadow-xl flex flex-col justify-between cursor-grab active:cursor-grabbing"
                                     >
-                                      <span className="text-[10px] font-mono text-sky-400">
+                                      {cardPhoto && (
+                                        <>
+                                          <img
+                                            src={cardPhoto}
+                                            alt={cardLabel}
+                                            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                                          />
+                                          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/20 pointer-events-none" />
+                                        </>
+                                      )}
+                                      <span className="relative z-10 text-[10px] font-mono text-sky-300 drop-shadow">
                                         Card #{topIdx + layerIdx + 1}
                                       </span>
-                                      <div>
-                                        <p className="text-sm font-bold text-white">{cardLabel}</p>
-                                        <p className="text-[10px] text-slate-400 mt-0.5">
+                                      <div className="relative z-10">
+                                        <p className="text-sm font-bold text-white drop-shadow">{cardLabel}</p>
+                                        <p className="text-[10px] text-slate-300 mt-0.5 drop-shadow">
                                           Drag card or click Swipe below
                                         </p>
                                       </div>
@@ -7711,7 +7790,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="bg-[#11151E] border border-sky-500/30 rounded-2xl max-w-md w-full p-4 shadow-2xl space-y-3 text-xs"
+            className="bg-[#11151E] border border-sky-500/30 rounded-2xl max-w-lg w-full max-h-[85vh] overflow-y-auto p-4 shadow-2xl space-y-3 text-xs"
           >
             <div className="flex items-center justify-between border-b border-white/10 pb-2">
               <div className="flex items-center gap-1.5 font-bold text-white">
@@ -7781,29 +7860,14 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
                 />
               </div>
 
-              {supportsOptionsList(inlineEditBlock.type, inlineEditBlock.controlVariant) && (
-                <div className="space-y-1">
-                  <label className="text-[10px] text-sky-300 font-semibold block">
-                    Items / Options (comma separated)
-                  </label>
-                  <input
-                    type="text"
-                    value={parseOptionsList(inlineEditBlock.content, inlineEditBlock.options).join(', ')}
-                    onChange={(e) => {
-                      const raw = e.target.value;
-                      const parsed = raw
-                        .split(/[,|]+/)
-                        .map((s) => s.trim())
-                        .filter(Boolean);
-                      onUpdateBlock({
-                        ...inlineEditBlock,
-                        options: parsed,
-                        content: parsed.join(' | '),
-                      });
-                    }}
-                    className="w-full px-3 py-1.5 rounded-lg bg-[#090B10] border border-white/15 text-sky-200 outline-none focus:border-sky-400"
-                  />
-                </div>
+              {(supportsMultiTextBoxes(inlineEditBlock) ||
+                supportsOptionsList(inlineEditBlock.type, inlineEditBlock.controlVariant)) && (
+                <MultiTextItemsEditor
+                  block={inlineEditBlock}
+                  onUpdateBlock={onUpdateBlock}
+                  onSelectBlock={onSelectBlock}
+                  compact
+                />
               )}
 
               {inlineEditBlock.type === 'ui-testimonial' && (

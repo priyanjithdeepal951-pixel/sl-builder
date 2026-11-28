@@ -42,6 +42,11 @@ import { BLOCK_STYLE_TEMPLATES, FONT_OPTIONS } from '../../data/blockStyleTempla
 import { ICON_LIBRARY } from '../../utils/mediaHelpers';
 import { renderVectorIcon } from './WebPreviewRenderer';
 import { readAndCompressImageFile } from '../../utils/imageUpload';
+import {
+  MultiTextItemsEditor,
+  supportsItemPhotos,
+  supportsMultiTextBoxes,
+} from './MultiTextItemsEditor';
 
 const PRO_FONT_CHOICES: Array<{ label: string; value: string; familyBucket?: BlockStyle['fontFamily'] }> = [
   { label: 'Inter (Modern Sans)', value: 'Inter, system-ui, sans-serif', familyBucket: 'sans' },
@@ -681,47 +686,35 @@ export const ProBlockInspector: React.FC<ProBlockInspectorProps> = ({
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] text-slate-400 block mb-1">Subtitle / Description</label>
-                <input
-                  type="text"
-                  value={
+            <div>
+              <label className="text-[10px] text-slate-400 block mb-1">Subtitle / Description</label>
+              <input
+                type="text"
+                value={
+                  selectedBlock.type === 'ui-stat'
+                    ? selectedBlock.statLabel ?? selectedBlock.subtitle ?? ''
+                    : selectedBlock.subtitle || ''
+                }
+                onChange={(e) =>
+                  patchBlock(
                     selectedBlock.type === 'ui-stat'
-                      ? selectedBlock.statLabel ?? selectedBlock.subtitle ?? ''
-                      : selectedBlock.subtitle || ''
-                  }
-                  onChange={(e) =>
-                    patchBlock(
-                      selectedBlock.type === 'ui-stat'
-                        ? { subtitle: e.target.value, statLabel: e.target.value }
-                        : { subtitle: e.target.value }
-                    )
-                  }
-                  placeholder="Optional subtitle..."
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/10 focus:border-blue-500 text-slate-200 outline-none"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-400 block mb-1">
-                  Options / List Items (comma separated)
-                </label>
-                <input
-                  type="text"
-                  value={(selectedBlock.options || []).join(', ')}
-                  onChange={(e) =>
-                    patchBlock({
-                      options: e.target.value
-                        .split(/[,|]+/)
-                        .map((x) => x.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                  placeholder="Option A, Option B, Option C"
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/10 focus:border-blue-500 text-slate-200 outline-none"
-                />
-              </div>
+                      ? { subtitle: e.target.value, statLabel: e.target.value }
+                      : { subtitle: e.target.value }
+                  )
+                }
+                placeholder="Optional subtitle..."
+                className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/10 focus:border-blue-500 text-slate-200 outline-none"
+              />
             </div>
+
+            {supportsMultiTextBoxes(selectedBlock) && (
+              <MultiTextItemsEditor
+                block={selectedBlock}
+                onUpdateBlock={onUpdateBlock}
+                onSelectBlock={onSelectBlock}
+                lang={lang}
+              />
+            )}
           </div>
 
           {/* MS Word Font & Format Toolbar */}
@@ -1628,6 +1621,18 @@ export const ProBlockInspector: React.FC<ProBlockInspectorProps> = ({
                   </label>
                 </div>
               </div>
+
+              {supportsItemPhotos(selectedBlock.type) && (
+                <div className="sm:col-span-2 pt-1">
+                  <MultiTextItemsEditor
+                    block={selectedBlock}
+                    onUpdateBlock={onUpdateBlock}
+                    onSelectBlock={onSelectBlock}
+                    compact
+                    lang={lang}
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="text-[10px] text-slate-400 block mb-1">

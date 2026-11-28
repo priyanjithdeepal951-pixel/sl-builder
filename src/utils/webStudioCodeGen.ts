@@ -793,19 +793,24 @@ export function generateHtmlExport(
 
         case 'ui-listview': {
           const isHoriz = b.direction === 'horizontal';
+          const imgs = Array.isArray(b.itemImages) ? b.itemImages : [];
           const items = (
             parsedOptions.length
               ? parsedOptions
               : ['Alex Rivera · Hey, UI update looks great!', 'Sarah Chen · Ready to publish build', 'Design Team · Synced']
           )
-            .map((raw) => {
+            .map((raw, idx) => {
               const [t, s] = raw.split('·').map((x) => x.trim());
+              const imgUrl = imgs[idx];
+              const mediaHtml = imgUrl
+                ? `<img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(t || '')}" class="w-8 h-8 rounded-full object-cover border border-white/20 shrink-0" />`
+                : `<div style="background:${escapeHtml(resolvedAccent)};" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0">${escapeHtml(
+                    (t || 'U').slice(0, 2).toUpperCase()
+                  )}</div>`;
               return `<div class="${
                 isHoriz ? 'min-w-[210px] shrink-0' : 'w-full'
               } p-3.5 rounded-xl bg-[#090B10] border border-white/10 flex items-center gap-3">
-                <div style="background:${escapeHtml(resolvedAccent)};" class="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white shrink-0">${escapeHtml(
-                (t || 'U').slice(0, 2).toUpperCase()
-              )}</div>
+                ${mediaHtml}
                 <div class="min-w-0 flex-1"><div class="text-sm font-semibold text-white truncate">${escapeHtml(
                   t
                 )}</div>${s ? `<div class="text-xs text-slate-400 truncate">${escapeHtml(s)}</div>` : ''}</div>
@@ -820,13 +825,17 @@ export function generateHtmlExport(
         }
 
         case 'ui-grid': {
+          const imgs = Array.isArray(b.itemImages) ? b.itemImages : [];
           const cells = (parsedOptions.length ? parsedOptions : ['Gallery 01', 'Gallery 02', 'Gallery 03', 'Gallery 04'])
-            .map(
-              (c) =>
-                `<div style="${textFxCss}" class="p-4 rounded-xl bg-[#090B10] border border-white/10 text-sm font-semibold">${escapeHtml(
-                  c
-                )}</div>`
-            )
+            .map((c, idx) => {
+              const imgUrl = imgs[idx];
+              const thumbHtml = imgUrl
+                ? `<img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(c)}" class="w-full h-28 rounded-lg object-cover border border-white/10 mb-2" />`
+                : '';
+              return `<div style="${textFxCss}" class="p-3.5 rounded-xl bg-[#090B10] border border-white/10 text-sm font-semibold">${thumbHtml}<div>${escapeHtml(
+                c
+              )}</div></div>`;
+            })
             .join('');
           return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-2.5">
@@ -865,11 +874,14 @@ export function generateHtmlExport(
           const slides = parsedOptions.length
             ? parsedOptions
             : ['Welcome to Studio · Drag & drop layouts effortlessly', 'Interactive Logic · Connect events & live data', 'Instant Export · Ship clean production code'];
+          const imgs = Array.isArray(b.itemImages) ? b.itemImages : [];
+          const firstPhoto = imgs[0] || '';
           return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="${surfaceFxCss}" class="p-6 ${radiusClass} border border-white/15 bg-white/5 space-y-4 text-center" data-sl-pageview='${escapeHtml(
             JSON.stringify(slides)
-          )}' data-sl-page-idx="0">
-      <div class="min-h-[100px] flex flex-col items-center justify-center gap-1">
+          )}' data-sl-pageview-imgs='${escapeHtml(JSON.stringify(imgs))}' data-sl-page-idx="0">
+      <div class="min-h-[100px] flex flex-col items-center justify-center gap-2">
+        <img src="${escapeHtml(firstPhoto)}" alt="" class="sl-pv-img w-full max-h-48 rounded-xl object-cover border border-white/10 ${firstPhoto ? '' : 'hidden'}" />
         <h3 class="sl-pv-title text-lg font-bold text-white">${escapeHtml(
           (slides[0] || '').split('·')[0].trim()
         )}</h3>
@@ -888,13 +900,17 @@ export function generateHtmlExport(
 
         case 'ui-carousel': {
           const items = parsedOptions.length ? parsedOptions : ['Slide 1', 'Slide 2', 'Slide 3', 'Slide 4'];
+          const imgs = Array.isArray(b.itemImages) ? b.itemImages : [];
           const slidesHtml = items
-            .map(
-              (lbl, idx) =>
-                `<div class="min-w-[260px] snap-center p-5 rounded-xl bg-[#090B10] border border-white/10 space-y-2"><div class="h-24 rounded-lg bg-gradient-to-tr from-indigo-500/25 to-sky-500/20"></div><div class="text-sm font-bold text-white">${escapeHtml(
-                  lbl
-                )}</div><div class="text-xs text-slate-400">Slide #${idx + 1}</div></div>`
-            )
+            .map((lbl, idx) => {
+              const imgUrl = imgs[idx];
+              const mediaHtml = imgUrl
+                ? `<img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(lbl)}" class="w-full h-32 rounded-lg object-cover border border-white/10" />`
+                : `<div class="h-24 rounded-lg bg-gradient-to-tr from-indigo-500/25 to-sky-500/20"></div>`;
+              return `<div class="min-w-[260px] snap-center p-4 rounded-xl bg-[#090B10] border border-white/10 space-y-2">${mediaHtml}<div class="text-sm font-bold text-white">${escapeHtml(
+                lbl
+              )}</div><div class="text-xs text-slate-400">Slide #${idx + 1}</div></div>`;
+            })
             .join('');
           return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5 space-y-3">
@@ -945,19 +961,28 @@ export function generateHtmlExport(
 
         case 'ui-staggered': {
           const heights = ['h-28', 'h-44', 'h-32', 'h-48', 'h-28', 'h-40'];
+          const imgs = Array.isArray(b.itemImages) ? b.itemImages : [];
           const tiles = (
             parsedOptions.length
               ? parsedOptions
               : ['Architecture Concept', 'Minimal UI Kit', 'Typography Study', 'Color Tokens', 'Motion Curve', 'Dark Theme']
           )
-            .map(
-              (tile, idx) =>
-                `<div class="break-inside-avoid rounded-xl p-4 bg-[#090B10] border border-white/10 flex flex-col justify-between ${
-                  heights[idx % heights.length]
-                }"><span class="text-xs font-mono text-indigo-300">#${idx + 1}</span><span class="text-sm font-semibold text-white">${escapeHtml(
-                  tile
-                )}</span></div>`
-            )
+            .map((tile, idx) => {
+              const imgUrl = imgs[idx];
+              return imgUrl
+                ? `<div class="break-inside-avoid relative overflow-hidden rounded-xl p-4 border border-white/15 flex flex-col justify-end ${
+                    heights[idx % heights.length]
+                  }"><img src="${escapeHtml(imgUrl)}" alt="${escapeHtml(
+                    tile
+                  )}" class="absolute inset-0 w-full h-full object-cover" /><div class="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent"></div><div class="relative z-10 flex items-center justify-between gap-2"><span class="text-sm font-semibold text-white">${escapeHtml(
+                    tile
+                  )}</span><span class="text-xs font-mono text-sky-300">#${idx + 1}</span></div></div>`
+                : `<div class="break-inside-avoid rounded-xl p-4 bg-[#090B10] border border-white/10 flex flex-col justify-between ${
+                    heights[idx % heights.length]
+                  }"><span class="text-xs font-mono text-indigo-300">#${idx + 1}</span><span class="text-sm font-semibold text-white">${escapeHtml(
+                    tile
+                  )}</span></div>`;
+            })
             .join('');
           return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="${surfaceFxCss}" class="p-4 ${radiusClass} border border-white/10 bg-white/5">
@@ -992,21 +1017,25 @@ export function generateHtmlExport(
 
         case 'ui-swipeable-stack': {
           const cards = parsedOptions.length ? parsedOptions : ['Card 1 · Design', 'Card 2 · Prototype', 'Card 3 · Launch'];
+          const imgs = Array.isArray(b.itemImages) ? b.itemImages : [];
+          const firstPhoto = imgs[0] || '';
           return `  <section id="${elId}" style="${layoutStyle}font-family: ${fontFam};" class="max-w-5xl mx-auto px-6 py-4${customCls}">
     <div style="${surfaceFxCss}" class="p-5 ${radiusClass} border border-white/10 bg-white/5 space-y-3" data-sl-swipe-cards='${escapeHtml(
             JSON.stringify(cards)
-          )}' data-sl-swipe-idx="0">
+          )}' data-sl-swipe-imgs='${escapeHtml(JSON.stringify(imgs))}' data-sl-swipe-idx="0">
       <div class="flex justify-between text-xs font-mono text-sky-300"><span>SwipeableStack</span><span class="sl-sw-count">0 / ${
             cards.length
           } swiped</span></div>
-      <div class="sl-sw-card p-6 rounded-2xl bg-gradient-to-br from-[#1b2234] to-[#0c1018] border border-white/15 min-h-[120px] flex flex-col justify-between">
-        <span class="sl-sw-num text-xs font-mono text-sky-400">Card #1</span>
-        <div class="sl-sw-title text-base font-bold text-white">${escapeHtml(cards[0] || '')}</div>
+      <div class="sl-sw-card relative overflow-hidden p-6 rounded-2xl bg-gradient-to-br from-[#1b2234] to-[#0c1018] border border-white/15 min-h-[160px] flex flex-col justify-between">
+        <img src="${escapeHtml(firstPhoto)}" alt="" class="sl-sw-img absolute inset-0 w-full h-full object-cover ${firstPhoto ? '' : 'hidden'}" />
+        <div class="sl-sw-scrim absolute inset-0 bg-gradient-to-t from-black/85 via-black/35 to-black/20 ${firstPhoto ? '' : 'hidden'}"></div>
+        <span class="sl-sw-num relative z-10 text-xs font-mono text-sky-300">Card #1</span>
+        <div class="sl-sw-title relative z-10 text-base font-bold text-white">${escapeHtml(cards[0] || '')}</div>
       </div>
       <div class="flex justify-center gap-2">
         <button type="button" onclick="slSwipeStackNext(this)" class="px-3.5 py-1.5 rounded-lg bg-rose-500/20 border border-rose-400/30 text-rose-200 text-xs font-semibold cursor-pointer">&larr; Swipe Left</button>
         <button type="button" onclick="slSwipeStackNext(this)" class="px-3.5 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-200 text-xs font-semibold cursor-pointer">Swipe Right &rarr;</button>
-        <button type="button" onclick="slSwipeStackReset(this)" class="px-3 py-1.5 rounded-lg bg-white/10 text-slate-200 text-xs font-semibold cursor-pointer">Reset</button>
+        <button type="button" onclick="slSwipeStackReset(this)" class="px-3.5 py-1.5 rounded-lg bg-white/10 text-slate-200 text-xs font-semibold cursor-pointer">Reset</button>
       </div>
     </div>
   </section>`;
@@ -2519,14 +2548,21 @@ ${renderedBlocks}
       var wrap = btn.closest('[data-sl-pageview]');
       if (!wrap) return;
       var slides = [];
+      var imgs = [];
       try { slides = JSON.parse(wrap.getAttribute('data-sl-pageview') || '[]'); } catch(e) {}
+      try { imgs = JSON.parse(wrap.getAttribute('data-sl-pageview-imgs') || '[]'); } catch(e) {}
       if (!slides.length) return;
       var idx = Math.max(0, Math.min(slides.length - 1, (parseInt(wrap.getAttribute('data-sl-page-idx') || '0', 10) || 0) + delta));
       wrap.setAttribute('data-sl-page-idx', String(idx));
       var parts = String(slides[idx] || '').split('·');
+      var imgEl = wrap.querySelector('.sl-pv-img');
       var tEl = wrap.querySelector('.sl-pv-title');
       var sEl = wrap.querySelector('.sl-pv-sub');
       var iEl = wrap.querySelector('.sl-pv-ind');
+      if (imgEl) {
+        if (imgs[idx]) { imgEl.setAttribute('src', imgs[idx]); imgEl.classList.remove('hidden'); }
+        else { imgEl.classList.add('hidden'); }
+      }
       if (tEl) tEl.textContent = (parts[0] || '').trim();
       if (sEl) sEl.textContent = (parts[1] || '').trim();
       if (iEl) iEl.textContent = 'Page ' + (idx + 1) + ' / ' + slides.length;
@@ -2553,20 +2589,30 @@ ${renderedBlocks}
       var box = btn.closest('[data-sl-swipe-cards]');
       if (!box) return;
       var cards = [];
+      var imgs = [];
       try { cards = JSON.parse(box.getAttribute('data-sl-swipe-cards') || '[]'); } catch(e) {}
+      try { imgs = JSON.parse(box.getAttribute('data-sl-swipe-imgs') || '[]'); } catch(e) {}
       var idx = (parseInt(box.getAttribute('data-sl-swipe-idx') || '0', 10) || 0) + 1;
       if (idx > cards.length) idx = cards.length;
       box.setAttribute('data-sl-swipe-idx', String(idx));
       var cEl = box.querySelector('.sl-sw-count');
       var nEl = box.querySelector('.sl-sw-num');
       var tEl = box.querySelector('.sl-sw-title');
+      var imgEl = box.querySelector('.sl-sw-img');
+      var scrimEl = box.querySelector('.sl-sw-scrim');
       if (cEl) cEl.textContent = idx + ' / ' + cards.length + ' swiped';
       if (idx >= cards.length) {
         if (nEl) nEl.textContent = 'DONE';
         if (tEl) tEl.textContent = 'All cards swiped! Click Reset.';
+        if (imgEl) imgEl.classList.add('hidden');
+        if (scrimEl) scrimEl.classList.add('hidden');
       } else {
         if (nEl) nEl.textContent = 'Card #' + (idx + 1);
         if (tEl) tEl.textContent = cards[idx];
+        if (imgEl && scrimEl) {
+          if (imgs[idx]) { imgEl.setAttribute('src', imgs[idx]); imgEl.classList.remove('hidden'); scrimEl.classList.remove('hidden'); }
+          else { imgEl.classList.add('hidden'); scrimEl.classList.add('hidden'); }
+        }
       }
     }
 
@@ -2574,14 +2620,22 @@ ${renderedBlocks}
       var box = btn.closest('[data-sl-swipe-cards]');
       if (!box) return;
       var cards = [];
+      var imgs = [];
       try { cards = JSON.parse(box.getAttribute('data-sl-swipe-cards') || '[]'); } catch(e) {}
+      try { imgs = JSON.parse(box.getAttribute('data-sl-swipe-imgs') || '[]'); } catch(e) {}
       box.setAttribute('data-sl-swipe-idx', '0');
       var cEl = box.querySelector('.sl-sw-count');
       var nEl = box.querySelector('.sl-sw-num');
       var tEl = box.querySelector('.sl-sw-title');
+      var imgEl = box.querySelector('.sl-sw-img');
+      var scrimEl = box.querySelector('.sl-sw-scrim');
       if (cEl) cEl.textContent = '0 / ' + cards.length + ' swiped';
       if (nEl) nEl.textContent = 'Card #1';
       if (tEl) tEl.textContent = cards[0] || '';
+      if (imgEl && scrimEl) {
+        if (imgs[0]) { imgEl.setAttribute('src', imgs[0]); imgEl.classList.remove('hidden'); scrimEl.classList.remove('hidden'); }
+        else { imgEl.classList.add('hidden'); scrimEl.classList.add('hidden'); }
+      }
     }
 
     document.querySelectorAll('.sl-file-input').forEach(function(inp) {
@@ -3032,6 +3086,7 @@ export function generateReactTsxExport(
         case 'ui-column':
         case 'ui-grid': {
           const items = parseOptionsList(b.content, b.options, ['Item 1', 'Item 2', 'Item 3']);
+          const imgs = Array.isArray(b.itemImages) ? b.itemImages : [];
           const gridClass =
             b.type === 'ui-column'
               ? 'flex flex-col gap-3'
@@ -3044,7 +3099,10 @@ export function generateReactTsxExport(
             b.children && b.children.length > 0 && b.type !== 'ui-grid'
               ? b.children.map((c) => renderChildJsx(c, b.type === 'ui-row' && c.type !== 'ui-vertical-divider' ? '1 1 0%' : undefined)).join('\n          ')
               : `{${JSON.stringify(items)}.map((item, i) => (
-            <div key={i} className="p-4 rounded-xl bg-white/5 border border-white/10 font-semibold">{item}</div>
+            <div key={i} className="p-3.5 rounded-xl bg-white/5 border border-white/10 font-semibold flex flex-col gap-2">
+              {${JSON.stringify(imgs)}[i] && <img src={${JSON.stringify(imgs)}[i]} alt={item} className="w-full h-32 rounded-lg object-cover" />}
+              <span>{item}</span>
+            </div>
           ))}`
           }
         </div>
@@ -3064,11 +3122,15 @@ export function generateReactTsxExport(
       </section>`;
         case 'ui-listview': {
           const items = parseOptionsList(b.content, b.options, ['Item 1 · Description', 'Item 2 · Description']);
+          const imgs = Array.isArray(b.itemImages) ? b.itemImages : [];
           const isH = b.direction === 'horizontal';
           return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
         <div className="${isH ? 'flex flex-row gap-3 overflow-x-auto pb-2' : 'flex flex-col gap-2 max-h-64 overflow-y-auto'}"${styleAttr}>
           {${JSON.stringify(items)}.map((item, i) => (
-            <div key={i} className="${isH ? 'min-w-[200px] shrink-0' : 'w-full'} p-3.5 rounded-xl bg-white/5 border border-white/10 text-sm font-medium">{item}</div>
+            <div key={i} className="${isH ? 'min-w-[200px] shrink-0' : 'w-full'} p-3.5 rounded-xl bg-white/5 border border-white/10 text-sm font-medium flex items-center gap-3">
+              {${JSON.stringify(imgs)}[i] && <img src={${JSON.stringify(imgs)}[i]} alt={item} className="w-8 h-8 rounded-full object-cover shrink-0" />}
+              <span className="truncate">{item}</span>
+            </div>
           ))}
         </div>
       </section>`;
@@ -3089,8 +3151,10 @@ export function generateReactTsxExport(
         }
         case 'ui-pageview': {
           const slides = parseOptionsList(b.content, b.options, ['Welcome · Step 1', 'Features · Step 2', 'Launch · Step 3']);
+          const imgs = Array.isArray(b.itemImages) ? b.itemImages : [];
           return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
         <div className="p-6 rounded-2xl bg-white/5 border border-white/15 space-y-4 text-center"${styleAttr}>
+          {${JSON.stringify(imgs)}[tabIdx[${JSON.stringify(`${b.id}_pv`)}] ?? 0] && <img src={${JSON.stringify(imgs)}[tabIdx[${JSON.stringify(`${b.id}_pv`)}] ?? 0]} alt="" className="w-full max-h-56 rounded-xl object-cover" />}
           <div className="text-lg font-bold">{${JSON.stringify(slides)}[tabIdx[${JSON.stringify(`${b.id}_pv`)}] ?? 0]}</div>
           <div className="flex justify-between items-center">
             <button type="button" onClick={() => setTabIdx((p) => ({ ...p, [${JSON.stringify(`${b.id}_pv`)}]: Math.max(0, (p[${JSON.stringify(`${b.id}_pv`)}] ?? 0) - 1) }))} className="px-3 py-1 rounded bg-white/10 text-xs cursor-pointer">Prev</button>
@@ -3102,10 +3166,14 @@ export function generateReactTsxExport(
         }
         case 'ui-carousel': {
           const slides = parseOptionsList(b.content, b.options, ['Slide 1', 'Slide 2', 'Slide 3']);
+          const imgs = Array.isArray(b.itemImages) ? b.itemImages : [];
           return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
         <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2"${styleAttr}>
           {${JSON.stringify(slides)}.map((s, idx) => (
-            <div key={idx} className="min-w-[260px] snap-center p-5 rounded-xl bg-white/5 border border-white/10 font-bold">{s}</div>
+            <div key={idx} className="min-w-[260px] snap-center p-4 rounded-xl bg-white/5 border border-white/10 font-bold space-y-2">
+              {${JSON.stringify(imgs)}[idx] && <img src={${JSON.stringify(imgs)}[idx]} alt={s} className="w-full h-36 rounded-lg object-cover" />}
+              <div>{s}</div>
+            </div>
           ))}
         </div>
       </section>`;
@@ -3134,10 +3202,14 @@ export function generateReactTsxExport(
       </section>`;
         case 'ui-staggered': {
           const tiles = parseOptionsList(b.content, b.options, ['Tile 1', 'Tile 2', 'Tile 3', 'Tile 4']);
+          const imgs = Array.isArray(b.itemImages) ? b.itemImages : [];
           return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
         <div className="${b.gridColumns === 3 ? 'columns-1 md:columns-3' : 'columns-1 md:columns-2'} gap-4 space-y-4"${styleAttr}>
           {${JSON.stringify(tiles)}.map((t, i) => (
-            <div key={i} className="break-inside-avoid p-5 rounded-xl bg-white/5 border border-white/10 font-semibold">{t}</div>
+            <div key={i} className="break-inside-avoid relative overflow-hidden p-5 rounded-xl bg-white/5 border border-white/10 font-semibold min-h-[120px] flex flex-col justify-end">
+              {${JSON.stringify(imgs)}[i] && <><img src={${JSON.stringify(imgs)}[i]} alt={t} className="absolute inset-0 w-full h-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" /></>}
+              <span className="relative z-10">{t}</span>
+            </div>
           ))}
         </div>
       </section>`;
@@ -3152,9 +3224,13 @@ export function generateReactTsxExport(
       </section>`;
         case 'ui-swipeable-stack': {
           const cards = parseOptionsList(b.content, b.options, ['Card 1', 'Card 2', 'Card 3']);
+          const imgs = Array.isArray(b.itemImages) ? b.itemImages : [];
           return `      <section id=${JSON.stringify(elId)} className="max-w-5xl mx-auto px-6 py-4 w-full">
         <div className="p-5 rounded-2xl bg-white/5 border border-white/10 space-y-3"${styleAttr}>
-          <div className="p-5 rounded-xl bg-black/30 border border-white/10 font-bold">{${JSON.stringify(cards)}[tabIdx[${JSON.stringify(`${b.id}_sw`)}] ?? 0] ?? 'All cards swiped!'}</div>
+          <div className="relative overflow-hidden p-5 rounded-xl bg-black/30 border border-white/10 min-h-[150px] flex flex-col justify-end font-bold">
+            {${JSON.stringify(imgs)}[tabIdx[${JSON.stringify(`${b.id}_sw`)}] ?? 0] && <><img src={${JSON.stringify(imgs)}[tabIdx[${JSON.stringify(`${b.id}_sw`)}] ?? 0]} alt="" className="absolute inset-0 w-full h-full object-cover" /><div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" /></>}
+            <span className="relative z-10">{${JSON.stringify(cards)}[tabIdx[${JSON.stringify(`${b.id}_sw`)}] ?? 0] ?? 'All cards swiped!'}</span>
+          </div>
           <div className="flex gap-2">
             <button type="button" onClick={() => setTabIdx((p) => ({ ...p, [${JSON.stringify(`${b.id}_sw`)}]: Math.min(${cards.length}, (p[${JSON.stringify(`${b.id}_sw`)}] ?? 0) + 1) }))} className="px-3 py-1.5 rounded bg-indigo-600 text-white text-xs font-semibold cursor-pointer">Swipe Next</button>
             <button type="button" onClick={() => setTabIdx((p) => ({ ...p, [${JSON.stringify(`${b.id}_sw`)}]: 0 }))} className="px-3 py-1.5 rounded bg-white/10 text-xs cursor-pointer">Reset</button>

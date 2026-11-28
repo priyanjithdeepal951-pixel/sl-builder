@@ -324,6 +324,7 @@ export interface CanvasBlock {
   navLinks?: NavbarLinkItem[];
   // Custom metadata & interactive controls
   imageUrl?: string;
+  itemImages?: string[];
   videoUrl?: string;
   iconName?: string;
   badgeText?: string;

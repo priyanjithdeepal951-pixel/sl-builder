@@ -83,7 +83,9 @@ import { ThemeStyleStudioPanel } from './ThemeStyleStudioPanel';
 import { CloudBackendStudioPanel, DEFAULT_SITE_CLOUD_CONFIG } from './CloudBackendStudioPanel';
 import { PageSelectorStudioPanel } from './PageSelectorStudioPanel';
 import { WidgetTreeStudioPanel } from './WidgetTreeStudioPanel';
+import { SearchStudioPanel } from './SearchStudioPanel';
 import { ProBlockInspector, ProInspectorRibbon } from './ProBlockInspector';
+import { MultiTextItemsEditor, supportsMultiTextBoxes } from './MultiTextItemsEditor';
 import { GeminiCodingAgentPanel, GeminiAgentAction } from './GeminiCodingAgentPanel';
 import { ICON_LIBRARY } from '../../utils/mediaHelpers';
 import {
@@ -4223,11 +4225,29 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                     />
                   )}
 
+                  {activeRailItem === 'search' && (
+                    <SearchStudioPanel
+                      lang={lang}
+                      pages={pages}
+                      activePageId={activePageId}
+                      selectedBlockId={selectedBlockId}
+                      onSelectPage={(pageId) => handleSelectPage(pageId)}
+                      onSelectBlock={(id) => setSelectedBlockId(id)}
+                      onInspectBlock={(id) => {
+                        setSelectedBlockId(id);
+                        setHtmlViewMode('inspector');
+                      }}
+                      onAddTemplateBlock={handleAddTemplateBlock}
+                      onPaletteDragStart={handlePaletteDragStart}
+                    />
+                  )}
+
                   {activeRailItem !== 'widget-palette' &&
                     activeRailItem !== 'theme-palette' &&
                     activeRailItem !== 'cloud-sync' &&
                     activeRailItem !== 'page-selector' &&
-                    activeRailItem !== 'widget-tree' && (
+                    activeRailItem !== 'widget-tree' &&
+                    activeRailItem !== 'search' && (
                     <>
                       <div className="flex items-center justify-between pb-1">
                         <span className="text-xs font-bold text-slate-200">
@@ -4829,62 +4849,13 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                       )}
                                     </div>
 
-                                    {(blk.type === 'ui-sidebar' ||
-                                      blk.type === 'ui-tabbar' ||
-                                      blk.type === 'ui-row' ||
-                                      blk.type === 'ui-column' ||
-                                      blk.type === 'ui-listview' ||
-                                      blk.type === 'ui-grid' ||
-                                      blk.type === 'ui-pageview' ||
-                                      blk.type === 'ui-carousel' ||
-                                      blk.type === 'ui-wrap' ||
-                                      blk.type === 'ui-staggered' ||
-                                      blk.type === 'ui-swipeable-stack' ||
-                                      blk.type === 'ui-flex' ||
-                                      blk.type === 'ui-vertical-divider' ||
-                                      blk.type === 'ui-select' ||
-                                      blk.type === 'ui-calendar' ||
-                                      blk.type === 'ui-rive' ||
-                                      blk.type === 'ui-language-selector' ||
-                                      blk.type === 'ui-chart' ||
-                                      blk.type === 'ui-choice-chips' ||
-                                      blk.type === 'ui-place-picker' ||
-                                      blk.type === 'ui-checkbox-group' ||
-                                      (blk.type === 'ui-checkbox' &&
-                                        blk.controlVariant === 'radio')) && (
-                                      <input
-                                        type="text"
-                                        value={
-                                          Array.isArray(blk.options) && blk.options.length > 0
-                                            ? blk.options.join(', ')
-                                            : blk.content
-                                        }
-                                        placeholder="Items (comma separated, e.g. Item 1, Item 2, Item 3)"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSelectedBlockId(blk.id);
-                                        }}
-                                        onChange={(e) => {
-                                          const raw = e.target.value;
-                                          const parsed = raw
-                                            .split(/[,|]+/)
-                                            .map((s) => s.trim())
-                                            .filter(Boolean);
-                                          const keepContent =
-                                            blk.type === 'ui-calendar' ||
-                                            blk.type === 'ui-rive' ||
-                                            blk.type === 'ui-language-selector' ||
-                                            blk.type === 'ui-chart' ||
-                                            blk.type === 'ui-choice-chips' ||
-                                            blk.type === 'ui-place-picker' ||
-                                            blk.type === 'ui-checkbox-group';
-                                          handleUpdateBlock({
-                                            ...blk,
-                                            options: parsed,
-                                            ...(keepContent ? {} : { content: parsed.join(' | ') }),
-                                          });
-                                        }}
-                                        className="w-full bg-[#0B0E15] border border-sky-500/20 focus:border-[#4D97FF] rounded-lg px-2.5 py-1 text-[11px] text-sky-200 placeholder-slate-600 outline-none"
+                                    {supportsMultiTextBoxes(blk) && (
+                                      <MultiTextItemsEditor
+                                        block={blk}
+                                        onUpdateBlock={handleUpdateBlock}
+                                        onSelectBlock={setSelectedBlockId}
+                                        compact
+                                        lang={lang}
                                       />
                                     )}
                                   </div>
