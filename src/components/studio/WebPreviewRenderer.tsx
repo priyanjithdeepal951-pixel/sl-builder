@@ -128,6 +128,7 @@ interface WebPreviewRendererProps {
       moveBlockId?: string;
       imageDataUrl?: string;
       fileName?: string;
+      mediaAsset?: { id: string; name: string; kind: 'image' | 'video' | 'audio' | 'pdf'; url: string };
     },
     index: number
   ) => void;
@@ -138,6 +139,7 @@ interface WebPreviewRendererProps {
       blockType?: string;
       imageDataUrl?: string;
       fileName?: string;
+      mediaAsset?: { id: string; name: string; kind: 'image' | 'video' | 'audio' | 'pdf'; url: string };
     }
   ) => void;
   onDismissSubmission?: () => void;
@@ -701,6 +703,19 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
       return;
     }
 
+    const mediaRaw = e.dataTransfer.getData('application/x-slbuilder-media-asset');
+    if (mediaRaw) {
+      try {
+        const mediaAsset = JSON.parse(mediaRaw);
+        if (mediaAsset?.url && mediaAsset?.kind) {
+          onDropAtStageIndex({ mediaAsset }, targetIdx);
+          return;
+        }
+      } catch {
+        // ignore invalid json
+      }
+    }
+
     const moveBlockId = e.dataTransfer.getData('application/x-slbuilder-move-id');
     const tplId = e.dataTransfer.getData('application/x-slbuilder-tpl-id');
     const blockType = e.dataTransfer.getData('application/x-slbuilder-type');
@@ -756,6 +771,7 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
     const hasTpl =
       e.dataTransfer.types.includes('application/x-slbuilder-tpl-id') ||
       e.dataTransfer.types.includes('application/x-slbuilder-type') ||
+      e.dataTransfer.types.includes('application/x-slbuilder-media-asset') ||
       e.dataTransfer.types.includes('Files');
     if (!hasTpl) return;
     e.preventDefault();
@@ -767,16 +783,29 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
 
   const handleContainerDrop = async (e: React.DragEvent, containerId: string) => {
     if (!onDropChildInContainer) return;
+    const mediaRaw = e.dataTransfer.getData('application/x-slbuilder-media-asset');
     const tplId = e.dataTransfer.getData('application/x-slbuilder-tpl-id');
     const blockType = e.dataTransfer.getData('application/x-slbuilder-type');
     const file = e.dataTransfer.files?.[0];
-    if (!tplId && !blockType && !(file && file.type.startsWith('image/'))) {
+    if (!mediaRaw && !tplId && !blockType && !(file && file.type.startsWith('image/'))) {
       return;
     }
     e.preventDefault();
     e.stopPropagation();
     setDragOverContainerId(null);
     setStageDropIdx(null);
+
+    if (mediaRaw) {
+      try {
+        const mediaAsset = JSON.parse(mediaRaw);
+        if (mediaAsset?.url && mediaAsset?.kind) {
+          onDropChildInContainer(containerId, { mediaAsset });
+          return;
+        }
+      } catch {
+        // ignore invalid json
+      }
+    }
 
     if (file && file.type.startsWith('image/')) {
       try {

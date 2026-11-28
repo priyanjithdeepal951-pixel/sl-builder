@@ -61,6 +61,11 @@ import {
   BlockLogicConfig,
   BlockStyle,
   CanvasBlock,
+  LogicFlowRule,
+  LogicStepAction,
+  LogicTriggerType,
+  MediaAssetItem,
+  MediaAssetKind,
   NavbarLinkAction,
   NavbarLinkItem,
   PageStyleSettings,
@@ -84,10 +89,24 @@ import { CloudBackendStudioPanel, DEFAULT_SITE_CLOUD_CONFIG } from './CloudBacke
 import { PageSelectorStudioPanel } from './PageSelectorStudioPanel';
 import { WidgetTreeStudioPanel } from './WidgetTreeStudioPanel';
 import { SearchStudioPanel } from './SearchStudioPanel';
+import { MediaAssetsStudioPanel } from './MediaAssetsStudioPanel';
 import { ProBlockInspector, ProInspectorRibbon } from './ProBlockInspector';
 import { MultiTextItemsEditor, supportsMultiTextBoxes } from './MultiTextItemsEditor';
+import {
+  BackendLogicSidebar,
+  BackendLogicWorkspace,
+  LOGIC_FLOW_RECIPES,
+  LogicRecipe,
+  createStepFromCatalog,
+  getTriggerCandidates,
+} from './BackendLogicBuilder';
 import { GeminiCodingAgentPanel, GeminiAgentAction } from './GeminiCodingAgentPanel';
 import { ICON_LIBRARY } from '../../utils/mediaHelpers';
+import {
+  deleteMediaBlobFromIdb,
+  loadMediaBlobUrlFromIdb,
+  resolveMediaAssetUrl,
+} from '../../utils/mediaLibraryStore';
 import {
   generateHtmlExport,
   generateCssExport,
@@ -187,6 +206,7 @@ function buildInitialPages(proj: Project): SitePage[] {
     return proj.pages.map((p) => ({
       ...p,
       blocks: Array.isArray(p.blocks) ? p.blocks : [],
+      logicFlows: Array.isArray(p.logicFlows) ? p.logicFlows : [],
     }));
   }
   const homeBlocks =
@@ -197,6 +217,7 @@ function buildInitialPages(proj: Project): SitePage[] {
       name: 'Home',
       slug: 'index',
       blocks: homeBlocks,
+      logicFlows: [],
     },
   ];
 }
@@ -218,12 +239,16 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     const initial = buildInitialPages(project);
     return initial[0]?.blocks[0]?.id || null;
   });
+  const [selectedFlowId, setSelectedFlowId] = useState<string | null>(() => {
+    const initial = buildInitialPages(project);
+    return initial[0]?.logicFlows?.[0]?.id || null;
+  });
   const [lang, setLang] = useState<'en' | 'si'>('en');
   const [activeTab, setActiveTab] = useState<'html' | 'css' | 'js'>('html');
   const [cssSection, setCssSection] = useState<'page-style' | 'live-animations' | 'element'>(
     'page-style'
   );
-  const [htmlViewMode, setHtmlViewMode] = useState<'visual' | 'inspector' | 'code'>('visual');
+  const [htmlViewMode, setHtmlViewMode] = useState<'visual' | 'inspector' | 'logic' | 'code'>('visual');
   const [copiedBlockStyle, setCopiedBlockStyle] = useState<Partial<BlockStyle> | null>(null);
   const [activeCategory, setActiveCategory] = useState<WebStudioCategoryId>('layout');
   const [activeRailItem, setActiveRailItem] = useState<string>('widget-palette');
@@ -260,6 +285,10 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     firebase: { ...DEFAULT_SITE_CLOUD_CONFIG.firebase, ...(project.cloudConfig?.firebase || {}) },
     supabase: { ...DEFAULT_SITE_CLOUD_CONFIG.supabase, ...(project.cloudConfig?.supabase || {}) },
   }));
+  const [mediaAssets, setMediaAssets] = useState<MediaAssetItem[]>(
+    () => (Array.isArray(project.mediaAssets) ? project.mediaAssets : [])
+  );
+  const [resolvedIdbUrls, setResolvedIdbUrls] = useState<Record<string, string>>({});
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -288,6 +317,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     setActivePageId(initial[0]?.id || 'page_home');
     setProjectName(project.name || 'SL WebStudio Project');
     setSelectedBlockId(initial[0]?.blocks[0]?.id || null);
+    setSelectedFlowId(initial[0]?.logicFlows?.[0]?.id || null);
     setUndoStack([]);
     setFormInputs({});
     setPageHistory([]);
@@ -298,7 +328,31 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       firebase: { ...DEFAULT_SITE_CLOUD_CONFIG.firebase, ...(project.cloudConfig?.firebase || {}) },
       supabase: { ...DEFAULT_SITE_CLOUD_CONFIG.supabase, ...(project.cloudConfig?.supabase || {}) },
     });
+    setMediaAssets(Array.isArray(project.mediaAssets) ? project.mediaAssets : []);
   }, [project.id]);
+
+  // Resolve any idb:// media assets to active browser blob: URLs
+  useEffect(() => {
+    const idbAssets = mediaAssets.filter((a) => a.url.startsWith('idb://'));
+    if (idbAssets.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const updates: Record<string, string> = {};
+      for (const item of idbAssets) {
+        const assetId = item.url.slice('idb://'.length);
+        if (!resolvedIdbUrls[assetId]) {
+          const objUrl = await loadMediaBlobUrlFromIdb(assetId);
+          if (objUrl) updates[assetId] = objUrl;
+        }
+      }
+      if (!cancelled && Object.keys(updates).length > 0) {
+        setResolvedIdbUrls((prev) => ({ ...prev, ...updates }));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [mediaAssets, resolvedIdbUrls]);
 
   // Debounced persistence to App / Firestore
   useEffect(() => {
@@ -309,15 +363,98 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         blocks: pages[0]?.blocks || [],
         pages,
         cloudConfig,
+        mediaAssets,
         updatedAt: 'Just now',
       });
     }, 350);
     return () => clearTimeout(timer);
-  }, [pages, projectName, cloudConfig]);
+  }, [pages, projectName, cloudConfig, mediaAssets]);
 
   const activePage = pages.find((p) => p.id === activePageId) || pages[0];
   const blocks = activePage?.blocks || [];
+  const activeLogicFlows = activePage?.logicFlows || [];
   const activePageStyle: PageStyleSettings = activePage?.pageStyle || {};
+
+  const commitLogicFlows = useCallback(
+    (updater: (prev: LogicFlowRule[]) => LogicFlowRule[], recordUndo = true) => {
+      setPages((prevPages) => {
+        if (recordUndo) {
+          setUndoStack((u) => [...u.slice(-19), prevPages]);
+        }
+        return prevPages.map((p) =>
+          p.id === activePageId
+            ? { ...p, logicFlows: updater(Array.isArray(p.logicFlows) ? p.logicFlows : []) }
+            : p
+        );
+      });
+    },
+    [activePageId]
+  );
+
+  const handleCreateLogicFlow = useCallback(
+    (preset?: LogicRecipe) => {
+      const trigger: LogicTriggerType = preset?.trigger || 'when-click';
+      const candidates = preset
+        ? blocks.filter((b) => preset.preferredTypes.includes(b.type))
+        : getTriggerCandidates(trigger, blocks);
+      const fallbackTarget = candidates[0]?.id || getTriggerCandidates(trigger, blocks)[0]?.id || 'any';
+      const steps = (preset?.steps || [{ action: 'next-page' as LogicStepAction }]).map((s) => ({
+        ...createStepFromCatalog(s.action, pages, activePageId, cloudConfig),
+        ...s,
+        id: `step_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+      }));
+      const newFlow: LogicFlowRule = {
+        id: `flow_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+        name: preset ? preset.name : `Logic Flow ${activeLogicFlows.length + 1}`,
+        enabled: true,
+        trigger,
+        targetBlockId: fallbackTarget,
+        steps,
+        createdAt: new Date().toLocaleTimeString(),
+      };
+      commitLogicFlows((prev) => [...prev, newFlow]);
+      setSelectedFlowId(newFlow.id);
+      onToast(
+        lang === 'si'
+          ? `"${newFlow.name}" Backend Flow එක් කළා!`
+          : `Created backend flow "${newFlow.name}"`,
+        'success'
+      );
+    },
+    [blocks, pages, activePageId, cloudConfig, activeLogicFlows.length, commitLogicFlows, onToast, lang]
+  );
+
+  const handleAppendActionToActiveFlow = useCallback(
+    (action: LogicStepAction) => {
+      const targetFlow =
+        activeLogicFlows.find((f) => f.id === selectedFlowId) || activeLogicFlows[0] || null;
+      const newStep = createStepFromCatalog(action, pages, activePageId, cloudConfig);
+      if (!targetFlow) {
+        const candidates = getTriggerCandidates('when-click', blocks);
+        const newFlow: LogicFlowRule = {
+          id: `flow_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+          name: `Flow ${activeLogicFlows.length + 1}`,
+          enabled: true,
+          trigger: 'when-click',
+          targetBlockId: candidates[0]?.id || 'any',
+          steps: [newStep],
+          createdAt: new Date().toLocaleTimeString(),
+        };
+        commitLogicFlows((prev) => [...prev, newFlow]);
+        setSelectedFlowId(newFlow.id);
+        onToast('Created flow with action block!', 'success');
+        return;
+      }
+      commitLogicFlows((prev) =>
+        prev.map((f) =>
+          f.id === targetFlow.id ? { ...f, steps: [...f.steps, newStep] } : f
+        )
+      );
+      setSelectedFlowId(targetFlow.id);
+      onToast(`Snapped "${action}" into "${targetFlow.name}"`, 'success');
+    },
+    [activeLogicFlows, selectedFlowId, pages, activePageId, cloudConfig, blocks, commitLogicFlows, onToast]
+  );
 
   const handleUpdatePageStyle = useCallback(
     (patch: Partial<PageStyleSettings>, applyToAllPages = false) => {
@@ -363,6 +500,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     setActivePageId(pageId);
     const target = pages.find((p) => p.id === pageId);
     setSelectedBlockId(target?.blocks[0]?.id || null);
+    setSelectedFlowId(target?.logicFlows?.[0]?.id || null);
   };
 
   const handleCreatePage = (
@@ -465,6 +603,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       slug: copySlug,
       blocks: clonedBlocks,
       pageStyle: source.pageStyle ? { ...source.pageStyle } : undefined,
+      logicFlows: source.logicFlows ? source.logicFlows.map((f) => ({ ...f })) : [],
     };
     setUndoStack((u) => [...u.slice(-19), pages]);
     setPages((prev) => [...prev, duplicated]);
@@ -621,6 +760,83 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     e.dataTransfer.effectAllowed = 'move';
   };
 
+  const createBlockFromMediaAsset = (media: {
+    name: string;
+    kind: MediaAssetKind;
+    url: string;
+  }): CanvasBlock => {
+    const tplId =
+      media.kind === 'video'
+        ? 'tpl-video'
+        : media.kind === 'audio'
+        ? 'tpl-audio-player'
+        : media.kind === 'pdf'
+        ? 'tpl-pdf-viewer'
+        : 'tpl-image';
+    const tpl =
+      WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === tplId) || WEB_STUDIO_BLOCK_TEMPLATES[0];
+    const created = createCanvasBlockFromTemplate(tpl);
+    created.content = media.name || created.content;
+    if (media.kind === 'image') {
+      created.imageUrl = media.url;
+    } else {
+      created.videoUrl = media.url;
+    }
+    return created;
+  };
+
+  const handleInsertMediaAsset = (asset: MediaAssetItem) => {
+    const url = resolveMediaAssetUrl(asset.url, resolvedIdbUrls);
+    if (!url) {
+      onToast('Media file is still loading or unavailable.', 'error');
+      return;
+    }
+    const created = createBlockFromMediaAsset({ name: asset.name, kind: asset.kind, url });
+    commitBlocks((prev) => [...prev, created]);
+    setSelectedBlockId(created.id);
+    if (htmlViewMode === 'logic') setHtmlViewMode('visual');
+    onToast(`Added "${asset.name}" to canvas`, 'success');
+  };
+
+  const handleApplyMediaToSelected = (asset: MediaAssetItem) => {
+    const target = blocks.find((b) => b.id === selectedBlockId);
+    if (!target) {
+      onToast('Select a block on the canvas first.', 'info');
+      return;
+    }
+    const url = resolveMediaAssetUrl(asset.url, resolvedIdbUrls);
+    if (!url) {
+      onToast('Media file is still loading or unavailable.', 'error');
+      return;
+    }
+
+    if (asset.kind === 'image') {
+      const imagePrimaryTypes = [
+        'ui-image',
+        'ui-avatar',
+        'ui-card',
+        'ui-stack',
+        'ui-media-display',
+        'ui-aspect-ratio',
+        'ui-blur',
+        'ui-testimonial',
+      ];
+      if (imagePrimaryTypes.includes(target.type)) {
+        handleUpdateBlock({ ...target, imageUrl: url });
+      } else {
+        handleUpdateBlock({
+          ...target,
+          style: { ...target.style, bgImageUrl: url },
+        });
+      }
+      onToast(`Applied "${asset.name}" image to "${target.name}"`, 'success');
+      return;
+    }
+
+    handleUpdateBlock({ ...target, videoUrl: url });
+    onToast(`Applied "${asset.name}" to "${target.name}"`, 'success');
+  };
+
   const handleDropAtIndex = async (e: React.DragEvent, targetIndex: number) => {
     e.preventDefault();
     e.stopPropagation();
@@ -655,14 +871,41 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       }
     }
 
-    // 2. Reordering existing block
+    // 2. Dropped asset from Media Library
+    const mediaRaw = e.dataTransfer.getData('application/x-slbuilder-media-asset');
+    if (mediaRaw) {
+      try {
+        const mediaAsset = JSON.parse(mediaRaw) as {
+          id: string;
+          name: string;
+          kind: MediaAssetKind;
+          url: string;
+        };
+        if (mediaAsset?.url && mediaAsset?.kind) {
+          const created = createBlockFromMediaAsset(mediaAsset);
+          commitBlocks((prev) => {
+            const idx = Math.max(0, Math.min(prev.length, targetIndex));
+            const next = [...prev];
+            next.splice(idx, 0, created);
+            return next;
+          });
+          setSelectedBlockId(created.id);
+          onToast(`Added "${mediaAsset.name}" to canvas`, 'success');
+          return;
+        }
+      } catch {
+        // fall through
+      }
+    }
+
+    // 3. Reordering existing block
     const moveId = e.dataTransfer.getData('application/x-slbuilder-move-id');
     if (moveId) {
       handleMoveBlockToIndex(moveId, targetIndex);
       return;
     }
 
-    // 3. New block from left palette
+    // 4. New block from left palette
     const tplId = e.dataTransfer.getData('application/x-slbuilder-tpl-id');
     const blockType = e.dataTransfer.getData('application/x-slbuilder-type');
     const tpl =
@@ -680,11 +923,25 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       moveBlockId?: string;
       imageDataUrl?: string;
       fileName?: string;
+      mediaAsset?: { id: string; name: string; kind: MediaAssetKind; url: string };
     },
     targetIndex: number
   ) => {
     setCanvasDropIndex(null);
     setDraggingCanvasBlockId(null);
+
+    if (payload.mediaAsset) {
+      const created = createBlockFromMediaAsset(payload.mediaAsset);
+      commitBlocks((prev) => {
+        const idx = Math.max(0, Math.min(prev.length, targetIndex));
+        const next = [...prev];
+        next.splice(idx, 0, created);
+        return next;
+      });
+      setSelectedBlockId(created.id);
+      onToast(`Added "${payload.mediaAsset.name}"`, 'success');
+      return;
+    }
 
     if (payload.imageDataUrl) {
       const imgTpl =
@@ -750,8 +1007,21 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       blockType?: string;
       imageDataUrl?: string;
       fileName?: string;
+      mediaAsset?: { id: string; name: string; kind: MediaAssetKind; url: string };
     }
   ) => {
+    if (payload.mediaAsset) {
+      const created = createBlockFromMediaAsset(payload.mediaAsset);
+      commitBlocks((prev) =>
+        prev.map((b) =>
+          b.id === containerId ? { ...b, children: [...(b.children || []), created] } : b
+        )
+      );
+      setSelectedBlockId(containerId);
+      onToast(`Added "${payload.mediaAsset.name}" inside container`, 'success');
+      return;
+    }
+
     if (payload.imageDataUrl) {
       const imgTpl =
         WEB_STUDIO_BLOCK_TEMPLATES.find((t) => t.id === 'tpl-image') ||
@@ -1019,10 +1289,430 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     [commitBlocks, handleCreatePage, handleUpdatePageStyle, selectedBlockId]
   );
 
+  const evaluateFlowCondition = (
+    flow: LogicFlowRule,
+    currentInputs: Record<string, string>
+  ): boolean => {
+    const cond = flow.condition;
+    if (!cond || !cond.enabled) return true;
+    let leftRaw = '';
+    if (cond.sourceType === 'widget') {
+      const targetBlk = blocks.find((b) => b.id === cond.leftId);
+      if (currentInputs[cond.leftId] !== undefined) {
+        leftRaw = currentInputs[cond.leftId];
+      } else if (targetBlk) {
+        if (targetBlk.type === 'ui-checkbox' || targetBlk.type === 'ui-checkbox-tile' || targetBlk.type === 'ui-switch-tile') {
+          leftRaw = targetBlk.isExpanded ? 'true' : 'false';
+        } else if (targetBlk.type === 'ui-slider') {
+          leftRaw = String(targetBlk.progressValue ?? 65);
+        } else if (targetBlk.type === 'ui-counter-button' || targetBlk.type === 'ui-rating-bar') {
+          leftRaw = String(targetBlk.counterValue ?? 0);
+        } else {
+          leftRaw = targetBlk.content || '';
+        }
+      }
+    } else {
+      leftRaw = String(runtimeState.variables[cond.leftId] ?? '');
+    }
+    const rightRaw = String(cond.rightValue ?? '');
+    if (cond.operator === 'not-empty') {
+      return leftRaw.trim().length > 0 && leftRaw !== 'false' && leftRaw !== 'Unchecked' && leftRaw !== 'Disabled';
+    }
+    if (cond.operator === 'is-empty') {
+      return leftRaw.trim().length === 0 || leftRaw === 'false' || leftRaw === 'Unchecked' || leftRaw === 'Disabled';
+    }
+    if (cond.operator === 'is-checked') {
+      return leftRaw === 'true' || leftRaw === 'Checked' || leftRaw === 'Enabled';
+    }
+    if (cond.operator === 'contains') {
+      return leftRaw.toLowerCase().includes(rightRaw.toLowerCase());
+    }
+    const ln = Number(leftRaw);
+    const rn = Number(rightRaw);
+    const numeric = leftRaw.trim() !== '' && rightRaw.trim() !== '' && !Number.isNaN(ln) && !Number.isNaN(rn);
+    switch (cond.operator) {
+      case '!=':
+        return numeric ? ln !== rn : leftRaw !== rightRaw;
+      case '>':
+        return numeric ? ln > rn : leftRaw > rightRaw;
+      case '<':
+        return numeric ? ln < rn : leftRaw < rightRaw;
+      case '>=':
+        return numeric ? ln >= rn : leftRaw >= rightRaw;
+      case '<=':
+        return numeric ? ln <= rn : leftRaw <= rightRaw;
+      default:
+        return numeric ? ln === rn : leftRaw === rightRaw;
+    }
+  };
+
+  const executeSingleLogicFlow = (
+    flow: LogicFlowRule,
+    currentInputs: Record<string, string>,
+    liveValue = ''
+  ) => {
+    if (!flow.enabled) return;
+    if (!evaluateFlowCondition(flow, currentInputs)) {
+      appendConsoleLog('warn', `Flow "${flow.name}" skipped (IF condition false)`);
+      return;
+    }
+    appendConsoleLog('success', `Running Flow "${flow.name}" (${flow.steps.length} steps)`);
+
+    const runStepAt = (idx: number) => {
+      if (idx >= flow.steps.length) return;
+      const step = flow.steps[idx];
+      const interpolated = (step.value || '').replace(/\{\{value\}\}/g, liveValue);
+
+      if (step.action === 'delay') {
+        const ms = Math.max(100, Math.min(10000, step.delayMs || 800));
+        appendConsoleLog('log', `Wait ${ms}ms...`);
+        window.setTimeout(() => runStepAt(idx + 1), ms);
+        return;
+      }
+
+      if (step.action === 'next-page') {
+        const curIdx = pages.findIndex((p) => p.id === activePageId);
+        if (pages.length > 1 && curIdx >= 0) {
+          const nextPg = pages[(curIdx + 1) % pages.length];
+          handleSelectPage(nextPg.id);
+          onToast(`Navigated to "${nextPg.name}"`, 'success');
+          appendConsoleLog('success', `Next Page → /${nextPg.slug}`);
+        } else {
+          onToast('Add a second page in Pages to navigate to Next Page!', 'info');
+        }
+        return;
+      }
+
+      if (step.action === 'prev-page') {
+        const curIdx = pages.findIndex((p) => p.id === activePageId);
+        if (pages.length > 1 && curIdx >= 0) {
+          const prevPg = pages[(curIdx - 1 + pages.length) % pages.length];
+          handleSelectPage(prevPg.id);
+          onToast(`Navigated to "${prevPg.name}"`, 'success');
+          appendConsoleLog('success', `Previous Page → /${prevPg.slug}`);
+        } else {
+          onToast('Add a second page in Pages first!', 'info');
+        }
+        return;
+      }
+
+      if (step.action === 'navigate-page') {
+        const targetPg =
+          pages.find((p) => p.id === step.targetPageId) ||
+          pages.find((p) => p.id !== activePageId);
+        if (targetPg) {
+          handleSelectPage(targetPg.id);
+          onToast(`Navigated to "${targetPg.name}"`, 'success');
+          appendConsoleLog('success', `Navigate → /${targetPg.slug}`);
+        } else {
+          onToast('Select a Target Page in the Logic Flow step.', 'info');
+        }
+        return;
+      }
+
+      if (step.action === 'go-back') {
+        const prevId = pageHistory[pageHistory.length - 1];
+        if (prevId && pages.some((p) => p.id === prevId)) {
+          setPageHistory((h) => h.slice(0, -1));
+          handleSelectPage(prevId, false);
+          onToast('Returned to previous page', 'info');
+        } else {
+          onToast('No previous page in history yet.', 'info');
+        }
+        return;
+      }
+
+      if (step.action === 'open-url') {
+        const rawUrl = interpolated.trim();
+        if (rawUrl.startsWith('#')) {
+          const el = document.getElementById(rawUrl.slice(1)) || document.getElementById(`sl-el-${rawUrl.slice(1)}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          onToast(`Jumped to ${rawUrl}`, 'success');
+        } else if (rawUrl) {
+          onToast(`Link ready: ${rawUrl}`, 'success');
+        }
+      } else if (step.action === 'scroll-to-block') {
+        const targetBlk = blocks.find((b) => b.id === step.targetBlockId) || blocks[0];
+        if (targetBlk) {
+          const el = document.getElementById(`sl-el-${targetBlk.id}`);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          setSelectedBlockId(targetBlk.id);
+        }
+      } else if (step.action === 'validate-form') {
+        const targetInp = step.targetBlockId
+          ? blocks.find((b) => b.id === step.targetBlockId)
+          : blocks.find((b) =>
+              ['ui-input', 'ui-textarea', 'ui-select', 'ui-pin-code', 'ui-checkbox', 'ui-checkbox-tile'].includes(b.type)
+            );
+        const valToCheck = targetInp ? currentInputs[targetInp.id] ?? '' : liveValue;
+        const check = validateInputValue(valToCheck, step.validationRule || 'not-empty');
+        if (!check.valid) {
+          onToast(check.reason, 'error');
+          appendConsoleLog('error', `Flow stopped: ${check.reason}`);
+          return;
+        }
+        appendConsoleLog('success', `Validated: ${check.reason}`);
+      } else if (step.action === 'submit-form') {
+        const { fields } = collectFormFields(currentInputs);
+        const summary = fields.map((i) => `${i.label}: ${i.value}`).join(' · ');
+        const msg = interpolated.trim() || 'Form submitted successfully!';
+        const recordData: Record<string, unknown> = {};
+        fields.forEach((f) => {
+          recordData[f.label] = f.value;
+        });
+        setRuntimeState((prev) => ({
+          ...prev,
+          lastSubmission: {
+            timestamp: new Date().toLocaleTimeString(),
+            message: msg,
+            fields: fields.map((f) => ({ label: f.label, value: f.value })),
+          },
+          variables: {
+            ...prev.variables,
+            lastSubmissionCount: fields.length,
+            ...(fields[0] ? { lastInput: fields[0].value } : {}),
+          },
+          dbCollections: {
+            ...prev.dbCollections,
+            submissions: [
+              ...(prev.dbCollections.submissions || []),
+              {
+                id: `sub_${Date.now().toString(36).slice(-4)}`,
+                data: recordData,
+                createdAt: new Date().toLocaleTimeString(),
+              },
+            ],
+          },
+        }));
+        onToast(summary ? `${msg} (${summary})` : msg, 'success');
+        appendConsoleLog('success', summary ? `Submitted → ${summary}` : msg);
+      } else if (step.action === 'clear-form') {
+        setFormInputs({});
+        setRuntimeState((prev) => ({ ...prev, lastSubmission: null }));
+        onToast('Cleared all form inputs', 'info');
+      } else if (step.action === 'show-toast') {
+        const mappedToastType = step.toastType === 'warning' ? 'info' : (step.toastType || 'success');
+        onToast(interpolated || 'Action executed!', mappedToastType);
+      } else if (step.action === 'show-element' || step.action === 'hide-element') {
+        const tid = step.targetBlockId || blocks.find((b) => !b.type.startsWith('logic-'))?.id;
+        if (tid) {
+          const hide = step.action === 'hide-element';
+          setRuntimeState((prev) => ({
+            ...prev,
+            hiddenBlocks: { ...prev.hiddenBlocks, [tid]: hide },
+          }));
+          onToast(`${hide ? 'Hidden' : 'Shown'} widget`, 'info');
+        }
+      } else if (step.action === 'toggle-visibility') {
+        const tid = step.targetBlockId || blocks.find((b) => !b.type.startsWith('logic-'))?.id;
+        if (tid) {
+          setRuntimeState((prev) => ({
+            ...prev,
+            hiddenBlocks: { ...prev.hiddenBlocks, [tid]: !prev.hiddenBlocks[tid] },
+          }));
+        }
+      } else if (step.action === 'enable-element' || step.action === 'disable-element') {
+        const tid =
+          step.targetBlockId ||
+          blocks.find((b) => b.type === 'ui-button' || b.type === 'ui-input')?.id;
+        if (tid) {
+          const dis = step.action === 'disable-element';
+          setRuntimeState((prev) => ({
+            ...prev,
+            disabledBlocks: { ...prev.disabledBlocks, [tid]: dis },
+          }));
+          onToast(`${dis ? 'Disabled' : 'Enabled'} widget`, 'info');
+        }
+      } else if (step.action === 'change-text') {
+        const tid =
+          step.targetBlockId ||
+          blocks.find((b) => b.type === 'ui-heading' || b.type === 'ui-paragraph')?.id ||
+          blocks[0]?.id;
+        if (tid) {
+          const nextTxt = interpolated || 'Updated!';
+          setRuntimeState((prev) => ({
+            ...prev,
+            textOverrides: { ...prev.textOverrides, [tid]: nextTxt },
+          }));
+        }
+      } else if (step.action === 'set-input-value') {
+        const tid =
+          step.targetBlockId ||
+          blocks.find((b) => b.type === 'ui-input' || b.type === 'ui-textarea' || b.type === 'ui-select')?.id;
+        if (tid) {
+          setFormInputs((prev) => ({ ...prev, [tid]: interpolated || '' }));
+        }
+      } else if (step.action === 'open-modal' || step.action === 'close-modal') {
+        const modalTarget =
+          blocks.find((b) => b.id === step.targetBlockId && b.type === 'ui-modal') ||
+          blocks.find((b) => b.type === 'ui-modal');
+        if (modalTarget) {
+          setRuntimeState((prev) => ({
+            ...prev,
+            openModals: { ...prev.openModals, [modalTarget.id]: step.action === 'open-modal' },
+          }));
+        }
+      } else if (step.action === 'set-variable') {
+        const vn = (step.varName || 'score').trim() || 'score';
+        const rawV = interpolated || liveValue || '1';
+        const parsedV: string | number | boolean =
+          rawV === 'true'
+            ? true
+            : rawV === 'false'
+            ? false
+            : rawV.trim() !== '' && !Number.isNaN(Number(rawV))
+            ? Number(rawV)
+            : rawV;
+        setRuntimeState((prev) => ({
+          ...prev,
+          variables: { ...prev.variables, [vn]: parsedV },
+        }));
+      } else if (step.action === 'increment-counter') {
+        const targetCounter =
+          blocks.find((b) => b.id === step.targetBlockId && b.type === 'logic-counter') ||
+          blocks.find((b) => b.type === 'logic-counter');
+        if (targetCounter) {
+          const nextVal = (targetCounter.counterValue ?? 0) + 1;
+          handleUpdateBlock({
+            ...targetCounter,
+            counterValue: nextVal,
+            content: `Clicks Registered: ${nextVal}`,
+          });
+        }
+        setRuntimeState((prev) => ({
+          ...prev,
+          variables: { ...prev.variables, score: Number(prev.variables.score || 0) + 1 },
+        }));
+      } else if (step.action === 'save-storage') {
+        const k = step.varName || 'sl_saved_data';
+        const v = interpolated || liveValue || 'saved';
+        try {
+          window.localStorage.setItem(k, v);
+          onToast(`Saved "${k}" to LocalStorage`, 'success');
+        } catch {
+          onToast('LocalStorage write blocked', 'error');
+        }
+      } else if (step.action === 'db-save') {
+        const col = (step.collectionName || 'submissions').trim() || 'submissions';
+        const { fields } = collectFormFields(currentInputs);
+        const docPayload: Record<string, unknown> = {};
+        fields.forEach((f) => {
+          docPayload[f.label] = f.value;
+        });
+        if (Object.keys(docPayload).length === 0) {
+          docPayload.value = interpolated || liveValue || 'record';
+        }
+        const doc = {
+          id: `doc_${Date.now().toString(36).slice(-4)}`,
+          data: docPayload,
+          createdAt: new Date().toLocaleTimeString(),
+        };
+        setRuntimeState((prev) => {
+          const nextRows = [...(prev.dbCollections[col] || []), doc];
+          try {
+            window.localStorage.setItem(`sl_db_${col}`, JSON.stringify(nextRows));
+          } catch {
+            // ignore
+          }
+          return { ...prev, dbCollections: { ...prev.dbCollections, [col]: nextRows } };
+        });
+        onToast(`Saved record to [${col}]`, 'success');
+        appendConsoleLog('success', `Cloud DB Save [${col}/${doc.id}]`);
+      } else if (step.action === 'call-api') {
+        const endpoint = (step.apiUrl || '/api/v1/submit').trim();
+        const method = step.httpMethod || 'POST';
+        const { fields } = collectFormFields(currentInputs);
+        const bodyObj = Object.fromEntries(fields.map((f) => [f.label, f.value]));
+        if (/^https?:\/\//i.test(endpoint)) {
+          fetch(endpoint, {
+            method,
+            ...(method !== 'GET' && method !== 'DELETE'
+              ? { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(bodyObj) }
+              : {}),
+          })
+            .then((r) => {
+              onToast(`${method} ${endpoint} → HTTP ${r.status}`, r.ok ? 'success' : 'info');
+              appendConsoleLog(r.ok ? 'success' : 'warn', `${method} ${endpoint} → ${r.status}`);
+            })
+            .catch(() => {
+              onToast(`${method} ${endpoint} → 200 OK (sandbox)`, 'info');
+              appendConsoleLog('warn', `${method} ${endpoint} → sandbox fallback`);
+            });
+        } else {
+          onToast(`${method} ${endpoint} → 200 OK`, 'success');
+          appendConsoleLog('success', `${method} ${endpoint} → 200 OK`);
+        }
+      } else if (step.action === 'auth-logout') {
+        setRuntimeState((prev) => ({
+          ...prev,
+          authUser: null,
+          variables: { ...prev.variables, isLoggedIn: false },
+        }));
+        onToast('Signed out user', 'info');
+      } else if (step.action === 'auth-signup' || step.action === 'auth-login') {
+        const email = interpolated.trim() || currentInputs[blocks.find((b) => b.inputType === 'email')?.id || ''] || 'user@blockcraft.app';
+        setRuntimeState((prev) => ({
+          ...prev,
+          authUser: { email, uid: `uid_${Date.now().toString(36).slice(-5)}` },
+          variables: { ...prev.variables, isLoggedIn: true, userName: email.split('@')[0] },
+        }));
+        onToast(`${step.action === 'auth-signup' ? 'Registered' : 'Signed in'}: ${email}`, 'success');
+      }
+
+      runStepAt(idx + 1);
+    };
+
+    runStepAt(0);
+  };
+
+  const executeLogicFlowsForEvent = (
+    trigger: LogicTriggerType,
+    sourceBlock: CanvasBlock | null,
+    currentInputs: Record<string, string>,
+    liveValue = '',
+    keyPressed?: string
+  ): number => {
+    const matching = activeLogicFlows.filter((flow) => {
+      if (!flow.enabled || flow.trigger !== trigger) return false;
+      if (trigger === 'when-load') return true;
+      if (trigger === 'when-key') {
+        return !keyPressed || (flow.triggerKey || 'Enter') === keyPressed;
+      }
+      if (flow.targetBlockId === 'any') return true;
+      return sourceBlock ? flow.targetBlockId === sourceBlock.id : false;
+    });
+    matching.forEach((flow) => executeSingleLogicFlow(flow, currentInputs, liveValue));
+    return matching.length;
+  };
+
   const handleFormInputChange = (blockId: string, value: string, fireInputEvent = true) => {
     const updatedInputs = { ...formInputs, [blockId]: value };
     setFormInputs(updatedInputs);
     if (!fireInputEvent) return;
+
+    const changedBlock = blocks.find((b) => b.id === blockId) || null;
+    if (changedBlock) {
+      if (
+        changedBlock.type === 'ui-checkbox' ||
+        changedBlock.type === 'ui-checkbox-tile' ||
+        changedBlock.type === 'ui-switch-tile' ||
+        changedBlock.type === 'ui-checkbox-group'
+      ) {
+        const isChecked =
+          value === 'true' ||
+          value === 'Checked' ||
+          value === 'Enabled' ||
+          (changedBlock.type === 'ui-checkbox-group' && value.trim().length > 0);
+        executeLogicFlowsForEvent(
+          isChecked ? 'when-checked' : 'when-unchecked',
+          changedBlock,
+          updatedInputs,
+          value
+        );
+      }
+      executeLogicFlowsForEvent('when-change', changedBlock, updatedInputs, value);
+    }
+
     const listeners = blocks.filter((b) => {
       if (b.type !== 'logic-oninput') return false;
       const sourceMatch = b.logicConfig?.triggerSourceId || b.targetId;
@@ -1924,23 +2614,43 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       return;
     }
 
-    // 3. Standard Button / Link Auto-Smart Action Wiring
-    const hasCounter = blocks.some((b) => b.type === 'logic-counter');
-    const { inputBlocks, fields } = collectFormFields(currentInputs);
-    const hasFilled = fields.some((f) => f.hasUserEntry);
-    const resolvedAction: BlockActionType =
-      sourceBlock.action ||
-      (hasFilled
-        ? 'submit-form'
-        : hasCounter
-        ? 'increment-counter'
-        : inputBlocks.length > 0
-        ? 'submit-form'
-        : 'increment-counter');
+    // 3. Fire matching Non-Visual Backend Logic Flows for clicks & form submissions
+    let backendFlowsTriggered = 0;
+    if (sourceBlock.type === 'ui-form') {
+      backendFlowsTriggered += executeLogicFlowsForEvent('when-submit', sourceBlock, currentInputs, 'submitted');
+    } else if (
+      sourceBlock.type === 'ui-button' ||
+      sourceBlock.type === 'ui-icon-button' ||
+      sourceBlock.type === 'ui-fab' ||
+      sourceBlock.type === 'ui-list-tile'
+    ) {
+      backendFlowsTriggered += executeLogicFlowsForEvent('when-click', sourceBlock, currentInputs);
+      if (sourceBlock.action === 'submit-form') {
+        backendFlowsTriggered += executeLogicFlowsForEvent('when-submit', sourceBlock, currentInputs, 'submitted');
+      }
+    }
 
-    runAction(resolvedAction, sourceBlock);
+    // 4. Standard Button / Link Auto-Smart Action Wiring
+    if (backendFlowsTriggered > 0 && !sourceBlock.action) {
+      // Backend logic flow already handled this interaction cleanly without fallback noise.
+    } else {
+      const hasCounter = blocks.some((b) => b.type === 'logic-counter');
+      const { inputBlocks, fields } = collectFormFields(currentInputs);
+      const hasFilled = fields.some((f) => f.hasUserEntry);
+      const resolvedAction: BlockActionType =
+        sourceBlock.action ||
+        (hasFilled
+          ? 'submit-form'
+          : hasCounter
+          ? 'increment-counter'
+          : inputBlocks.length > 0
+          ? 'submit-form'
+          : 'increment-counter');
 
-    // 4. Fire matching "When Button is Clicked" Hat blocks
+      runAction(resolvedAction, sourceBlock);
+    }
+
+    // 5. Fire matching "When Button is Clicked" Hat blocks
     if (sourceBlock.type === 'ui-button') {
       blocks
         .filter((b) => {
@@ -1969,11 +2679,14 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   latestBlocksRef.current = blocks;
   const latestInputsRef = useRef(formInputs);
   latestInputsRef.current = formInputs;
+  const latestLogicFlowTriggerRef = useRef(executeLogicFlowsForEvent);
+  latestLogicFlowTriggerRef.current = executeLogicFlowsForEvent;
 
-  // Keyboard listener for logic-onkey hat blocks inside studio stage
+  // Keyboard listener for logic-onkey hat blocks & non-visual backend key flows
   useEffect(() => {
     const keyHats = blocks.filter((b) => b.type === 'logic-onkey');
-    if (keyHats.length === 0) return;
+    const hasKeyFlows = activeLogicFlows.some((f) => f.enabled && f.trigger === 'when-key');
+    if (keyHats.length === 0 && !hasKeyFlows) return;
     const handler = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       const normalized = e.key === ' ' ? 'Space' : e.key;
@@ -1986,10 +2699,13 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
           latestActionRef.current(hat, latestInputsRef.current, 1);
         }
       });
+      if (hasKeyFlows && (normalized === 'Enter' || normalized === 'Space' || normalized === 'Escape')) {
+        latestLogicFlowTriggerRef.current('when-key', null, latestInputsRef.current, normalized, normalized);
+      }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [blocks]);
+  }, [blocks, activeLogicFlows]);
 
   // Active Countdown Timer Engine for logic-timer blocks
   const hasActiveTimers = Object.values(runningTimers).some(Boolean);
@@ -2034,10 +2750,9 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     return () => window.clearInterval(interval);
   }, [hasActiveTimers, runningTimers, commitBlocks, appendConsoleLog, onToast]);
 
-  // Execute "When Page Loads" hat blocks when navigating to a page
+  // Execute "When Page Loads" hat blocks & non-visual backend flows when navigating to a page
   useEffect(() => {
     const loadHats = latestBlocksRef.current.filter((b) => b.type === 'logic-onload');
-    if (loadHats.length === 0) return;
     loadHats.forEach((hat) => {
       appendConsoleLog('log', `Page "${activePage?.name || 'Home'}" loaded -> ${hat.name}`);
       if (hat.logicConfig?.varName) {
@@ -2051,6 +2766,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
         latestActionRef.current(hat, latestInputsRef.current, 1);
       }
     });
+    latestLogicFlowTriggerRef.current('when-load', null, latestInputsRef.current);
   }, [activePageId]);
 
   const handleTriggerNavLink = (navBlock: CanvasBlock, link: NavbarLinkItem) => {
@@ -2191,9 +2907,9 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     setOpenMenu(null);
   };
 
-  const htmlCode = generateHtmlExport(projectName, blocks, pages, activePage?.pageStyle, cloudConfig);
+  const htmlCode = generateHtmlExport(projectName, blocks, pages, activePage?.pageStyle, cloudConfig, activeLogicFlows);
   const cssCode = generateCssExport(projectName, blocks, activePage?.pageStyle);
-  const jsCode = generateJsExport(projectName, blocks, pages, cloudConfig);
+  const jsCode = generateJsExport(projectName, blocks, pages, cloudConfig, activeLogicFlows);
   const reactCode = generateReactTsxExport(projectName, blocks, activePage?.pageStyle, pages, cloudConfig);
   const flaskCode = generateFlaskExport(projectName, blocks);
 
@@ -2592,16 +3308,24 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setActiveRailItem('actions')}
-                        title="Action Flow"
+                        onClick={() => {
+                          setActiveRailItem('actions');
+                          setHtmlViewMode('logic');
+                        }}
+                        title="Action Flow · Backend Logic"
                         aria-label="Action Flow"
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                        className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                           activeRailItem === 'actions'
-                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            ? 'bg-amber-500/15 border border-amber-400/40 text-amber-300'
                             : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
                         }`}
                       >
                         <Zap className="w-[18px] h-[18px] fill-current stroke-[1.5]" />
+                        {activeLogicFlows.length > 0 && (
+                          <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-1 rounded-full bg-amber-500 text-slate-950 text-[9px] font-extrabold flex items-center justify-center">
+                            {activeLogicFlows.length}
+                          </span>
+                        )}
                       </button>
 
                       <button
@@ -2685,13 +3409,18 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         onClick={() => setActiveRailItem('media-assets')}
                         title="Media Assets"
                         aria-label="Media Assets"
-                        className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
+                        className={`relative w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                           activeRailItem === 'media-assets'
-                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            ? 'bg-sky-500/15 border border-sky-400/40 text-sky-300'
                             : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
                         }`}
                       >
                         <ImageIcon className="w-[18px] h-[18px] stroke-[1.75]" />
+                        {mediaAssets.length > 0 && (
+                          <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-1 rounded-full bg-sky-500 text-white text-[9px] font-bold flex items-center justify-center leading-none ring-2 ring-[#14161b]">
+                            {mediaAssets.length > 9 ? '9+' : mediaAssets.length}
+                          </span>
+                        )}
                       </button>
 
                       <button
@@ -2755,12 +3484,15 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
 
                       <button
                         type="button"
-                        onClick={() => setActiveRailItem('triggers')}
-                        title="Quick Triggers"
+                        onClick={() => {
+                          setActiveRailItem('triggers');
+                          setHtmlViewMode('logic');
+                        }}
+                        title="Quick Triggers · Backend Logic"
                         aria-label="Quick Triggers"
                         className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                           activeRailItem === 'triggers'
-                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            ? 'bg-amber-500/15 border border-amber-400/40 text-amber-300'
                             : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
                         }`}
                       >
@@ -4242,12 +4974,77 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                     />
                   )}
 
+                  {(activeRailItem === 'actions' || activeRailItem === 'triggers') && (
+                    <BackendLogicSidebar
+                      lang={lang}
+                      blocks={blocks}
+                      pages={pages}
+                      activePageId={activePageId}
+                      flows={activeLogicFlows}
+                      selectedFlowId={selectedFlowId}
+                      cloudConfig={cloudConfig}
+                      onSelectFlow={(flowId) => setSelectedFlowId(flowId)}
+                      onCreateFlow={handleCreateLogicFlow}
+                      onToggleFlowEnabled={(flowId) =>
+                        commitLogicFlows((prev) =>
+                          prev.map((f) => (f.id === flowId ? { ...f, enabled: !f.enabled } : f))
+                        )
+                      }
+                      onDeleteFlow={(flowId) => {
+                        commitLogicFlows((prev) => {
+                          const next = prev.filter((f) => f.id !== flowId);
+                          if (selectedFlowId === flowId) {
+                            setSelectedFlowId(next[0]?.id || null);
+                          }
+                          return next;
+                        });
+                        onToast('Deleted backend logic flow', 'info');
+                      }}
+                      onAppendActionStep={handleAppendActionToActiveFlow}
+                      onRunFlowTest={(flow) => executeSingleLogicFlow(flow, formInputs, 'Test')}
+                      onOpenLogicWorkspace={() => setHtmlViewMode('logic')}
+                    />
+                  )}
+
+                  {activeRailItem === 'media-assets' && (
+                    <MediaAssetsStudioPanel
+                      lang={lang}
+                      assets={mediaAssets}
+                      resolvedIdbUrls={resolvedIdbUrls}
+                      selectedBlock={blocks.find((b) => b.id === selectedBlockId) || null}
+                      onAddAssets={(newItems, newUrls) => {
+                        if (newUrls && Object.keys(newUrls).length > 0) {
+                          setResolvedIdbUrls((prev) => ({ ...prev, ...newUrls }));
+                        }
+                        setMediaAssets((prev) => [...newItems, ...prev]);
+                      }}
+                      onUpdateAsset={(updatedAsset) =>
+                        setMediaAssets((prev) =>
+                          prev.map((a) => (a.id === updatedAsset.id ? updatedAsset : a))
+                        )
+                      }
+                      onDeleteAsset={(asset) => {
+                        setMediaAssets((prev) => prev.filter((a) => a.id !== asset.id));
+                        if (asset.url.startsWith('idb://')) {
+                          void deleteMediaBlobFromIdb(asset.url.slice('idb://'.length));
+                        }
+                        onToast(`Removed "${asset.name}" from Media Library`, 'info');
+                      }}
+                      onInsertAssetToCanvas={handleInsertMediaAsset}
+                      onApplyAssetToSelected={handleApplyMediaToSelected}
+                      onToast={onToast}
+                    />
+                  )}
+
                   {activeRailItem !== 'widget-palette' &&
                     activeRailItem !== 'theme-palette' &&
                     activeRailItem !== 'cloud-sync' &&
                     activeRailItem !== 'page-selector' &&
                     activeRailItem !== 'widget-tree' &&
-                    activeRailItem !== 'search' && (
+                    activeRailItem !== 'search' &&
+                    activeRailItem !== 'actions' &&
+                    activeRailItem !== 'triggers' &&
+                    activeRailItem !== 'media-assets' && (
                     <>
                       <div className="flex items-center justify-between pb-1">
                         <span className="text-xs font-bold text-slate-200">
@@ -4405,6 +5202,20 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                         </button>
                         <button
                           type="button"
+                          onClick={() => setHtmlViewMode('logic')}
+                          className={`px-2.5 py-1 rounded-md font-semibold flex items-center gap-1 cursor-pointer transition-colors ${
+                            htmlViewMode === 'logic'
+                              ? 'bg-amber-500/20 text-amber-300'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <Zap className="w-3 h-3" />
+                          <span>
+                            Logic Blocks{activeLogicFlows.length > 0 ? ` (${activeLogicFlows.length})` : ''}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
                           onClick={() => setHtmlViewMode('code')}
                           className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer transition-colors ${
                             htmlViewMode === 'code'
@@ -4417,7 +5228,7 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                       </div>
                     </div>
 
-                    {htmlViewMode !== 'code' && (
+                    {htmlViewMode !== 'code' && htmlViewMode !== 'logic' && (
                       <ProInspectorRibbon
                         lang={lang}
                         selectedBlock={selectedBlock}
@@ -4434,7 +5245,53 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                     )}
                   </div>
 
-                  {htmlViewMode === 'inspector' ? (
+                  {htmlViewMode === 'logic' ? (
+                    <BackendLogicWorkspace
+                      lang={lang}
+                      pages={pages}
+                      activePage={activePage}
+                      blocks={blocks}
+                      flows={activeLogicFlows}
+                      selectedFlowId={selectedFlowId}
+                      runtimeState={runtimeState}
+                      cloudConfig={cloudConfig}
+                      onSelectFlow={(flowId) => setSelectedFlowId(flowId)}
+                      onCreateFlow={handleCreateLogicFlow}
+                      onUpdateFlow={(updatedFlow) =>
+                        commitLogicFlows(
+                          (prev) => prev.map((f) => (f.id === updatedFlow.id ? updatedFlow : f)),
+                          false
+                        )
+                      }
+                      onDeleteFlow={(flowId) => {
+                        commitLogicFlows((prev) => {
+                          const next = prev.filter((f) => f.id !== flowId);
+                          if (selectedFlowId === flowId) {
+                            setSelectedFlowId(next[0]?.id || null);
+                          }
+                          return next;
+                        });
+                        onToast('Deleted backend logic flow', 'info');
+                      }}
+                      onDuplicateFlow={(flow) => {
+                        const copy: LogicFlowRule = {
+                          ...flow,
+                          id: `flow_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+                          name: `${flow.name} (Copy)`,
+                          steps: flow.steps.map((s) => ({
+                            ...s,
+                            id: `step_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                          })),
+                        };
+                        commitLogicFlows((prev) => [...prev, copy]);
+                        setSelectedFlowId(copy.id);
+                        onToast(`Duplicated "${flow.name}"`, 'success');
+                      }}
+                      onRunFlowTest={(flow) => executeSingleLogicFlow(flow, formInputs, 'Test')}
+                      onBackToVisual={() => setHtmlViewMode('visual')}
+                      onOpenCodeView={() => setHtmlViewMode('code')}
+                    />
+                  ) : htmlViewMode === 'inspector' ? (
                     <div className="flex-1 overflow-y-auto">
                       <ProBlockInspector
                         lang={lang}
@@ -7979,7 +8836,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                             pg.blocks,
                             pages,
                             pg.pageStyle,
-                            cloudConfig
+                            cloudConfig,
+                            pg.logicFlows || []
                           );
                           const blob = new Blob([code], { type: 'text/html' });
                           const url = URL.createObjectURL(blob);

@@ -29,16 +29,13 @@ import {
   Type as TypeIcon,
   Underline,
   Upload,
-  Wand2,
-  Zap,
 } from 'lucide-react';
 import type {
-  BlockActionType,
   BlockStyle,
   CanvasBlock,
   SitePage,
 } from '../../types/builder';
-import { BLOCK_STYLE_TEMPLATES, FONT_OPTIONS } from '../../data/blockStyleTemplates';
+import { BLOCK_STYLE_TEMPLATES } from '../../data/blockStyleTemplates';
 import { ICON_LIBRARY } from '../../utils/mediaHelpers';
 import { renderVectorIcon } from './WebPreviewRenderer';
 import { readAndCompressImageFile } from '../../utils/imageUpload';
@@ -123,23 +120,6 @@ const ANIMATION_PRESETS: Array<{ id: NonNullable<BlockStyle['animationPreset']>;
   { id: 'pulse', label: 'Pulse (Loop)' },
   { id: 'float', label: 'Float (Loop)' },
   { id: 'glow-pulse', label: 'Glow Pulse (Loop)' },
-];
-
-const ACTION_OPTIONS: Array<{ value: BlockActionType | ''; label: string }> = [
-  { value: '', label: 'None (No Action)' },
-  { value: 'alert', label: 'Show Alert / Toast Message' },
-  { value: 'navigate-page', label: 'Navigate to Page' },
-  { value: 'scroll-to-block', label: 'Scroll to Block' },
-  { value: 'open-url', label: 'Open External URL' },
-  { value: 'submit-form', label: 'Submit Form Inputs' },
-  { value: 'increment-counter', label: 'Increment Counter' },
-  { value: 'toggle-visibility', label: 'Toggle Block Visibility' },
-  { value: 'change-text', label: 'Change Target Text' },
-  { value: 'call-api', label: 'Call REST API (Fetch)' },
-  { value: 'db-save', label: 'Save to Cloud DB (Firebase/Supabase)' },
-  { value: 'auth-signup', label: 'Auth Sign Up / Login' },
-  { value: 'copy-clipboard', label: 'Copy to Clipboard' },
-  { value: 'open-modal', label: 'Open Modal Dialog' },
 ];
 
 interface ProInspectorRibbonProps {
@@ -439,7 +419,6 @@ interface ProBlockInspectorProps {
 export const ProBlockInspector: React.FC<ProBlockInspectorProps> = ({
   lang,
   blocks,
-  pages,
   selectedBlock,
   copiedStyle,
   onSelectBlock,
@@ -453,7 +432,7 @@ export const ProBlockInspector: React.FC<ProBlockInspectorProps> = ({
   onResetStyle,
   onToast,
 }) => {
-  const [tab, setTab] = useState<'text' | 'shape' | 'layout' | 'fx' | 'presets' | 'actions'>('text');
+  const [tab, setTab] = useState<'text' | 'shape' | 'layout' | 'fx' | 'presets'>('text');
   const [gradStart, setGradStart] = useState('#4f46e5');
   const [gradEnd, setGradEnd] = useState('#06b6d4');
   const [gradAngle, setGradAngle] = useState(135);
@@ -605,15 +584,14 @@ export const ProBlockInspector: React.FC<ProBlockInspectorProps> = ({
         </div>
       </div>
 
-      {/* 6 Studio Tabs */}
-      <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 bg-[#11151E] p-1 rounded-xl border border-white/10">
+      {/* 5 Studio Tabs */}
+      <div className="grid grid-cols-3 sm:grid-cols-5 gap-1 bg-[#11151E] p-1 rounded-xl border border-white/10">
         {[
           { id: 'text' as const, label: lang === 'si' ? 'Text' : 'Text', icon: TypeIcon },
           { id: 'shape' as const, label: lang === 'si' ? 'Fill & Border' : 'Shape & Fill', icon: Palette },
           { id: 'layout' as const, label: lang === 'si' ? 'Layout' : 'Layout & Media', icon: LayoutGrid },
           { id: 'fx' as const, label: lang === 'si' ? 'FX & Motion' : 'FX & Motion', icon: Film },
           { id: 'presets' as const, label: lang === 'si' ? 'Presets' : 'Presets', icon: Sparkles },
-          { id: 'actions' as const, label: lang === 'si' ? 'Actions' : 'Actions', icon: Zap },
         ].map((item) => {
           const Icon = item.icon;
           const active = tab === item.id;
@@ -2108,143 +2086,6 @@ export const ProBlockInspector: React.FC<ProBlockInspectorProps> = ({
                 </button>
               );
             })}
-          </div>
-        </div>
-      )}
-
-      {/* ==================== TAB 6: ACTIONS, API & CUSTOM CSS ==================== */}
-      {tab === 'actions' && (
-        <div className="space-y-3">
-          <div className="rounded-xl bg-[#131822] border border-white/10 p-3 space-y-3">
-            <span className="text-[10.5px] font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
-              <Wand2 className="w-3.5 h-3.5" /> Interactive Action & API Wiring
-            </span>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="text-[10px] text-slate-400 block mb-1">On Click / Trigger Action</label>
-                <select
-                  value={selectedBlock.action || ''}
-                  onChange={(e) =>
-                    patchBlock({
-                      action: (e.target.value || undefined) as BlockActionType | undefined,
-                    })
-                  }
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/10 text-white outline-none cursor-pointer"
-                >
-                  {ACTION_OPTIONS.map((ao) => (
-                    <option key={ao.label} value={ao.value}>
-                      {ao.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="text-[10px] text-slate-400 block mb-1">
-                  Action Payload (Message / URL / Value)
-                </label>
-                <input
-                  type="text"
-                  value={selectedBlock.actionPayload || ''}
-                  onChange={(e) => patchBlock({ actionPayload: e.target.value })}
-                  placeholder="e.g. Saved! or https://..."
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/10 text-amber-200 outline-none"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="text-[10px] text-slate-400 block mb-1">Target Element</label>
-                <select
-                  value={selectedBlock.targetId || ''}
-                  onChange={(e) => patchBlock({ targetId: e.target.value || undefined })}
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/10 text-white outline-none cursor-pointer"
-                >
-                  <option value="">None</option>
-                  {blocks.map((b) => (
-                    <option key={b.id} value={b.id}>
-                      {b.name} ({b.type})
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-[10px] text-slate-400 block mb-1">Target Page</label>
-                <select
-                  value={selectedBlock.targetPageId || ''}
-                  onChange={(e) => patchBlock({ targetPageId: e.target.value || undefined })}
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/10 text-white outline-none cursor-pointer"
-                >
-                  <option value="">None</option>
-                  {pages.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} (/{p.slug})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div>
-                <label className="text-[10px] text-slate-400 block mb-1">HTTP Method</label>
-                <select
-                  value={selectedBlock.httpMethod || 'POST'}
-                  onChange={(e) =>
-                    patchBlock({ httpMethod: e.target.value as CanvasBlock['httpMethod'] })
-                  }
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/10 text-white outline-none"
-                >
-                  <option value="GET">GET</option>
-                  <option value="POST">POST</option>
-                  <option value="PUT">PUT</option>
-                  <option value="DELETE">DELETE</option>
-                </select>
-              </div>
-              <div className="sm:col-span-2">
-                <label className="text-[10px] text-slate-400 block mb-1">API Endpoint</label>
-                <input
-                  type="text"
-                  value={selectedBlock.apiEndpoint || ''}
-                  onChange={(e) => patchBlock({ apiEndpoint: e.target.value })}
-                  placeholder="/api/v1/submit"
-                  className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/10 text-emerald-300 font-mono outline-none"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="text-[10px] text-slate-400 block mb-1">Custom Tailwind / CSS Classes</label>
-              <input
-                type="text"
-                value={s.customClass || ''}
-                onChange={(e) => patchStyle({ customClass: e.target.value })}
-                placeholder="e.g. tracking-wide backdrop-blur-lg"
-                className="w-full px-2.5 py-1.5 rounded-lg bg-[#090B10] border border-white/10 text-sky-300 font-mono outline-none"
-              />
-            </div>
-          </div>
-
-          <div className="rounded-xl bg-[#131822] border border-white/10 p-3 flex items-center justify-between text-[10.5px] text-slate-400">
-            <span>Quick Font Presets</span>
-            <div className="flex flex-wrap gap-1">
-              {FONT_OPTIONS.map((fo) => (
-                <button
-                  key={fo.id}
-                  type="button"
-                  onClick={() => patchStyle({ fontFamily: fo.id, customFontName: undefined })}
-                  className={`px-2 py-0.5 rounded cursor-pointer ${
-                    s.fontFamily === fo.id && !s.customFontName
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-[#090B10] border border-white/10 text-slate-300'
-                  }`}
-                >
-                  {fo.label}
-                </button>
-              ))}
-            </div>
           </div>
         </div>
       )}

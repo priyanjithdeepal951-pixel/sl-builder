@@ -420,12 +420,99 @@ export interface PageStyleSettings {
   animationDensity?: 'low' | 'medium' | 'high';
 }
 
+export type LogicTriggerType =
+  | 'when-click'
+  | 'when-submit'
+  | 'when-change'
+  | 'when-checked'
+  | 'when-unchecked'
+  | 'when-load'
+  | 'when-key';
+
+export type LogicStepAction =
+  | 'next-page'
+  | 'prev-page'
+  | 'navigate-page'
+  | 'go-back'
+  | 'open-url'
+  | 'scroll-to-block'
+  | 'submit-form'
+  | 'validate-form'
+  | 'clear-form'
+  | 'show-toast'
+  | 'show-element'
+  | 'hide-element'
+  | 'toggle-visibility'
+  | 'enable-element'
+  | 'disable-element'
+  | 'change-text'
+  | 'set-input-value'
+  | 'open-modal'
+  | 'close-modal'
+  | 'set-variable'
+  | 'increment-counter'
+  | 'save-storage'
+  | 'db-save'
+  | 'call-api'
+  | 'auth-signup'
+  | 'auth-login'
+  | 'auth-logout'
+  | 'delay';
+
+export type LogicConditionOperator =
+  | '=='
+  | '!='
+  | '>'
+  | '<'
+  | '>='
+  | '<='
+  | 'contains'
+  | 'not-empty'
+  | 'is-empty'
+  | 'is-checked';
+
+export interface LogicConditionRule {
+  enabled: boolean;
+  sourceType: 'widget' | 'variable';
+  leftId: string;
+  operator: LogicConditionOperator;
+  rightValue: string;
+}
+
+export interface LogicActionStep {
+  id: string;
+  action: LogicStepAction;
+  targetPageId?: string;
+  targetBlockId?: string;
+  value?: string;
+  varName?: string;
+  collectionName?: string;
+  apiUrl?: string;
+  httpMethod?: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  validationRule?: 'not-empty' | 'email' | 'min-length';
+  toastType?: 'success' | 'info' | 'warning' | 'error';
+  delayMs?: number;
+}
+
+export interface LogicFlowRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  trigger: LogicTriggerType;
+  targetBlockId: string; // Widget block ID or 'any'
+  triggerKey?: 'Enter' | 'Space' | 'Escape';
+  condition?: LogicConditionRule;
+  steps: LogicActionStep[];
+  createdAt?: string;
+}
+
 export interface SitePage {
   id: string;
   name: string;
   slug: string;
   blocks: CanvasBlock[];
   pageStyle?: PageStyleSettings;
+  logicFlows?: LogicFlowRule[];
 }
 
 export interface SiteFirebaseConfig {
@@ -457,6 +544,19 @@ export interface SiteCloudConfig {
   supabase: SiteSupabaseConfig;
 }
 
+export type MediaAssetKind = 'image' | 'video' | 'audio' | 'pdf';
+
+export interface MediaAssetItem {
+  id: string;
+  name: string;
+  kind: MediaAssetKind;
+  url: string; // data: URL, https:// URL, or idb://<assetId>
+  mimeType?: string;
+  sizeBytes?: number;
+  source: 'upload' | 'url';
+  createdAt: string;
+}
+
 export interface Project {
   id: string;
   userId?: string;
@@ -468,6 +568,7 @@ export interface Project {
   pages?: SitePage[];
   studioState?: StudioWorkspaceState;
   cloudConfig?: SiteCloudConfig;
+  mediaAssets?: MediaAssetItem[];
   thumbnailColor?: string;
   description?: string;
   collaboratorUids?: string[];

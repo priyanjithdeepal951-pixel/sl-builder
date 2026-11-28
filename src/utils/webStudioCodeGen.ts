@@ -1,4 +1,4 @@
-import { CanvasBlock, PageStyleSettings, SiteCloudConfig, SitePage } from '../types/builder';
+import { CanvasBlock, LogicFlowRule, PageStyleSettings, SiteCloudConfig, SitePage } from '../types/builder';
 import {
   getAnimationCount,
   getAnimationSpeedMultiplier,
@@ -416,12 +416,194 @@ function buildCloudInitScriptsHtml(cloudConfig?: SiteCloudConfig): string {
   return parts.join('\n');
 }
 
+function buildLogicFlowsRuntimeScript(
+  logicFlows: LogicFlowRule[] = [],
+  pages?: SitePage[],
+  currentPageSlug = 'index'
+): string {
+  const activeFlows = logicFlows.filter((f) => f.enabled);
+  if (activeFlows.length === 0) return '';
+  const pageList = (pages || []).map((p) => ({
+    id: p.id,
+    name: p.name,
+    slug: p.slug === 'index' ? 'index.html' : `${p.slug}.html`,
+  }));
+  const currentIdx = pageList.findIndex(
+    (p) => p.slug === (currentPageSlug === 'index' ? 'index.html' : `${currentPageSlug}.html`)
+  );
+  const nextHref = pageList.length > 1 ? pageList[(Math.max(0, currentIdx) + 1) % pageList.length]?.slug || '' : '';
+  const prevHref =
+    pageList.length > 1
+      ? pageList[(Math.max(0, currentIdx) - 1 + pageList.length) % pageList.length]?.slug || ''
+      : '';
+
+  return `
+  // Non-Visual Backend Logic Flows (${activeFlows.length})
+  (function() {
+    var slFlows = ${JSON.stringify(activeFlows)};
+    var slPages = ${JSON.stringify(pageList)};
+    var slNextHref = ${JSON.stringify(nextHref)};
+    var slPrevHref = ${JSON.stringify(prevHref)};
+
+    function slReadWidgetValue(blockId) {
+      var wrap = document.getElementById('sl-el-' + blockId);
+      if (!wrap) return '';
+      var inp = wrap.querySelector('input[type="checkbox"], input[type="radio"]:checked, input, textarea, select');
+      if (inp) {
+        if (inp.type === 'checkbox') return inp.checked ? 'true' : 'false';
+        return (inp.value || '').trim();
+      }
+      return (wrap.textContent || '').trim();
+    }
+
+    function slCheckCond(cond) {
+      if (!cond || !cond.enabled) return true;
+      var left = cond.sourceType === 'widget'
+        ? slReadWidgetValue(cond.leftId)
+        : String(window.slRuntime.vars[cond.leftId] ?? '');
+      var right = String(cond.rightValue || '');
+      if (cond.operator === 'not-empty') return left.length > 0 && left !== 'false';
+      if (cond.operator === 'is-empty') return left.length === 0 || left === 'false';
+      if (cond.operator === 'is-checked') return left === 'true' || left === 'Checked' || left === 'Enabled';
+      if (cond.operator === 'contains') return left.toLowerCase().indexOf(right.toLowerCase()) !== -1;
+      var ln = Number(left), rn = Number(right);
+      var num = left !== '' && right !== '' && !isNaN(ln) && !isNaN(rn);
+      if (cond.operator === '!=') return num ? ln !== rn : left !== right;
+      if (cond.operator === '>') return num ? ln > rn : left > right;
+      if (cond.operator === '<') return num ? ln < rn : left < right;
+      if (cond.operator === '>=') return num ? ln >= rn : left >= right;
+      if (cond.operator === '<=') return num ? ln <= rn : left <= right;
+      return num ? ln === rn : left === right;
+    }
+
+    function slExecFlow(flow, liveVal) {
+      if (!slCheckCond(flow.condition)) return;
+      var steps = flow.steps || [];
+      function runStep(i) {
+        if (i >= steps.length) return;
+        var st = steps[i];
+        var val = (st.value || '').replace(/\\{\\{value\\}\\}/g, String(liveVal || ''));
+        if (st.action === 'delay') {
+          setTimeout(function() { runStep(i + 1); }, Math.max(100, Number(st.delayMs) || 800));
+          return;
+        }
+        if (st.action === 'next-page' && slNextHref) { window.location.href = slNextHref; return; }
+        if (st.action === 'prev-page' && slPrevHref) { window.location.href = slPrevHref; return; }
+        if (st.action === 'navigate-page' && st.targetPageId) {
+          var pg = slPages.find(function(p) { return p.id === st.targetPageId; });
+          if (pg) { window.location.href = pg.slug; return; }
+        }
+        if (st.action === 'go-back') { window.history.back(); return; }
+        if (st.action === 'open-url' && val) {
+          if (val.charAt(0) === '#') { var a = document.querySelector(val); if (a) a.scrollIntoView({ behavior: 'smooth' }); }
+          else { window.location.href = val; return; }
+        }
+        if (st.action === 'scroll-to-block' && st.targetBlockId) {
+          var elS = document.getElementById('sl-el-' + st.targetBlockId);
+          if (elS) elS.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        if (st.action === 'validate-form') {
+          var v = st.targetBlockId ? slReadWidgetValue(st.targetBlockId) : String(liveVal || '');
+          var r = st.validationRule || 'not-empty';
+          var ok = r === 'email' ? /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(v) : r === 'min-length' ? v.length >= 6 : v.length > 0;
+          if (!ok) { slShowToast('Validation failed (' + r + ')'); return; }
+        }
+        if (st.action === 'show-toast') slShowToast(val || 'Done!');
+        if (st.action === 'show-element' && st.targetBlockId) {
+          var sh = document.getElementById('sl-el-' + st.targetBlockId); if (sh) sh.style.display = '';
+        }
+        if (st.action === 'hide-element' && st.targetBlockId) {
+          var hd = document.getElementById('sl-el-' + st.targetBlockId); if (hd) hd.style.display = 'none';
+        }
+        if (st.action === 'toggle-visibility' && st.targetBlockId) {
+          var tg = document.getElementById('sl-el-' + st.targetBlockId);
+          if (tg) tg.style.display = tg.style.display === 'none' ? '' : 'none';
+        }
+        if (st.action === 'enable-element' && st.targetBlockId) {
+          var en = document.querySelector('#sl-el-' + st.targetBlockId + ' button, #sl-el-' + st.targetBlockId + ' input');
+          if (en) en.disabled = false;
+        }
+        if (st.action === 'disable-element' && st.targetBlockId) {
+          var dis = document.querySelector('#sl-el-' + st.targetBlockId + ' button, #sl-el-' + st.targetBlockId + ' input');
+          if (dis) dis.disabled = true;
+        }
+        if (st.action === 'change-text' && st.targetBlockId) {
+          var tx = document.querySelector('[data-sl-text-target="' + st.targetBlockId + '"]') || document.getElementById('sl-el-' + st.targetBlockId);
+          if (tx) tx.textContent = val || 'Updated!';
+        }
+        if (st.action === 'set-variable') {
+          window.slRuntime.vars[st.varName || 'score'] = val || liveVal || '1';
+        }
+        if (st.action === 'save-storage') {
+          try { localStorage.setItem(st.varName || 'sl_saved_data', val || String(liveVal || '')); } catch (e) {}
+        }
+        if (st.action === 'db-save') {
+          slRunDb('flow', st.collectionName || 'submissions', 'save', JSON.stringify({ value: val || liveVal || 'submitted' }));
+        }
+        if (st.action === 'call-api' && st.apiUrl) {
+          slRunFetch('flow', st.apiUrl, st.httpMethod || 'POST', JSON.stringify({ value: val || liveVal || '' }));
+        }
+        if (st.action === 'submit-form') {
+          slShowToast(val || 'Form submitted!');
+        }
+        runStep(i + 1);
+      }
+      runStep(0);
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      slFlows.forEach(function(flow) {
+        if (flow.trigger === 'when-load') {
+          slExecFlow(flow, '');
+          return;
+        }
+        if (flow.trigger === 'when-key') {
+          document.addEventListener('keydown', function(e) {
+            var k = e.key === ' ' ? 'Space' : e.key;
+            if (k === (flow.triggerKey || 'Enter')) slExecFlow(flow, k);
+          });
+          return;
+        }
+        var targets = flow.targetBlockId === 'any'
+          ? Array.from(document.querySelectorAll('[id^="sl-el-"]'))
+          : [document.getElementById('sl-el-' + flow.targetBlockId)].filter(Boolean);
+        targets.forEach(function(el) {
+          if (flow.trigger === 'when-click') {
+            el.addEventListener('click', function() { slExecFlow(flow, ''); });
+          } else if (flow.trigger === 'when-submit') {
+            var fm = el.querySelector('form');
+            if (fm) fm.addEventListener('submit', function() { slExecFlow(flow, 'submitted'); });
+            else el.addEventListener('click', function() { slExecFlow(flow, 'submitted'); });
+          } else if (flow.trigger === 'when-checked' || flow.trigger === 'when-unchecked' || flow.trigger === 'when-change') {
+            el.addEventListener('input', function(ev) {
+              var t = ev.target;
+              var val = t && t.type === 'checkbox' ? (t.checked ? 'true' : 'false') : (t && t.value !== undefined ? String(t.value) : '');
+              if (flow.trigger === 'when-checked' && val === 'true') slExecFlow(flow, val);
+              else if (flow.trigger === 'when-unchecked' && val === 'false') slExecFlow(flow, val);
+              else if (flow.trigger === 'when-change') slExecFlow(flow, val);
+            });
+            el.addEventListener('change', function(ev) {
+              var t = ev.target;
+              if (!t || t.type !== 'checkbox') return;
+              var checked = Boolean(t.checked);
+              if (flow.trigger === 'when-checked' && checked) slExecFlow(flow, 'true');
+              if (flow.trigger === 'when-unchecked' && !checked) slExecFlow(flow, 'false');
+            });
+          }
+        });
+      });
+    });
+  })();
+`;
+}
+
 export function generateHtmlExport(
   projectName: string,
   blocks: CanvasBlock[],
   pages?: SitePage[],
   pageStyle?: PageStyleSettings,
-  cloudConfig?: SiteCloudConfig
+  cloudConfig?: SiteCloudConfig,
+  logicFlows: LogicFlowRule[] = []
 ): string {
   const isLightPage = isLightPageBackground(pageStyle);
   const pageBg = resolvePageBackgroundCss(pageStyle);
@@ -2948,6 +3130,7 @@ ${renderedBlocks}
           : ''
       }
     });
+    ${buildLogicFlowsRuntimeScript(logicFlows, pages)}
   </script>${buildCloudInitScriptsHtml(cloudConfig)}
 </body>
 </html>`;
@@ -3838,7 +4021,8 @@ export function generateJsExport(
   projectName: string,
   blocks: CanvasBlock[],
   pages?: SitePage[],
-  cloudConfig?: SiteCloudConfig
+  cloudConfig?: SiteCloudConfig,
+  logicFlows: LogicFlowRule[] = []
 ): string {
   const onLoadHats = blocks.filter((b) => b.type === 'logic-onload');
   const onInputHats = blocks.filter((b) => b.type === 'logic-oninput');
@@ -4375,5 +4559,6 @@ document.addEventListener('DOMContentLoaded', function() {
     )
     .join('\n  ')}
 });
+${buildLogicFlowsRuntimeScript(logicFlows, pages)}
 `;
 }
