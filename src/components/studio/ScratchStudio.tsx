@@ -90,6 +90,8 @@ import { PageSelectorStudioPanel } from './PageSelectorStudioPanel';
 import { WidgetTreeStudioPanel } from './WidgetTreeStudioPanel';
 import { SearchStudioPanel } from './SearchStudioPanel';
 import { MediaAssetsStudioPanel } from './MediaAssetsStudioPanel';
+import { TemplatesStudioPanel } from './TemplatesStudioPanel';
+import type { ReadyPageTemplate } from '../../data/pageTemplates';
 import { ProBlockInspector, ProInspectorRibbon } from './ProBlockInspector';
 import { MultiTextItemsEditor, supportsMultiTextBoxes } from './MultiTextItemsEditor';
 import {
@@ -610,6 +612,74 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     setActivePageId(duplicated.id);
     setSelectedBlockId(clonedBlocks[0]?.id || null);
     onToast(`Duplicated "${source.name}"`, 'success');
+  };
+
+  // =================== READY PAGE TEMPLATES (HOMEPAGE / ADMIN / GOOGLE LOGIN) ===================
+  const handleCreatePageFromTemplate = (tpl: ReadyPageTemplate) => {
+    const built = tpl.build();
+    let slug = tpl.slug;
+    if (pages.some((p) => p.slug === slug)) {
+      slug = `${tpl.slug}-${pages.length + 1}`;
+    }
+    const newPage: SitePage = {
+      id: `page_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      name: tpl.name,
+      slug,
+      blocks: built.blocks,
+      pageStyle: tpl.pageStyle,
+      logicFlows: built.logicFlows,
+    };
+    setUndoStack((u) => [...u.slice(-19), pages]);
+    setPages((prev) => [...prev, newPage]);
+    setActivePageId(newPage.id);
+    setSelectedBlockId(built.blocks[0]?.id || null);
+    setSelectedFlowId(built.logicFlows[0]?.id || null);
+    setFormInputs({});
+    if (htmlViewMode === 'logic') setHtmlViewMode('visual');
+    onToast(
+      `Created "${tpl.name}" page (/${slug}) with ${built.blocks.length} blocks!`,
+      'success'
+    );
+  };
+
+  const handleAppendTemplateToCurrentPage = (tpl: ReadyPageTemplate) => {
+    const built = tpl.build();
+    setUndoStack((u) => [...u.slice(-19), pages]);
+    setPages((prev) =>
+      prev.map((p) =>
+        p.id === activePageId
+          ? {
+              ...p,
+              blocks: [...p.blocks, ...built.blocks],
+              logicFlows: [...(p.logicFlows || []), ...built.logicFlows],
+            }
+          : p
+      )
+    );
+    if (built.blocks[0]) setSelectedBlockId(built.blocks[0].id);
+    if (htmlViewMode === 'logic') setHtmlViewMode('visual');
+    onToast(`Added ${tpl.name} sections to "${activePage?.name || 'Home'}"`, 'success');
+  };
+
+  const handleReplaceCurrentPageWithTemplate = (tpl: ReadyPageTemplate) => {
+    const built = tpl.build();
+    setUndoStack((u) => [...u.slice(-19), pages]);
+    setPages((prev) =>
+      prev.map((p) =>
+        p.id === activePageId
+          ? {
+              ...p,
+              blocks: built.blocks,
+              logicFlows: built.logicFlows,
+            }
+          : p
+      )
+    );
+    setSelectedBlockId(built.blocks[0]?.id || null);
+    setSelectedFlowId(built.logicFlows[0]?.id || null);
+    setFormInputs({});
+    if (htmlViewMode === 'logic') setHtmlViewMode('visual');
+    onToast(`Applied "${tpl.name}" template to "${activePage?.name || 'Home'}"`, 'success');
   };
 
   // =================== BLOCK ACTIONS & EXACT-POSITION DRAG & DROP ===================
@@ -3290,11 +3360,11 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                       <button
                         type="button"
                         onClick={() => setActiveRailItem('storyboard')}
-                        title="Storyboard"
-                        aria-label="Storyboard"
+                        title="Templates (Homepage, Admin Panel, Google Login...)"
+                        aria-label="Templates"
                         className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors cursor-pointer ${
                           activeRailItem === 'storyboard'
-                            ? 'bg-white/[0.07] border border-white/[0.14] text-white'
+                            ? 'bg-indigo-500/15 border border-indigo-400/40 text-indigo-300'
                             : 'border border-transparent text-[#8b949e] hover:text-white hover:bg-white/[0.04]'
                         }`}
                       >
@@ -5036,6 +5106,16 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                     />
                   )}
 
+                  {activeRailItem === 'storyboard' && (
+                    <TemplatesStudioPanel
+                      lang={lang}
+                      activePageName={activePage?.name || 'Home'}
+                      onCreatePageFromTemplate={handleCreatePageFromTemplate}
+                      onAppendTemplateToCurrentPage={handleAppendTemplateToCurrentPage}
+                      onReplaceCurrentPageWithTemplate={handleReplaceCurrentPageWithTemplate}
+                    />
+                  )}
+
                   {activeRailItem !== 'widget-palette' &&
                     activeRailItem !== 'theme-palette' &&
                     activeRailItem !== 'cloud-sync' &&
@@ -5044,7 +5124,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                     activeRailItem !== 'search' &&
                     activeRailItem !== 'actions' &&
                     activeRailItem !== 'triggers' &&
-                    activeRailItem !== 'media-assets' && (
+                    activeRailItem !== 'media-assets' &&
+                    activeRailItem !== 'storyboard' && (
                     <>
                       <div className="flex items-center justify-between pb-1">
                         <span className="text-xs font-bold text-slate-200">
