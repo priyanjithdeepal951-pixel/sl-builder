@@ -54,6 +54,7 @@ import {
   LayoutGrid,
   Folder,
   Move,
+  SlidersHorizontal,
 } from 'lucide-react';
 import {
   BlockActionType,
@@ -80,6 +81,9 @@ import {
 import { PreviewConfirmDialog, WebPreviewRenderer, renderVectorIcon } from './WebPreviewRenderer';
 import { ThemeStyleStudioPanel } from './ThemeStyleStudioPanel';
 import { CloudBackendStudioPanel, DEFAULT_SITE_CLOUD_CONFIG } from './CloudBackendStudioPanel';
+import { PageSelectorStudioPanel } from './PageSelectorStudioPanel';
+import { WidgetTreeStudioPanel } from './WidgetTreeStudioPanel';
+import { ProBlockInspector, ProInspectorRibbon } from './ProBlockInspector';
 import { GeminiCodingAgentPanel, GeminiAgentAction } from './GeminiCodingAgentPanel';
 import { ICON_LIBRARY } from '../../utils/mediaHelpers';
 import {
@@ -217,7 +221,8 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
   const [cssSection, setCssSection] = useState<'page-style' | 'live-animations' | 'element'>(
     'page-style'
   );
-  const [htmlViewMode, setHtmlViewMode] = useState<'visual' | 'code'>('visual');
+  const [htmlViewMode, setHtmlViewMode] = useState<'visual' | 'inspector' | 'code'>('visual');
+  const [copiedBlockStyle, setCopiedBlockStyle] = useState<Partial<BlockStyle> | null>(null);
   const [activeCategory, setActiveCategory] = useState<WebStudioCategoryId>('layout');
   const [activeRailItem, setActiveRailItem] = useState<string>('widget-palette');
   const [frequentlyUsedOpen, setFrequentlyUsedOpen] = useState<boolean>(true);
@@ -414,6 +419,56 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
       setSelectedBlockId(remaining[0].blocks[0]?.id || null);
     }
     onToast(`Removed page "${target?.name || 'Page'}"`, 'info');
+  };
+
+  const handleRenamePage = (pageId: string, newName: string) => {
+    const cleanName = newName.trim();
+    if (!cleanName) return;
+    setUndoStack((u) => [...u.slice(-19), pages]);
+    setPages((prev) =>
+      prev.map((p) => {
+        if (p.id !== pageId) return p;
+        const nextSlug =
+          p.slug === 'index'
+            ? 'index'
+            : cleanName
+                .toLowerCase()
+                .replace(/[^a-z0-9]+/g, '-')
+                .replace(/^-|-$/g, '') || p.slug;
+        return { ...p, name: cleanName, slug: nextSlug };
+      })
+    );
+    onToast(`Renamed page to "${cleanName}"`, 'success');
+  };
+
+  const handleDuplicatePage = (pageId: string) => {
+    const source = pages.find((p) => p.id === pageId);
+    if (!source) return;
+    const copyName = `${source.name} Copy`;
+    let copySlug = `${source.slug === 'index' ? 'home' : source.slug}-copy`;
+    if (pages.some((p) => p.slug === copySlug)) {
+      copySlug = `${copySlug}-${pages.length + 1}`;
+    }
+    const clonedBlocks: CanvasBlock[] = source.blocks.map((b) => ({
+      ...b,
+      id: `blk_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      children: b.children?.map((ch) => ({
+        ...ch,
+        id: `blk_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      })),
+    }));
+    const duplicated: SitePage = {
+      id: `page_${Date.now()}_${Math.random().toString(36).slice(2, 5)}`,
+      name: copyName,
+      slug: copySlug,
+      blocks: clonedBlocks,
+      pageStyle: source.pageStyle ? { ...source.pageStyle } : undefined,
+    };
+    setUndoStack((u) => [...u.slice(-19), pages]);
+    setPages((prev) => [...prev, duplicated]);
+    setActivePageId(duplicated.id);
+    setSelectedBlockId(clonedBlocks[0]?.id || null);
+    onToast(`Duplicated "${source.name}"`, 'success');
   };
 
   // =================== BLOCK ACTIONS & EXACT-POSITION DRAG & DROP ===================
@@ -764,6 +819,49 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
     };
     commitBlocks((prev) => [...prev, copy]);
     setSelectedBlockId(copy.id);
+  };
+
+  const handleCopyBlockStyle = (styleToCopy: Partial<BlockStyle>) => {
+    setCopiedBlockStyle({ ...styleToCopy });
+    onToast('Style copied! Select any block and click Paste Style.', 'success');
+  };
+
+  const handlePasteBlockStyle = () => {
+    if (!copiedBlockStyle || !selectedBlock) return;
+    handleUpdateBlock({
+      ...selectedBlock,
+      style: { ...selectedBlock.style, ...copiedBlockStyle },
+    });
+    onToast(`Applied copied style to ${selectedBlock.name}`, 'success');
+  };
+
+  const handleBulkApplyBlockStyle = (stylePatch: Partial<BlockStyle>) => {
+    commitBlocks((prev) =>
+      prev.map((b) => ({
+        ...b,
+        style: { ...b.style, ...stylePatch },
+        children: b.children?.map((ch) => ({
+          ...ch,
+          style: { ...ch.style, ...stylePatch },
+        })),
+      }))
+    );
+  };
+
+  const handleResetBlockStyle = (blockId: string) => {
+    commitBlocks((prev) =>
+      prev.map((b) =>
+        b.id === blockId
+          ? {
+              ...b,
+              style: {
+                isHidden: b.style?.isHidden,
+              },
+            }
+          : b
+      )
+    );
+    onToast('Reset block styles to default', 'info');
   };
 
   const handleApplyGeminiActions = useCallback(
@@ -4062,7 +4160,74 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                     />
                   )}
 
-                  {activeRailItem !== 'widget-palette' && activeRailItem !== 'theme-palette' && activeRailItem !== 'cloud-sync' && (
+                  {activeRailItem === 'page-selector' && (
+                    <PageSelectorStudioPanel
+                      lang={lang}
+                      pages={pages}
+                      activePageId={activePageId}
+                      onSelectPage={(pageId) => handleSelectPage(pageId)}
+                      onCreatePage={handleCreatePage}
+                      onRenamePage={handleRenamePage}
+                      onDuplicatePage={handleDuplicatePage}
+                      onDeletePage={handleDeletePage}
+                      onOpenAddModal={() => {
+                        setNewPageName('');
+                        setShowAddPageModal(true);
+                      }}
+                    />
+                  )}
+
+                  {activeRailItem === 'widget-tree' && (
+                    <WidgetTreeStudioPanel
+                      lang={lang}
+                      activePageName={activePage?.name || 'Home'}
+                      activePageSlug={activePage?.slug || 'index'}
+                      blocks={blocks}
+                      selectedBlockId={selectedBlockId}
+                      onSelectBlock={(id) => setSelectedBlockId(id)}
+                      onMoveBlock={handleMoveBlock}
+                      onDuplicateBlock={handleDuplicateBlock}
+                      onToggleHidden={(blk) =>
+                        handleUpdateBlock({
+                          ...blk,
+                          style: { ...blk.style, isHidden: !blk.style?.isHidden },
+                        })
+                      }
+                      onDeleteBlock={handleDeleteBlock}
+                      onDeleteChildWidget={(parentId, childId) => {
+                        commitBlocks((prev) =>
+                          prev.map((b) =>
+                            b.id === parentId
+                              ? { ...b, children: (b.children || []).filter((ch) => ch.id !== childId) }
+                              : b
+                          )
+                        );
+                      }}
+                      onToggleChildHidden={(parentId, childId) => {
+                        commitBlocks((prev) =>
+                          prev.map((b) =>
+                            b.id === parentId
+                              ? {
+                                  ...b,
+                                  children: (b.children || []).map((ch) =>
+                                    ch.id === childId
+                                      ? { ...ch, style: { ...ch.style, isHidden: !ch.style?.isHidden } }
+                                      : ch
+                                  ),
+                                }
+                              : b
+                          )
+                        );
+                      }}
+                      onOpenWidgetPalette={() => setActiveRailItem('widget-palette')}
+                    />
+                  )}
+
+                  {activeRailItem !== 'widget-palette' &&
+                    activeRailItem !== 'theme-palette' &&
+                    activeRailItem !== 'cloud-sync' &&
+                    activeRailItem !== 'page-selector' &&
+                    activeRailItem !== 'widget-tree' && (
                     <>
                       <div className="flex items-center justify-between pb-1">
                         <span className="text-xs font-bold text-slate-200">
@@ -4188,38 +4353,88 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                     backgroundSize: '24px 24px',
                   }}
                 >
-                  {/* Top Canvas Mode Switcher: Visual HTML Blocks vs <slug>.html */}
-                  <div className="sticky top-0 z-10 px-4 py-2 flex items-center justify-between bg-[#0A0D13]/90 backdrop-blur-xs border-b border-white/5">
-                    <span className="text-[11px] font-mono text-orange-400 font-semibold">
-                      {activePage?.slug || 'index'}.html · {blocks.length} elements
-                    </span>
-                    <div className="flex items-center gap-1 bg-[#11151E] border border-white/10 rounded-lg p-0.5 text-[11px]">
-                      <button
-                        type="button"
-                        onClick={() => setHtmlViewMode('visual')}
-                        className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
-                          htmlViewMode === 'visual'
-                            ? 'bg-orange-500/20 text-orange-300'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        Visual Blocks
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setHtmlViewMode('code')}
-                        className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer ${
-                          htmlViewMode === 'code'
-                            ? 'bg-orange-500/20 text-orange-300'
-                            : 'text-slate-400 hover:text-white'
-                        }`}
-                      >
-                        &lt;&gt; HTML Code
-                      </button>
+                  {/* Top Canvas Mode Switcher + MS Word / PowerPoint / CapCut Ribbon */}
+                  <div className="sticky top-0 z-10 bg-[#0A0D13]/95 backdrop-blur-xs border-b border-white/10">
+                    <div className="px-4 py-2 flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-mono text-orange-400 font-semibold truncate">
+                        {activePage?.slug || 'index'}.html · {blocks.length} elements
+                      </span>
+                      <div className="flex items-center gap-1 bg-[#11151E] border border-white/10 rounded-lg p-0.5 text-[11px] shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setHtmlViewMode('visual')}
+                          className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer transition-colors ${
+                            htmlViewMode === 'visual'
+                              ? 'bg-orange-500/20 text-orange-300'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          Visual Blocks
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHtmlViewMode('inspector')}
+                          className={`px-2.5 py-1 rounded-md font-semibold flex items-center gap-1 cursor-pointer transition-colors ${
+                            htmlViewMode === 'inspector'
+                              ? 'bg-sky-500/20 text-sky-300'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          <SlidersHorizontal className="w-3 h-3" />
+                          <span>Inspector</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setHtmlViewMode('code')}
+                          className={`px-2.5 py-1 rounded-md font-semibold cursor-pointer transition-colors ${
+                            htmlViewMode === 'code'
+                              ? 'bg-orange-500/20 text-orange-300'
+                              : 'text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          &lt;&gt; HTML Code
+                        </button>
+                      </div>
                     </div>
+
+                    {htmlViewMode !== 'code' && (
+                      <ProInspectorRibbon
+                        lang={lang}
+                        selectedBlock={selectedBlock}
+                        copiedStyle={copiedBlockStyle}
+                        isInspectorOpen={htmlViewMode === 'inspector'}
+                        onUpdateBlock={handleUpdateBlock}
+                        onCopyStyle={handleCopyBlockStyle}
+                        onPasteStyle={handlePasteBlockStyle}
+                        onOpenFullInspector={() =>
+                          setHtmlViewMode((m) => (m === 'inspector' ? 'visual' : 'inspector'))
+                        }
+                        onResetStyle={handleResetBlockStyle}
+                      />
+                    )}
                   </div>
 
-                  {htmlViewMode === 'visual' ? (
+                  {htmlViewMode === 'inspector' ? (
+                    <div className="flex-1 overflow-y-auto">
+                      <ProBlockInspector
+                        lang={lang}
+                        blocks={blocks}
+                        pages={pages}
+                        selectedBlock={selectedBlock}
+                        copiedStyle={copiedBlockStyle}
+                        onSelectBlock={(id) => setSelectedBlockId(id)}
+                        onUpdateBlock={handleUpdateBlock}
+                        onMoveBlock={handleMoveBlock}
+                        onDuplicateBlock={handleDuplicateBlock}
+                        onDeleteBlock={handleDeleteBlock}
+                        onCopyStyle={handleCopyBlockStyle}
+                        onPasteStyle={handlePasteBlockStyle}
+                        onBulkApplyStyle={handleBulkApplyBlockStyle}
+                        onResetStyle={handleResetBlockStyle}
+                        onToast={onToast}
+                      />
+                    </div>
+                  ) : htmlViewMode === 'visual' ? (
                     <div
                       className="min-h-full p-5 max-w-2xl w-full mx-auto space-y-2 origin-top"
                       style={{ transform: `scale(${zoomLevel})` }}
@@ -4319,6 +4534,18 @@ export const ScratchStudio: React.FC<ScratchStudioProps> = ({
                                       className="flex items-center gap-1 shrink-0"
                                       onClick={(e) => e.stopPropagation()}
                                     >
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedBlockId(blk.id);
+                                          setHtmlViewMode('inspector');
+                                        }}
+                                        title="Open Pro Inspector (MS Word / PowerPoint / CapCut)"
+                                        className="px-1.5 py-1 rounded bg-sky-500/15 hover:bg-sky-500/30 border border-sky-400/25 text-sky-300 text-[10px] font-semibold flex items-center gap-1 cursor-pointer"
+                                      >
+                                        <SlidersHorizontal className="w-3 h-3" />
+                                        <span>Inspect</span>
+                                      </button>
                                       <button
                                         type="button"
                                         disabled={idx === 0}

@@ -207,6 +207,58 @@
   }
 }
 
+/* CapCut & PowerPoint Block Entry / Loop Animations */
+@keyframes slBlkFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slBlkSlideUp {
+  from { opacity: 0; transform: translate3d(0, 26px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes slBlkSlideDown {
+  from { opacity: 0; transform: translate3d(0, -26px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes slBlkSlideLeft {
+  from { opacity: 0; transform: translate3d(28px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes slBlkSlideRight {
+  from { opacity: 0; transform: translate3d(-28px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+@keyframes slBlkZoomIn {
+  from { opacity: 0; transform: scale(0.84); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes slBlkBounce {
+  0%, 100% { transform: translateY(0); }
+  45% { transform: translateY(-9px); }
+  70% { transform: translateY(-3px); }
+}
+@keyframes slBlkPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+@keyframes slBlkFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-7px); }
+}
+@keyframes slBlkGlowPulse {
+  0%, 100% { filter: drop-shadow(0 0 0 rgba(96,165,250,0)); }
+  50% { filter: drop-shadow(0 0 14px rgba(96,165,250,0.65)); }
+}
+
+.sl-hover-lift { transition: transform 0.22s ease, box-shadow 0.22s ease; }
+.sl-hover-lift:hover { transform: translateY(-5px); box-shadow: 0 14px 28px rgba(0,0,0,0.35); }
+.sl-hover-scale { transition: transform 0.22s ease; }
+.sl-hover-scale:hover { transform: scale(1.035); }
+.sl-hover-glow { transition: box-shadow 0.22s ease; }
+.sl-hover-glow:hover { box-shadow: 0 0 24px rgba(56,189,248,0.55); }
+.sl-hover-tilt { transition: transform 0.22s ease; }
+.sl-hover-tilt:hover { transform: rotate(-1.2deg) scale(1.02); }
+
 @media (prefers-reduced-motion: reduce) {
   .sl-anim-item,
   .signal-wire-flow {

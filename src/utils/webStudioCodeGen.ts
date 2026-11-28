@@ -130,8 +130,48 @@ function getInlineLayoutCss(b: CanvasBlock): string {
   if (b.style?.height && b.style.height !== 'auto') {
     parts.push(`min-height:${b.style.height};`);
   }
-  if (b.style?.margin) {
+  if (typeof b.style?.marginPx === 'number') {
+    parts.push(`margin-top:${b.style.marginPx}px;margin-bottom:${b.style.marginPx}px;`);
+  } else if (b.style?.margin) {
     parts.push(`margin:${b.style.margin};`);
+  }
+  if (typeof b.style?.zIndex === 'number' && b.style.zIndex !== 0) {
+    parts.push(`position:relative;z-index:${b.style.zIndex};`);
+  }
+  if (typeof b.style?.opacity === 'number' && b.style.opacity < 100) {
+    parts.push(`opacity:${(Math.max(0, Math.min(100, b.style.opacity)) / 100).toFixed(2)};`);
+  }
+  const fParts: string[] = [];
+  if (typeof b.style?.filterBlurPx === 'number' && b.style.filterBlurPx > 0) {
+    fParts.push(`blur(${b.style.filterBlurPx}px)`);
+  }
+  if (typeof b.style?.filterBrightness === 'number' && b.style.filterBrightness !== 100) {
+    fParts.push(`brightness(${b.style.filterBrightness}%)`);
+  }
+  if (typeof b.style?.filterContrast === 'number' && b.style.filterContrast !== 100) {
+    fParts.push(`contrast(${b.style.filterContrast}%)`);
+  }
+  if (typeof b.style?.filterSaturate === 'number' && b.style.filterSaturate !== 100) {
+    fParts.push(`saturate(${b.style.filterSaturate}%)`);
+  }
+  if (fParts.length > 0) {
+    parts.push(`filter:${fParts.join(' ')};`);
+  }
+  const tParts: string[] = [];
+  if (b.transformTranslateX || b.transformTranslateY) {
+    tParts.push(`translate(${b.transformTranslateX || 0}px,${b.transformTranslateY || 0}px)`);
+  }
+  if (b.transformRotate) {
+    tParts.push(`rotate(${b.transformRotate}deg)`);
+  }
+  if (typeof b.transformScale === 'number' && b.transformScale !== 1) {
+    tParts.push(`scale(${b.transformScale})`);
+  }
+  if (b.style?.skewX) {
+    tParts.push(`skewX(${b.style.skewX}deg)`);
+  }
+  if (tParts.length > 0) {
+    parts.push(`transform:${tParts.join(' ')};`);
   }
   if (b.style?.isHidden) {
     parts.push('display:none;');
@@ -440,28 +480,76 @@ export function generateHtmlExport(
         b.style?.textAlign ||
         (b.type === 'ui-heading' || b.type === 'ui-button' ? 'center' : 'left');
       const alignClass =
-        align === 'center' ? 'text-center' : align === 'right' ? 'text-right' : 'text-left';
+        align === 'center'
+          ? 'text-center'
+          : align === 'right'
+          ? 'text-right'
+          : align === 'justify'
+          ? 'text-justify'
+          : 'text-left';
       const primaryColor = getCssColor(
         b.style?.textColor,
         b.style?.customTextHex,
         defaultPrimaryColor
       );
       const subColor = b.style?.subtitleColorHex || defaultMutedColor;
-      const fontFam = getCssFontFamily(b.style?.fontFamily);
+      const fontFam = b.style?.customFontName || getCssFontFamily(b.style?.fontFamily);
       const fontWt = getCssFontWeight(
         b.style?.fontWeight,
         b.type === 'ui-paragraph' ? '400' : '700'
       );
       const bgVal = b.style?.bgGradient || getCssBgColor(b.style?.bgColor, b.style?.customBgHex);
-      const surfaceFxCss = `${bgVal ? `background: ${bgVal};` : ''}${
-        b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''
-      }${b.style?.borderWidth ? ` border-width: ${b.style.borderWidth};` : ''}${
-        b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''
-      }`;
+      const surfaceFxCss = `${
+        b.style?.bgImageUrl
+          ? `background-image: url(${escapeHtml(b.style.bgImageUrl)}); background-size: cover; background-position: center;`
+          : bgVal
+          ? `background: ${bgVal};`
+          : ''
+      }${b.style?.borderColor ? ` border-color: ${b.style.borderColor};` : ''}${
+        b.style?.borderStyle ? ` border-style: ${b.style.borderStyle};` : ''
+      }${
+        typeof b.style?.borderWidthPx === 'number'
+          ? ` border-width: ${b.style.borderWidthPx}px;`
+          : b.style?.borderWidth
+          ? ` border-width: ${b.style.borderWidth};`
+          : ''
+      }${
+        typeof b.style?.borderRadiusPx === 'number'
+          ? ` border-radius: ${b.style.borderRadiusPx}px;`
+          : ''
+      }${typeof b.style?.paddingPx === 'number' ? ` padding: ${b.style.paddingPx}px;` : ''}${
+        typeof b.style?.backdropBlurPx === 'number' && b.style.backdropBlurPx > 0
+          ? ` backdrop-filter: blur(${b.style.backdropBlurPx}px); -webkit-backdrop-filter: blur(${b.style.backdropBlurPx}px);`
+          : ''
+      }${b.style?.boxShadow ? ` box-shadow: ${b.style.boxShadow};` : ''}`;
       const textFxCss = `${
         b.style?.textGradient
           ? `background-image: ${b.style.textGradient}; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent;`
           : `color: ${primaryColor};`
+      }${
+        typeof b.style?.fontSizePx === 'number' && b.style.fontSizePx > 0
+          ? ` font-size: ${b.style.fontSizePx}px;`
+          : ''
+      }${b.style?.fontStyle ? ` font-style: ${b.style.fontStyle};` : ''}${
+        b.style?.textDecoration && b.style.textDecoration !== 'none'
+          ? ` text-decoration: ${b.style.textDecoration};`
+          : ''
+      }${
+        b.style?.textTransform && b.style.textTransform !== 'none'
+          ? ` text-transform: ${b.style.textTransform};`
+          : ''
+      }${
+        typeof b.style?.letterSpacing === 'number' && b.style.letterSpacing !== 0
+          ? ` letter-spacing: ${b.style.letterSpacing}px;`
+          : ''
+      }${
+        typeof b.style?.lineHeight === 'number' && b.style.lineHeight > 0
+          ? ` line-height: ${b.style.lineHeight};`
+          : ''
+      }${
+        b.style?.textHighlightHex && !b.style?.textGradient
+          ? ` background-color: ${b.style.textHighlightHex}; padding: 0 4px; border-radius: 4px;`
+          : ''
       }${b.style?.textShadow ? ` text-shadow: ${b.style.textShadow};` : ''}${
         b.style?.textStroke ? ` -webkit-text-stroke: ${b.style.textStroke};` : ''
       }`;

@@ -127,25 +127,61 @@ export interface BlockStyle {
   textColor?: string;
   customTextHex?: string;
   subtitleColorHex?: string;
+  textHighlightHex?: string;
   textGradient?: string;
   textShadow?: string;
   textStroke?: string;
   bgColor?: string;
   customBgHex?: string;
   bgGradient?: string;
+  bgImageUrl?: string;
   borderColor?: string;
   borderWidth?: string;
+  borderWidthPx?: number;
+  borderStyle?: 'solid' | 'dashed' | 'dotted' | 'double' | 'none';
   boxShadow?: string;
   templateId?: string;
   fontFamily?: 'sans' | 'serif' | 'mono' | 'display' | 'rounded' | 'condensed' | 'script';
+  customFontName?: string;
   fontWeight?: 'normal' | 'medium' | 'semibold' | 'bold' | 'extrabold';
+  fontStyle?: 'normal' | 'italic';
+  textDecoration?: 'none' | 'underline' | 'line-through' | 'underline line-through';
+  textTransform?: 'none' | 'uppercase' | 'lowercase' | 'capitalize';
   fontSize?: 'xs' | 'sm' | 'base' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
-  textAlign?: 'left' | 'center' | 'right';
+  fontSizePx?: number;
+  letterSpacing?: number;
+  lineHeight?: number;
+  textAlign?: 'left' | 'center' | 'right' | 'justify';
   padding?: string;
+  paddingPx?: number;
   margin?: string;
+  marginPx?: number;
   width?: string;
   height?: string;
   borderRadius?: string;
+  borderRadiusPx?: number;
+  backdropBlurPx?: number;
+  zIndex?: number;
+  opacity?: number;
+  filterBlurPx?: number;
+  filterBrightness?: number;
+  filterContrast?: number;
+  filterSaturate?: number;
+  skewX?: number;
+  animationPreset?:
+    | 'none'
+    | 'fade-in'
+    | 'slide-up'
+    | 'slide-down'
+    | 'slide-left'
+    | 'slide-right'
+    | 'zoom-in'
+    | 'bounce'
+    | 'pulse'
+    | 'float'
+    | 'glow-pulse';
+  animationDurationMs?: number;
+  hoverEffect?: 'none' | 'lift' | 'scale' | 'glow' | 'tilt';
   shadow?: string;
   customClass?: string;
   isHidden?: boolean;

@@ -1028,6 +1028,8 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
               ? 'text-center'
               : block.style?.textAlign === 'right'
               ? 'text-right'
+              : block.style?.textAlign === 'justify'
+              ? 'text-justify'
               : 'text-left';
 
           const customTextColor =
@@ -1046,9 +1048,57 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
           const customWeight = block.style?.fontWeight
             ? FONT_WEIGHT_MAP[block.style.fontWeight] || ''
             : '';
-          const fontFamilyValue = block.style?.fontFamily
-            ? FONT_FAMILY_CSS[block.style.fontFamily]
-            : undefined;
+          const fontFamilyValue =
+            block.style?.customFontName ||
+            (block.style?.fontFamily ? FONT_FAMILY_CSS[block.style.fontFamily] : undefined);
+
+          const filterParts: string[] = [];
+          if (typeof block.style?.filterBlurPx === 'number' && block.style.filterBlurPx > 0) {
+            filterParts.push(`blur(${block.style.filterBlurPx}px)`);
+          }
+          if (typeof block.style?.filterBrightness === 'number' && block.style.filterBrightness !== 100) {
+            filterParts.push(`brightness(${block.style.filterBrightness}%)`);
+          }
+          if (typeof block.style?.filterContrast === 'number' && block.style.filterContrast !== 100) {
+            filterParts.push(`contrast(${block.style.filterContrast}%)`);
+          }
+          if (typeof block.style?.filterSaturate === 'number' && block.style.filterSaturate !== 100) {
+            filterParts.push(`saturate(${block.style.filterSaturate}%)`);
+          }
+
+          const transformParts: string[] = [];
+          if (block.transformTranslateX || block.transformTranslateY) {
+            transformParts.push(
+              `translate(${block.transformTranslateX || 0}px, ${block.transformTranslateY || 0}px)`
+            );
+          }
+          if (block.transformRotate) {
+            transformParts.push(`rotate(${block.transformRotate}deg)`);
+          }
+          if (typeof block.transformScale === 'number' && block.transformScale !== 1) {
+            transformParts.push(`scale(${block.transformScale})`);
+          }
+          if (block.style?.skewX) {
+            transformParts.push(`skewX(${block.style.skewX}deg)`);
+          }
+
+          const animMap: Record<string, { name: string; loop: boolean }> = {
+            'fade-in': { name: 'slBlkFadeIn', loop: false },
+            'slide-up': { name: 'slBlkSlideUp', loop: false },
+            'slide-down': { name: 'slBlkSlideDown', loop: false },
+            'slide-left': { name: 'slBlkSlideLeft', loop: false },
+            'slide-right': { name: 'slBlkSlideRight', loop: false },
+            'zoom-in': { name: 'slBlkZoomIn', loop: false },
+            bounce: { name: 'slBlkBounce', loop: true },
+            pulse: { name: 'slBlkPulse', loop: true },
+            float: { name: 'slBlkFloat', loop: true },
+            'glow-pulse': { name: 'slBlkGlowPulse', loop: true },
+          };
+          const animSpec =
+            block.style?.animationPreset && block.style.animationPreset !== 'none'
+              ? animMap[block.style.animationPreset]
+              : undefined;
+          const animDur = block.style?.animationDurationMs || (animSpec?.loop ? 2000 : 550);
 
           const layoutBoxStyle: React.CSSProperties = {
             ...(block.style?.width && block.style.width !== 'auto'
@@ -1057,12 +1107,55 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
             ...(block.style?.height && block.style.height !== 'auto'
               ? { minHeight: block.style.height }
               : {}),
-            ...(block.style?.margin ? { margin: block.style.margin } : {}),
+            ...(typeof block.style?.marginPx === 'number'
+              ? { marginTop: `${block.style.marginPx}px`, marginBottom: `${block.style.marginPx}px` }
+              : block.style?.margin
+              ? { margin: block.style.margin }
+              : {}),
+            ...(typeof block.style?.zIndex === 'number' && block.style.zIndex !== 0
+              ? { zIndex: block.style.zIndex, position: 'relative' as const }
+              : {}),
+            ...(typeof block.style?.opacity === 'number' && block.style.opacity < 100
+              ? { opacity: Math.max(0, Math.min(1, block.style.opacity / 100)) }
+              : {}),
+            ...(filterParts.length > 0 ? { filter: filterParts.join(' ') } : {}),
+            ...(transformParts.length > 0 ? { transform: transformParts.join(' ') } : {}),
+            ...(animSpec
+              ? {
+                  animation: `${animSpec.name} ${animDur}ms ${
+                    animSpec.loop ? 'ease-in-out infinite' : 'cubic-bezier(0.16, 1, 0.3, 1) both'
+                  }`,
+                }
+              : {}),
           };
 
           const primaryStyle: React.CSSProperties = {
             ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}),
+            ...(typeof block.style?.fontSizePx === 'number' && block.style.fontSizePx > 0
+              ? { fontSize: `${block.style.fontSizePx}px` }
+              : {}),
+            ...(block.style?.fontStyle ? { fontStyle: block.style.fontStyle } : {}),
+            ...(block.style?.textDecoration && block.style.textDecoration !== 'none'
+              ? { textDecoration: block.style.textDecoration }
+              : {}),
+            ...(block.style?.textTransform && block.style.textTransform !== 'none'
+              ? { textTransform: block.style.textTransform }
+              : {}),
+            ...(typeof block.style?.letterSpacing === 'number' && block.style.letterSpacing !== 0
+              ? { letterSpacing: `${block.style.letterSpacing}px` }
+              : {}),
+            ...(typeof block.style?.lineHeight === 'number' && block.style.lineHeight > 0
+              ? { lineHeight: block.style.lineHeight }
+              : {}),
+            ...(block.style?.textAlign === 'justify' ? { textAlign: 'justify' as const } : {}),
             ...(block.style?.customTextHex ? { color: block.style.customTextHex } : {}),
+            ...(block.style?.textHighlightHex && !block.style?.textGradient
+              ? {
+                  backgroundColor: block.style.textHighlightHex,
+                  padding: '0 4px',
+                  borderRadius: '4px',
+                }
+              : {}),
             ...(block.style?.textShadow ? { textShadow: block.style.textShadow } : {}),
             ...(block.style?.textStroke ? { WebkitTextStroke: block.style.textStroke } : {}),
             ...(block.style?.textGradient
@@ -1079,15 +1172,46 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
           const subtitleStyle: React.CSSProperties = {
             ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}),
             ...(block.style?.subtitleColorHex ? { color: block.style.subtitleColorHex } : {}),
+            ...(block.style?.fontStyle ? { fontStyle: block.style.fontStyle } : {}),
+            ...(typeof block.style?.lineHeight === 'number' && block.style.lineHeight > 0
+              ? { lineHeight: block.style.lineHeight }
+              : {}),
           };
 
           const surfaceStyle: React.CSSProperties = {
             ...(fontFamilyValue ? { fontFamily: fontFamilyValue } : {}),
-            ...(block.style?.customBgHex && !block.style?.bgGradient
+            ...(block.style?.customBgHex && !block.style?.bgGradient && !block.style?.bgImageUrl
               ? { backgroundColor: block.style.customBgHex }
               : {}),
-            ...(block.style?.bgGradient ? { background: block.style.bgGradient } : {}),
+            ...(block.style?.bgGradient && !block.style?.bgImageUrl
+              ? { background: block.style.bgGradient }
+              : {}),
+            ...(block.style?.bgImageUrl
+              ? {
+                  backgroundImage: `url(${block.style.bgImageUrl})`,
+                  backgroundSize: 'cover',
+                  backgroundPosition: 'center',
+                }
+              : {}),
             ...(block.style?.borderColor ? { borderColor: block.style.borderColor } : {}),
+            ...(block.style?.borderStyle ? { borderStyle: block.style.borderStyle } : {}),
+            ...(typeof block.style?.borderWidthPx === 'number'
+              ? { borderWidth: `${block.style.borderWidthPx}px` }
+              : block.style?.borderWidth
+              ? { borderWidth: block.style.borderWidth }
+              : {}),
+            ...(typeof block.style?.borderRadiusPx === 'number'
+              ? { borderRadius: `${block.style.borderRadiusPx}px` }
+              : {}),
+            ...(typeof block.style?.paddingPx === 'number'
+              ? { padding: `${block.style.paddingPx}px` }
+              : {}),
+            ...(typeof block.style?.backdropBlurPx === 'number' && block.style.backdropBlurPx > 0
+              ? {
+                  backdropFilter: `blur(${block.style.backdropBlurPx}px)`,
+                  WebkitBackdropFilter: `blur(${block.style.backdropBlurPx}px)`,
+                }
+              : {}),
             ...(block.style?.boxShadow ? { boxShadow: block.style.boxShadow } : {}),
             ...(runtimeState.styleOverrides?.[block.id] || {}),
           };
@@ -1095,11 +1219,17 @@ export const WebPreviewRenderer: React.FC<WebPreviewRendererProps> = ({
           const hasExplicitBg = Boolean(
             block.style?.customBgHex ||
               block.style?.bgGradient ||
+              block.style?.bgImageUrl ||
               (customBg && customBg !== 'bg-transparent') ||
               runtimeState.styleOverrides?.[block.id]?.backgroundColor
           );
 
-          const wrapperClass = `relative transition-all cursor-pointer ${
+          const hoverClass =
+            block.style?.hoverEffect && block.style.hoverEffect !== 'none'
+              ? `sl-hover-${block.style.hoverEffect}`
+              : '';
+
+          const wrapperClass = `relative transition-all cursor-pointer ${hoverClass} ${
             block.type === 'ui-footer' ? 'mt-auto w-full' : 'w-full'
           } ${
             isEdgeToEdge
